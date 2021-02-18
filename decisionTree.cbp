@@ -23,6 +23,8 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
+		<Unit filename="Doxyfile" />
+		<Unit filename="Makefile" />
 		<Unit filename="dtcpp.h" />
 		<Unit filename="main.cpp" />
 		<Extensions>

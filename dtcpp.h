@@ -1,18 +1,23 @@
 /**
 \file
-\brief Naive implementation attempt of a Decision Tree using boost::graph
+\brief Naive implementation attempt of a classifier using a Decision Tree
 for continuous data values (aka real numbers)
 \author S. Kramm - 2021
 
 - Limited to binary tree (a node has only two childs)
 - Does not handle missing values
+- using boost::graph to model the tree
 */
 
 #include <iostream>
 #include <vector>
 #include <boost/graph/adjacency_list.hpp>
 
-#define DEBUG std::cout
+#ifdef DEBUG
+	#define COUT if(1) std::cout
+#else
+	#define COUT if(0) std::cout
+#endif // DEBUG
 
 //---------------------------------------------------------------------
 class DataPoint
@@ -21,6 +26,10 @@ class DataPoint
 		std::vector<float> _attrValue;
 		int _class = -1;  ///< Class of the datapoint, -1 for undefined
 	public:
+		size_t nbAttribs() const
+		{
+			return _attrValue.size();
+		}
 		void setSize( size_t n ) { _attrValue.resize(n); }
 		float getValue( size_t idx ) const
 		{
@@ -32,7 +41,29 @@ class DataPoint
 //---------------------------------------------------------------------
 class DataSet
 {
-	std::vector<DataPoint> _dataPoint;
+	public:
+		DataSet( size_t n ) : _nbAttribs(n)
+		{ assert( n ); }
+		size_t nbAttribs() const
+		{ return _nbAttribs; }
+		void addDataPoint( const DataPoint& dp )
+		{
+			assert( dp.nbAttribs() == _nbAttribs );
+			_dataPoint.push_back( dp );
+		}
+		DataPoint& getDataPoint( size_t idx )
+		{
+			assert( idx < _dataPoint.size() );
+			return _dataPoint[idx];
+		}
+		const DataPoint& getDataPoint( size_t idx ) const
+		{
+			assert( idx < _dataPoint.size() );
+			return _dataPoint[idx];
+		}
+	private:
+		size_t _nbAttribs = 0;
+		std::vector<DataPoint> _dataPoint;
 };
 
 //---------------------------------------------------------------------
@@ -50,6 +81,7 @@ struct Node
 	size_t   _attrIndex = 0;     ///< Attribute Index that this nodes classifies
 	float    _threshold = 0.f;   ///< Threshold on the attribute value (only for decision nodes)
 	int      _class = -1;        ///< (only for terminal nodes)
+	size_t   _depth = 0;         ///< depth of the node in the tree
 };
 
 //---------------------------------------------------------------------
@@ -74,14 +106,14 @@ class DecisionTree
 {
 	private:
 		Graph _graph;
+		size_t _maxDepth = 1;  ///< defined by training
+
 	public:
-
-
-	DecisionTree();
-	void Train( const DataSet& );
-	int Classify( const DataPoint& ) const;
-	void addDecision();
-
+		DecisionTree();
+		bool Train( const DataSet& );
+		int Classify( const DataPoint& ) const;
+		void addDecision();
+		size_t maxDepth() const { return _maxDepth; }
 };
 
 //---------------------------------------------------------------------
@@ -102,11 +134,29 @@ DecisionTree::DecisionTree()
 }
 
 //---------------------------------------------------------------------
-/// Train tree using data
-void
+/// Train tree using data.
+/// Return false if failure
+bool
 DecisionTree::Train( const DataSet& data )
 {
+	if( !data.nbAttribs() )
+		return false;
+	auto nbAttribs = data.nbAttribs();
+// step 1 - compute entropy of dataset
 
+
+// step 2 - compute entropy of each attribute
+	for( auto i=0; i<nbAttribs; i++ )
+	{
+		auto datapoint = data.getDataPoint(i);
+	}
+
+// step 3 - order attribute by entropy, so we start with the attribute that has the highest entropy
+
+
+// step 4 - split iteratively dataset and build tree
+
+	return true;
 }
 
 //---------------------------------------------------------------------
@@ -123,12 +173,12 @@ DecisionTree::Classify( const DataPoint& point ) const
 		{
 			done = true;
 			retval = _graph[v]._class;
-			DEBUG << "Final node " << v << ", class = " << retval << "\n";
+			COUT << "Final node " << v << ", class = " << retval << "\n";
 		}
 		else
 		{
-			auto attrIndex = _graph[v]._attrIndex;
-			auto pt_val = point.getValue( attrIndex );
+			auto attrIndex = _graph[v]._attrIndex;  // get attrib index that this node handles
+			auto pt_val = point.getValue( attrIndex );  // get data point value for this attribute
 
 			auto edges = boost::out_edges( v, _graph );    // get the two output edges of the node
 			auto et = *edges.first;
@@ -140,7 +190,7 @@ DecisionTree::Classify( const DataPoint& point ) const
 				v = boost::target( et, _graph );
 			else
 				v = boost::target( ef, _graph );
-			DEBUG << "switching to node " << v << "\n";
+			COUT << "switching to node " << v << "\n";
 		}
 	}
 	while( !done );

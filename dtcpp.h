@@ -31,7 +31,7 @@ class DataPoint
 			return _attrValue.size();
 		}
 		void setSize( size_t n ) { _attrValue.resize(n); }
-		float getValue( size_t idx ) const
+		float attribVal( size_t idx ) const
 		{
 			assert( idx< _attrValue.size() );
 			return _attrValue[idx];
@@ -44,6 +44,7 @@ class DataSet
 	public:
 		DataSet( size_t n ) : _nbAttribs(n)
 		{ assert( n ); }
+		size_t size() const { return _dataPoint.size(); }
 		size_t nbAttribs() const
 		{ return _nbAttribs; }
 		void addDataPoint( const DataPoint& dp )
@@ -139,22 +140,40 @@ DecisionTree::DecisionTree()
 bool
 DecisionTree::Train( const DataSet& data )
 {
-	if( !data.nbAttribs() )
-		return false;
 	auto nbAttribs = data.nbAttribs();
+	if( !nbAttribs )
+		return false;
+
 // step 1 - compute entropy of dataset
 
 
 // step 2 - compute entropy of each attribute
+
+// key: attribute index, val: entropy
+//	std::vector<size_t,float> entropyVal( nbAttribs );
+
+
 	for( auto i=0; i<nbAttribs; i++ )
 	{
-		auto datapoint = data.getDataPoint(i);
+		for( auto j=0; j<data.size(); j++ )
+		{
+			auto datapoint = data.getDataPoint( j );
+			auto attrVal = datapoint.attribVal( i );
+		}
 	}
+
 
 // step 3 - order attribute by entropy, so we start with the attribute that has the highest entropy
 
 
+	std::vector<size_t> sortedAttributeIndex;
+
 // step 4 - split iteratively dataset and build tree
+	bool done = true;
+	for( uint i=0; i<nbAttribs; i++ )
+	{
+		;
+	}
 
 	return true;
 }
@@ -178,7 +197,7 @@ DecisionTree::Classify( const DataPoint& point ) const
 		else
 		{
 			auto attrIndex = _graph[v]._attrIndex;  // get attrib index that this node handles
-			auto pt_val = point.getValue( attrIndex );  // get data point value for this attribute
+			auto pt_val = point.attribVal( attrIndex );  // get data point value for this attribute
 
 			auto edges = boost::out_edges( v, _graph );    // get the two output edges of the node
 			auto et = *edges.first;

@@ -21,10 +21,12 @@
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
+			<Add option="-std=gnu++14" />
 			<Add option="-fexceptions" />
 		</Compiler>
 		<Unit filename="Doxyfile" />
 		<Unit filename="Makefile" />
+		<Unit filename="README.md" />
 		<Unit filename="dtcpp.h" />
 		<Unit filename="main.cpp" />
 		<Extensions>

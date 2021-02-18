@@ -4,7 +4,7 @@
 for continuous data values (aka real numbers)
 \author S. Kramm - 2021
 
-- Limited to binary tree (a node has only two childs)
+- Limited to binary classification (a tree node has only two childs) but goal is to expand this to multiclass
 - Does not handle missing values
 - using boost::graph to model the tree
 */
@@ -19,17 +19,23 @@ for continuous data values (aka real numbers)
 	#define COUT if(0) std::cout
 #endif // DEBUG
 
+#define START std::cout << __FUNCTION__ << "()\n";
+
+
 //---------------------------------------------------------------------
+/// A datapoint, holds a set of attributes value and a corresponding (binary) class
 class DataPoint
 {
 	private:
 		std::vector<float> _attrValue;
 		int _class = -1;  ///< Class of the datapoint, -1 for undefined
+
 	public:
 		size_t nbAttribs() const
 		{
 			return _attrValue.size();
 		}
+		int getClass() const { return _class; }
 		void setSize( size_t n ) { _attrValue.resize(n); }
 		float attribVal( size_t idx ) const
 		{
@@ -39,6 +45,7 @@ class DataPoint
 };
 
 //---------------------------------------------------------------------
+/// A dataset, holds a set of \ref DataPoint
 class DataSet
 {
 	public:
@@ -89,7 +96,12 @@ struct NodeC
 //---------------------------------------------------------------------
 struct NodeT
 {
-	std::vector<uint> _dpIdx; ///< data point indexes
+	NodeType _type;
+	int      _class = -1;        ///< (only for terminal nodes)
+	size_t   _attrIndex = 0;     ///< Attribute Index that this nodes classifies
+	float    _threshold = 0.f;   ///< Threshold on the attribute value (only for decision nodes)
+
+	std::vector<uint> v_Idx; ///< data point indexes
 };
 
 //---------------------------------------------------------------------
@@ -102,6 +114,7 @@ struct EdgeC
 /// Edge of the tree. Single parameter is true/false of the above decision, depending on threshold
 struct EdgeT
 {
+	bool side;
 //	std::vector<size_t> _dpIdx; ///< data point indexes
 };
 
@@ -174,14 +187,118 @@ DecisionTree::DecisionTree()
 }
 
 //---------------------------------------------------------------------
+/// Finds the best attributes to use, considering the data points of the current node
+/// and compute threshold on that attribute so that the two classes are separated at best.
+/// Returns the index of this attribute
+std::pair<uint,float>
+findBestAttribute(
+	const std::vector<uint>& vIdx,
+	const DataSet&           data,
+	std::map<uint,bool>&     aMap
+)
+{
+	START;
+// step 1 - fetch the indexes of the attributes we need to explore
+	std::vector<uint> v_attrIdx;
+	for( auto elem: aMap )
+		if( elem.second = false )
+			v_attrIdx.push_back(elem.first);
+
+// step 2 - compute entropy for each of these
+	std::vector<float> v_entropy;
+	for( auto idx: v_attrIdx )
+		v_entropy.push_back( computeEntropy() );
+
+// step 3 - get the one with min value and compute the best threshold
+	auto it_mval = std::min_element( std::begin(v_entropy), std::end(v_entropy) );
+
+
+}
+//---------------------------------------------------------------------
 /// Recursive helper function, used by TrainingTree::Train()
 /**
-Computes the threshold and splits the dataset and assigns the split to 2 sub nodes (that get created)
+Computes the threshold, splits the dataset and assigns the split to 2 sub nodes (that get created)
 */
 bool
-SplitNode( vertexT_t v, uint attribIdx, GraphT& _graph )
+SplitNode(
+	vertexT_t            v,         ///< current node
+	std::map<uint,bool>& aMap,      ///< attribute map, holds true for all the attributes already used
+	GraphT&              graph,     ///< graph
+	const DataSet&       data       ///< dataset
+)
 {
+	auto vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
 
+
+// step 1.1 - check if there are different output classes in the given data points
+// if not, then we are done
+	size_t c1 = 0;
+	for( auto idx: vIdx )
+		if( data.getDataPoint( idx ).getClass() )
+			c1++;
+	size_t c0 = vIdx.size() - c1;
+	COUT << "c0=" << c0 << " c1=" << c1 << "\n";
+	if( c0 == 0 || c1 == 0 )
+	{
+		COUT << "single class in current dataset split holding " << vIdx.size() << " pts\n";
+		graph[v]._type = NT_Final;
+		graph[v]._class = (c0 ? 0 : 1);
+		return true;
+	}
+
+// step 1.2 - check if there are some remaining attributes to use
+// if not, then we are done
+	bool foundAnother = false;
+	for( const auto& elem: aMap )
+		if( elem.second == false )
+			foundAnother = true;
+	if( !foundAnother )
+	{
+		COUT << "no more attributes, done\n";
+		graph[v]._type = NT_Final;
+		return true;
+	}
+
+
+// step 2 - find the best attribute to use to split the data, considering the data points of the current node
+	auto pair_id_th = findBestAttribute( vIdx, data, aMap );
+	auto attribIdx  = pair_id_th.first;
+	auto threshold  = pair_id_th.second;
+	COUT << "best attrib=" << attribIdx << " thres value=" << threshold << "\n";
+
+	aMap[attribIdx] = true;  // so we will not use it again
+	graph[v]._attrIndex = attribIdx;
+	graph[v]._threshold = threshold;
+
+
+// step 3 - different classes here: we create two child nodes and split the dataset
+	auto v1 = boost::add_vertex(graph);
+	auto v2 = boost::add_vertex(graph);
+
+	auto et = boost::add_edge( v, v1, graph );
+	auto ef = boost::add_edge( v, v2, graph );
+	graph[et.first].side = true;
+	graph[ef.first].side = false;
+
+	COUT << "two nodes added, total nb=" << boost::num_vertices(graph) << "\n";
+
+	for( auto idx: vIdx )           // separate the data points into two sets
+	{
+		auto point = data.getDataPoint( idx );
+		auto attrVal = point.attribVal( attribIdx );
+		if( attrVal < threshold )
+			graph[v1].v_Idx.push_back( idx );
+		else
+			graph[v2].v_Idx.push_back( idx );
+		auto b1 = SplitNode( v1, aMap, graph, data );
+		auto b2 = SplitNode( v2, aMap, graph, data );
+		if( b1 && b2 )
+		{
+			COUT << "both nodes are done, return true\n";
+			return true;
+		}
+	}
+	return false;
 }
 //---------------------------------------------------------------------
 /// Train tree using data.
@@ -209,24 +326,31 @@ int attribIdx = 0;
 		}
 	}*/
 
-// step 3 - Create initial node, ans assign to it the whole dataset
+// step 3 - Create initial node, and assign to it the whole dataset
 
 	auto n0  = boost::add_vertex(_graph);
 	std::vector<uint> v_idx( data.size() );
 	uint i=0;
 	for( auto& id: v_idx )
 		id = i++;
-	_graph[n0]._dpIdx = v_idx;
-	SplitNode( n0, attribIdx, _graph );
+	_graph[n0].v_Idx = v_idx;
+	_graph[n0]._type = NT_Root;
+
+	std::map<uint,bool> attribMap;
+	for( uint i=0; i<nbAttribs; i++ )
+		attribMap[i] = false;
+
+// Call the "split" function (recursive)
+	SplitNode( n0, attribMap, _graph, data );
 
 
 //order attribute by entropy, so we start with the attribute that has the highest entropy
 
 
-	std::vector<size_t> sortedAttributeIndex(nbAttribs);
+//	std::vector<size_t> sortedAttributeIndex(nbAttribs);
 
 // step 4 - split iteratively dataset and build tree
-	bool done = true;
+/*	bool done = true;
 	for( uint i=0; i<nbAttribs; i++ )
 	{
 		for( uint dpidx=0; dpidx<data.size(); dpidx++ )
@@ -236,7 +360,7 @@ int attribIdx = 0;
 
 		}
 
-	}
+	}*/
 
 	return true;
 }

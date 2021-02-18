@@ -1,3 +1,6 @@
 
 doc:
-	doxygen Doxyfile
+	@doxygen Doxyfile
+
+clean:
+	@-rm html/*

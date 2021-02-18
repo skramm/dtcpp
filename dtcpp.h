@@ -35,11 +35,11 @@ class DataPoint
 		{
 			return _attrValue.size();
 		}
-		int getClass() const { return _class; }
+		int classVal() const { return _class; }
 		void setSize( size_t n ) { _attrValue.resize(n); }
 		float attribVal( size_t idx ) const
 		{
-			assert( idx< _attrValue.size() );
+			assert( idx<_attrValue.size() );
 			return _attrValue[idx];
 		}
 };
@@ -49,6 +49,9 @@ class DataPoint
 class DataSet
 {
 	public:
+		DataSet() : _nbAttribs(0)
+		{
+		}
 		DataSet( size_t n ) : _nbAttribs(n)
 		{ assert( n ); }
 		size_t size() const { return _dataPoint.size(); }
@@ -69,11 +72,19 @@ class DataSet
 			assert( idx < _dataPoint.size() );
 			return _dataPoint[idx];
 		}
+		bool load( std::string fname );
 	private:
 		size_t _nbAttribs = 0;
 		std::vector<DataPoint> _dataPoint;
 };
 
+//---------------------------------------------------------------------
+bool
+DataSet::load( std::string fname )
+{
+
+	return true;
+}
 //---------------------------------------------------------------------
 enum NodeType
 {
@@ -89,7 +100,7 @@ struct NodeC
 	size_t   _attrIndex = 0;     ///< Attribute Index that this nodes classifies
 	float    _threshold = 0.f;   ///< Threshold on the attribute value (only for decision nodes)
 	int      _class = -1;        ///< (only for terminal nodes)
-	size_t   _depth = 0;         ///< depth of the node in the tree
+	uint     depth = 0;         ///< depth of the node in the tree
 };
 
 
@@ -100,6 +111,7 @@ struct NodeT
 	int      _class = -1;        ///< (only for terminal nodes)
 	size_t   _attrIndex = 0;     ///< Attribute Index that this nodes classifies
 	float    _threshold = 0.f;   ///< Threshold on the attribute value (only for decision nodes)
+	uint     depth = 0;         ///< depth of the node in the tree
 
 	std::vector<uint> v_Idx; ///< data point indexes
 };
@@ -108,14 +120,13 @@ struct NodeT
 /// Edge of the tree. Single parameter is true/false of the above decision, depending on threshold
 struct EdgeC
 {
-	bool _res;
+	bool side;
 };
 //---------------------------------------------------------------------
 /// Edge of the tree. Single parameter is true/false of the above decision, depending on threshold
 struct EdgeT
 {
 	bool side;
-//	std::vector<size_t> _dpIdx; ///< data point indexes
 };
 
 //---------------------------------------------------------------------
@@ -151,7 +162,7 @@ class TrainingTree
 		size_t _maxDepth = 1;  ///< defined by training
 	public:
 		bool Train( const DataSet& );
-
+		void printDot( std::ostream& ) const;
 };
 
 //---------------------------------------------------------------------
@@ -163,7 +174,6 @@ class DecisionTree
 
 	public:
 		DecisionTree();
-//		bool Train( const DataSet& );
 		int Classify( const DataPoint& ) const;
 		void addDecision();
 		size_t maxDepth() const { return _maxDepth; }
@@ -173,7 +183,7 @@ class DecisionTree
 /// Create a DT having a single decision point (root node) and 3 nodes
 DecisionTree::DecisionTree()
 {
-	auto r  = boost::add_vertex(_graph);
+/*	auto r  = boost::add_vertex(_graph);
 	auto v1 = boost::add_vertex(_graph);
 	auto v2 = boost::add_vertex(_graph);
 	_graph[r]._type  = NT_Root;
@@ -183,36 +193,85 @@ DecisionTree::DecisionTree()
 	auto et = boost::add_edge( r, v1, _graph );
 	auto ef = boost::add_edge( r, v2, _graph );
 	_graph[et.first]._res = true;
-	_graph[ef.first]._res = false;
+	_graph[ef.first]._res = false;*/
 }
 
+//---------------------------------------------------------------------
+/// Print a DOT file of the tree
+void
+TrainingTree::printDot( std::ostream& f ) const
+{
+// TODO
+}
+//---------------------------------------------------------------------
+/// Compute entropy of attribute \c atIdx of the subset of data given by \c v_dpidx
+float
+computeEntropy(
+	uint                     atIdx,   ///< attribute index
+	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
+	const DataSet&           data     ///< dataset
+)
+{
+	START;
+	float v;
+// TODO
+	return v;
+}
 //---------------------------------------------------------------------
 /// Finds the best attributes to use, considering the data points of the current node
 /// and compute threshold on that attribute so that the two classes are separated at best.
 /// Returns the index of this attribute
 std::pair<uint,float>
 findBestAttribute(
-	const std::vector<uint>& vIdx,
-	const DataSet&           data,
-	std::map<uint,bool>&     aMap
+	const std::vector<uint>& vIdx,  ///< indexes of data points we need to consider
+	const DataSet&           data,  ///< whole dataset
+	std::map<uint,bool>&     aMap   ///< map of the attributes that "may" be left
 )
 {
 	START;
+	using pfi_t = std::pair<float,int>;
+
 // step 1 - fetch the indexes of the attributes we need to explore
 	std::vector<uint> v_attrIdx;
 	for( auto elem: aMap )
-		if( elem.second = false )
+		if( elem.second == false )
 			v_attrIdx.push_back(elem.first);
 
-// step 2 - compute entropy for each of these
+// step 2 - compute IG for each of these attributes, only for the considered points
 	std::vector<float> v_entropy;
-	for( auto idx: v_attrIdx )
-		v_entropy.push_back( computeEntropy() );
+	for( auto atIdx: v_attrIdx )
+		v_entropy.push_back( computeEntropy( atIdx, vIdx, data ) );
 
 // step 3 - get the one with min value and compute the best threshold
 	auto it_mval = std::min_element( std::begin(v_entropy), std::end(v_entropy) );
 
+	std::pair<uint,float> retval;
+	retval.first = *it_mval;
 
+// Store the attribute values and the output class into a container, so it can be sorted
+	std::vector<pfi_t> v_pairs( vIdx.size() );
+	uint i=0;
+	for( auto dpIdx : vIdx )
+	{
+		const auto& dataPoint = data.getDataPoint( dpIdx );
+		v_pairs.at(i).first  = dataPoint.attribVal( retval.first );
+		v_pairs.at(i).second = dataPoint.classVal();
+		i++;
+	}
+
+// sort it
+	std::sort(
+		std::begin(v_pairs),
+		std::end(v_pairs),
+		[]                         // lambda
+		( pfi_t p1, pfi_t p2 )
+		{
+			return p1.first < p2.first;
+		}
+	);
+
+
+	return retval	;
 }
 //---------------------------------------------------------------------
 /// Recursive helper function, used by TrainingTree::Train()
@@ -220,13 +279,14 @@ findBestAttribute(
 Computes the threshold, splits the dataset and assigns the split to 2 sub nodes (that get created)
 */
 bool
-SplitNode(
+splitNode(
 	vertexT_t            v,         ///< current node
 	std::map<uint,bool>& aMap,      ///< attribute map, holds true for all the attributes already used
 	GraphT&              graph,     ///< graph
 	const DataSet&       data       ///< dataset
 )
 {
+	START;
 	auto vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
 
 
@@ -234,7 +294,7 @@ SplitNode(
 // if not, then we are done
 	size_t c1 = 0;
 	for( auto idx: vIdx )
-		if( data.getDataPoint( idx ).getClass() )
+		if( data.getDataPoint( idx ).classVal() )
 			c1++;
 	size_t c0 = vIdx.size() - c1;
 	COUT << "c0=" << c0 << " c1=" << c1 << "\n";
@@ -259,7 +319,6 @@ SplitNode(
 		return true;
 	}
 
-
 // step 2 - find the best attribute to use to split the data, considering the data points of the current node
 	auto pair_id_th = findBestAttribute( vIdx, data, aMap );
 	auto attribIdx  = pair_id_th.first;
@@ -269,11 +328,15 @@ SplitNode(
 	aMap[attribIdx] = true;  // so we will not use it again
 	graph[v]._attrIndex = attribIdx;
 	graph[v]._threshold = threshold;
-
+	graph[v]._type = NT_Decision;
 
 // step 3 - different classes here: we create two child nodes and split the dataset
 	auto v1 = boost::add_vertex(graph);
 	auto v2 = boost::add_vertex(graph);
+
+	graph[v1].depth = graph[v].depth+1;
+	graph[v2].depth = graph[v].depth+1;
+
 
 	auto et = boost::add_edge( v, v1, graph );
 	auto ef = boost::add_edge( v, v2, graph );
@@ -290,8 +353,8 @@ SplitNode(
 			graph[v1].v_Idx.push_back( idx );
 		else
 			graph[v2].v_Idx.push_back( idx );
-		auto b1 = SplitNode( v1, aMap, graph, data );
-		auto b2 = SplitNode( v2, aMap, graph, data );
+		auto b1 = splitNode( v1, aMap, graph, data );
+		auto b2 = splitNode( v2, aMap, graph, data );
 		if( b1 && b2 )
 		{
 			COUT << "both nodes are done, return true\n";
@@ -306,6 +369,7 @@ SplitNode(
 bool
 TrainingTree::Train( const DataSet& data )
 {
+	START;
 	auto nbAttribs = data.nbAttribs();
 	if( !nbAttribs )
 		return false;
@@ -341,7 +405,7 @@ int attribIdx = 0;
 		attribMap[i] = false;
 
 // Call the "split" function (recursive)
-	SplitNode( n0, attribMap, _graph, data );
+	splitNode( n0, attribMap, _graph, data );
 
 
 //order attribute by entropy, so we start with the attribute that has the highest entropy
@@ -389,7 +453,7 @@ DecisionTree::Classify( const DataPoint& point ) const
 			auto edges = boost::out_edges( v, _graph );    // get the two output edges of the node
 			auto et = *edges.first;
 			auto ef = *edges.second;
-			if( _graph[et]._res )
+			if( _graph[et].side )
 				std::swap( et, ef );
 
 			if( pt_val < _graph[v]._threshold )  // depending on threshold, define the next node

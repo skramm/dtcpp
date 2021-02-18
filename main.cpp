@@ -15,5 +15,10 @@ int main()
 {
     cout << "Hello world!" << endl;
 
-    DecisionTree dt;
+    DataSet dataset;
+    dataset.load( "demodata1.csv" );
+
+    TrainingTree tt;
+    tt.Train( dataset );
+    tt.printDot( std::cout );
 }

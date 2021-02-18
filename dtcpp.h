@@ -76,7 +76,7 @@ enum NodeType
 //---------------------------------------------------------------------
 /// A node of the tree
 /// \todo separate class into two, because decision node and terminal nodes do not hold the same things
-struct Node
+struct NodeC
 {
 	NodeType _type;
 	size_t   _attrIndex = 0;     ///< Attribute Index that this nodes classifies
@@ -85,33 +85,72 @@ struct Node
 	size_t   _depth = 0;         ///< depth of the node in the tree
 };
 
+
+//---------------------------------------------------------------------
+struct NodeT
+{
+	std::vector<uint> _dpIdx; ///< data point indexes
+};
+
 //---------------------------------------------------------------------
 /// Edge of the tree. Single parameter is true/false of the above decision, depending on threshold
-struct Edge
+struct EdgeC
 {
 	bool _res;
 };
+//---------------------------------------------------------------------
+/// Edge of the tree. Single parameter is true/false of the above decision, depending on threshold
+struct EdgeT
+{
+//	std::vector<size_t> _dpIdx; ///< data point indexes
+};
 
-using Graph = boost::adjacency_list<
+//---------------------------------------------------------------------
+/// used for classifying
+using GraphC = boost::adjacency_list<
 		boost::vecS,
 		boost::vecS,
 		boost::directedS,
-		Node,
-		Edge
+		NodeC,
+		EdgeC
 	>;
 
-using vertex_t = boost::graph_traits<Graph>::vertex_descriptor;
+/// used for training
+using GraphT = boost::adjacency_list<
+		boost::vecS,
+		boost::vecS,
+		boost::directedS,
+		NodeT,
+		EdgeT
+	>;
+
+using vertexT_t = boost::graph_traits<GraphT>::vertex_descriptor;
+using vertexC_t = boost::graph_traits<GraphC>::vertex_descriptor;
+
+//---------------------------------------------------------------------
+/// This one holds edges that each have a vector holding the index of datapoints.
+/// This is memory costly, but useless for classifying, so once it is trained, we can use the \ref DecisionTree class
+/// \todo unify by templating the type of edges
+class TrainingTree
+{
+	private:
+		GraphT _graph;
+		size_t _maxDepth = 1;  ///< defined by training
+	public:
+		bool Train( const DataSet& );
+
+};
 
 //---------------------------------------------------------------------
 class DecisionTree
 {
 	private:
-		Graph _graph;
+		GraphC _graph;
 		size_t _maxDepth = 1;  ///< defined by training
 
 	public:
 		DecisionTree();
-		bool Train( const DataSet& );
+//		bool Train( const DataSet& );
 		int Classify( const DataPoint& ) const;
 		void addDecision();
 		size_t maxDepth() const { return _maxDepth; }
@@ -135,10 +174,20 @@ DecisionTree::DecisionTree()
 }
 
 //---------------------------------------------------------------------
+/// Recursive helper function, used by TrainingTree::Train()
+/**
+Computes the threshold and splits the dataset and assigns the split to 2 sub nodes (that get created)
+*/
+bool
+SplitNode( vertexT_t v, uint attribIdx, GraphT& _graph )
+{
+
+}
+//---------------------------------------------------------------------
 /// Train tree using data.
 /// Return false if failure
 bool
-DecisionTree::Train( const DataSet& data )
+TrainingTree::Train( const DataSet& data )
 {
 	auto nbAttribs = data.nbAttribs();
 	if( !nbAttribs )
@@ -147,12 +196,10 @@ DecisionTree::Train( const DataSet& data )
 // step 1 - compute entropy of dataset
 
 
-// step 2 - compute entropy of each attribute
+// step 2 - compute entropy of each attribute and find the one that maximizes information
 
-// key: attribute index, val: entropy
-//	std::vector<size_t,float> entropyVal( nbAttribs );
-
-
+int attribIdx = 0;
+/*
 	for( auto i=0; i<nbAttribs; i++ )
 	{
 		for( auto j=0; j<data.size(); j++ )
@@ -160,19 +207,35 @@ DecisionTree::Train( const DataSet& data )
 			auto datapoint = data.getDataPoint( j );
 			auto attrVal = datapoint.attribVal( i );
 		}
-	}
+	}*/
+
+// step 3 - Create initial node, ans assign to it the whole dataset
+
+	auto n0  = boost::add_vertex(_graph);
+	std::vector<uint> v_idx( data.size() );
+	uint i=0;
+	for( auto& id: v_idx )
+		id = i++;
+	_graph[n0]._dpIdx = v_idx;
+	SplitNode( n0, attribIdx, _graph );
 
 
-// step 3 - order attribute by entropy, so we start with the attribute that has the highest entropy
+//order attribute by entropy, so we start with the attribute that has the highest entropy
 
 
-	std::vector<size_t> sortedAttributeIndex;
+	std::vector<size_t> sortedAttributeIndex(nbAttribs);
 
 // step 4 - split iteratively dataset and build tree
 	bool done = true;
 	for( uint i=0; i<nbAttribs; i++ )
 	{
-		;
+		for( uint dpidx=0; dpidx<data.size(); dpidx++ )
+		{
+			auto point = data.getDataPoint( dpidx );
+//			if( point.class() )
+
+		}
+
 	}
 
 	return true;
@@ -184,7 +247,7 @@ int
 DecisionTree::Classify( const DataPoint& point ) const
 {
 	int retval = -1;
-	vertex_t v = 0;   ///< initialize for first node
+	vertexC_t v = 0;   ///< initialize for first node
 	bool done = true;
 	do
 	{

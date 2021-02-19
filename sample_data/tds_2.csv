@@ -1,0 +1,12 @@
+# from https://towardsdatascience.com/under-the-hood-decision-tree-454f8581684e
+# second set, with only 8 values
+
+8 3 1
+4 4 0
+6 4 1
+7 4 1
+8 6 1
+5 8 0
+4 9 0
+9 9 0
+

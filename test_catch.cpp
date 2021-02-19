@@ -37,11 +37,22 @@ TEST_CASE( "maj vote", "[majv]" )
 TEST_CASE( "compute IG", "[cig]" )
 {
 	DataSet dataset;
-	dataset.load( "sample_data/tds_1.csv" );
-	REQUIRE( dataset.size() == 10 );
-	std::vector<uint> v_dpidx{0,1,2,3,4};   // all the points
-	auto ig0 = computeIG( 0, v_dpidx, dataset );
+	dataset.load( "sample_data/tds_2.csv" );
+	REQUIRE( dataset.size() == 8 );
 
-	auto ig1 = computeIG( 0, v_dpidx, dataset );
+	auto v_dpidx = priv::setAllDataPoints( dataset );    // all the points
+
+	auto giniCoeff = getGlobalGiniCoeff( v_dpidx, dataset );
+
+	auto ig0 = computeIG( 0, v_dpidx, dataset, giniCoeff );
+	auto ig1 = computeIG( 1, v_dpidx, dataset, giniCoeff );
+}
+//-------------------------------------------------------------------------------------------
+TEST_CASE( "removeDuplicates", "[RD]" )
+{
+
+	std::vector<float> values{1., 2., 3., 4., 2. };
+	removeDuplicates( values, 1.0 );
+	CHECK( values.size() == 4 );
 }
 //-------------------------------------------------------------------------------------------

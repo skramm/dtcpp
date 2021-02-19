@@ -12,6 +12,8 @@ for continuous data values (aka real numbers)
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <numeric>
+
 #include <boost/graph/adjacency_list.hpp>
 
 #define DEBUG
@@ -32,9 +34,12 @@ for continuous data values (aka real numbers)
 /// General utility function
 template<typename T>
 void
-printVector( std::ostream& f, const std::vector<T>& vec )
+printVector( std::ostream& f, const std::vector<T>& vec, const char* msg=0 )
 {
-	f << "Vector: #=" << vec.size() << ":\n";
+	f << "Vector: ";
+	if( msg )
+		f << msg;
+	f << " #=" << vec.size() << ":\n";
 	for( const auto& elem : vec )
 		f << elem << "-";
 	f << "\n";
@@ -403,6 +408,19 @@ TrainingTree::printDot( std::ostream& f ) const
 {
 // TODO
 }
+
+//---------------------------------------------------------------------
+/// Utility functions, returns a vector of indexes holding all the points
+namespace priv {
+std::vector<uint>
+setAllDataPoints( const DataSet& dataset )
+{
+	std::vector<uint> v( dataset.size() );
+	std::iota( v.begin(), v.end(), 0 );
+	return v;
+}
+} // namespace priv
+
 //---------------------------------------------------------------------
 /// Computes the nb of votes for each class, for the points defined in \c v_Idx
 std::map<uint,uint>
@@ -419,8 +437,56 @@ computeClassVotes( const std::vector<uint>& v_Idx, const DataSet&  data )
 	return classVotes;
 }
 //---------------------------------------------------------------------
+double
+getGlobalGiniCoeff(
+	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
+	const DataSet&           data     ///< dataset
+)
+{
+	START;
+	auto classVotes = computeClassVotes( v_dpidx, data );
+
+	double giniCoeff = 1.;
+	for( auto elem: classVotes )
+	{
+		auto v = 1. * elem.second / v_dpidx.size();
+		giniCoeff -= v*v;
+	}
+	COUT << "global Gini Coeff=" << giniCoeff << '\n';
+	return giniCoeff;
+}
+//---------------------------------------------------------------------
+/// Utility function, sort vector and removes values whose difference is small
+/**
+\todo Check if not faster to use a set ?
+*/
+void
+removeDuplicates( std::vector<float>& vec, float coeff )
+{
+		auto mm = std::minmax( std::begin(vec), std::end(vec) )	;
+		auto max_range = mm.second - mm.first;
+		COUT << "max_range=" << max_range << '\n';
+
+		std::sort( vec.begin(), vec.end() );
+
+// remove all values that are equal
+	auto it_end = std::unique(
+		std::begin(vec),
+		std::end(vec),
+		[max_range,coeff]                        // lambda
+		( float v1, float v2 )
+		{
+			if( std::fabs(v1-v2) / max_range < coeff )
+				return true;
+			return false;
+		}
+	);
+	vec.erase( it_end, vec.end() );
+}
+
+//---------------------------------------------------------------------
 /// Compute best IG (Information Gain) of attribute \c atIdx of the subset of data given by \c v_dpidx.
-/// Will return the IG value AND the threshold value for which is was produced
+/// Will return the IG value AND the threshold value for which it was produced
 /**
 Details:
 - Uses the Gini coeff: https://en.wikipedia.org/wiki/Gini_coefficient
@@ -431,23 +497,14 @@ Details:
 //template<typename T>
 std::pair<float,float>
 computeIG(
-	uint                     atIdx,   ///< attribute index
-	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
-	const DataSet&           data     ///< dataset
+	uint                     atIdx,     ///< attribute index
+	const std::vector<uint>& v_dpidx,   ///< datapoint indexes to consider
+	const DataSet&           data,      ///< dataset
+	double                   giniCoeff  ///< Global Gini coeff for all the points
 )
 {
 	START;
-	std::pair<float,float> v;
 
-// step 0 - compute Gini coeff for all the points
-	auto classVotes = computeClassVotes( v_dpidx, data );
-
-	double giniCoeff = 1.;
-	for( auto elem: classVotes )
-	{
-		auto v = 1. * elem.second / v_dpidx.size();
-		giniCoeff -= v*v;
-	}
 
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
 
@@ -455,19 +512,22 @@ computeIG(
 	for( size_t i=0; i<v_dpidx.size(); i++ )
 		v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
 
+	removeDuplicates( v_attribVal, 1.0 );
+
 	std::sort( v_attribVal.begin(), v_attribVal.end() );         // sort the attribute values
 
 	std::vector<float> v_thresVal( v_dpidx.size()-1 ); // if 10 values, then only 9 thresholds
 	for( uint i=0; i<v_dpidx.size()-1; i++ )
 		v_thresVal[i] = 1. * ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.;
 
-	printVector( std::cout, v_thresVal );
+	printVector( std::cout, v_thresVal, "thresholds" );
 
 // step 2: compute IG for each threshold value
 
 	std::vector<float> deltaGini( v_thresVal.size() );
 	for( uint i=0; i<v_thresVal.size(); i++ )  // for each threshold value
 	{
+		COUT << "thres " << i << "=" << v_thresVal[i] << '\n';
 		std::map<uint,uint> m_LT, m_HT; //
 		uint nb_LT = 0;
 		uint nb_HT = 0;
@@ -500,6 +560,7 @@ computeIG(
 			g_HT -= val*val;
 		}
 		deltaGini[i] = giniCoeff - (g_LT + g_HT) / 2.;
+		COUT << "  => deltaGini = " << deltaGini[i] << '\n';
 	}
 
 // step 3 - find max value of the delta Gini
@@ -508,7 +569,9 @@ computeIG(
 		std::end( deltaGini )
 	);
 
-	COUT << "max gini for thres idx=" << *max_pos << "\n";
+	COUT << "max gini for thres idx=" << std::distance( std::begin( deltaGini ), max_pos ) << " val=" << *max_pos << "\n";
+
+	std::pair<float,float> v;
 
 	return v;
 }
@@ -535,10 +598,12 @@ findBestAttribute(
 
 	assert( v_attrIdx.size() );   // if not, well... shouldn't happen !
 
+	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
+
 // step 2 - compute best IG/threshold for each of these attributes, only for the considered points
 	std::vector<std::pair<float,float>> v_IG;
 	for( auto atIdx: v_attrIdx )
-		v_IG.push_back( computeIG( atIdx, vIdx, data ) );
+		v_IG.push_back( computeIG( atIdx, vIdx, data, giniCoeff ) );
 
 // step 3 - get the one with max value and compute the best threshold
 	auto it_mval = std::max_element( std::begin(v_IG), std::end(v_IG) ); // TODO: need a lambda here !

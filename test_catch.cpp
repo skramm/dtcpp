@@ -1,4 +1,7 @@
-
+/**
+\file
+\brief test program, needs Catch2: https://github.com/catchorg/Catch2
+*/
 
 
 #define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
@@ -30,3 +33,13 @@ TEST_CASE( "maj vote", "[majv]" )
 	}
 }
 
+//-------------------------------------------------------------------------------------------
+TEST_CASE( "compute IG", "[cig]" )
+{
+	DataSet dataset;
+	dataset.load( "sample_data/tds_1.csv" );
+	REQUIRE( dataset.size() == 10 );
+	std::vector<uint> v_dpidx{0,1,2,3,4};   // all the points
+	auto ig0 = computeIG( 0, v_dpidx, dataset );
+}
+//-------------------------------------------------------------------------------------------

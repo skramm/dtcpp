@@ -28,6 +28,18 @@ for continuous data values (aka real numbers)
 //class DataSet;
 
 //---------------------------------------------------------------------
+/// General utility function
+template<typename T>
+void
+printVector( std::ostream& f, const std::vector<T>& vec )
+{
+	f << "Vector: #=" << vec.size() << ":\n";
+	for( const auto& elem : vec )
+		f << elem << "-";
+	f << "\n";
+}
+
+//---------------------------------------------------------------------
 /// A datapoint, holds a set of attributes value and a corresponding (binary) class
 //template<typename T>
 class DataPoint
@@ -141,9 +153,9 @@ DataSet::print( std::ostream& f ) const
 	for( size_t i=0; i<nbAttribs(); i++ )
 		f << i << "; ";
 	f << " class\n";
-/*	for( const auto& pt: _dataPoint )
+	for( const auto& pt: _dataPoint )
 		for( const auto& val: pt._attrValue )
-			f << val << ";";*/
+			f << val << ";";
 	f << "\n";
 }
 
@@ -288,7 +300,11 @@ computeClassVotes( const std::vector<uint>& v_Idx, const DataSet&  data )
 /// Compute best IG (Information Gain) of attribute \c atIdx of the subset of data given by \c v_dpidx.
 /// Will return the IG value AND the threshold value for which is was produced
 /**
-Uses the Gini coeff: https://en.wikipedia.org/wiki/Gini_coefficient
+Details:
+- Uses the Gini coeff: https://en.wikipedia.org/wiki/Gini_coefficient
+- for details, see
+ - https://en.wikipedia.org/wiki/Information_gain_in_decision_trees
+ - https://towardsdatascience.com/under-the-hood-decision-tree-454f8581684e
 */
 //template<typename T>
 std::pair<float,float>
@@ -314,20 +330,63 @@ computeIG(
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
 
 	std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
-	size_t i=0;
-	for( auto ptIdx: v_dpidx )
-		v_attribVal[i++] = data.getDataPoint(ptIdx).attribVal( atIdx );
+	for( size_t i=0; i<v_dpidx.size(); i++ )
+		v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
+
 	std::sort( v_attribVal.begin(), v_attribVal.end() );         // sort the attribute values
 
-	i=0;
 	std::vector<float> v_thresVal( v_dpidx.size()-1 ); // if 10 values, then only 9 thresholds
 	for( uint i=0; i<v_dpidx.size()-1; i++ )
-		v_thresVal[i++] = 1. * ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.;
+		v_thresVal[i] = 1. * ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.;
 
-//	printVector( std::cout, v_thresVal );
+	printVector( std::cout, v_thresVal );
 
 // step 2: compute IG for each threshold value
 
+	std::vector<float> deltaGini( v_thresVal.size() );
+	for( uint i=0; i<v_thresVal.size(); i++ )  // for each threshold value
+	{
+		std::map<uint,uint> m_LT, m_HT; //
+		uint nb_LT = 0;
+		uint nb_HT = 0;
+		for( auto ptIdx: v_dpidx )    // for each data point
+		{
+			auto point = data.getDataPoint(ptIdx);;
+			auto attribVal = point.attribVal( atIdx );
+			if( attribVal<v_thresVal[i] )
+			{
+				m_LT[ point.classVal() ]++;
+				nb_LT++;
+			}
+			else
+			{
+				m_HT[ point.classVal() ]++;
+				nb_HT++;
+			}
+		}
+
+		auto g_LT = 1.;
+		for( auto p: m_LT )  // for the values that are Lower Than the threshold
+		{
+			auto val = 1. * p.second / nb_LT;
+			g_LT -= val*val;
+		}
+		auto g_HT = 1.;
+		for( auto p: m_LT )  // for the values that are Higher Than the threshold
+		{
+			auto val = 1. * p.second / nb_HT;
+			g_HT -= val*val;
+		}
+		deltaGini[i] = giniCoeff - (g_LT + g_HT) / 2.;
+	}
+
+// step 3 - find max value of the delta Gini
+	auto max_pos = std::max_element(
+		std::begin( deltaGini ),
+		std::end( deltaGini )
+	);
+
+	COUT << "max gini for thres idx=" << *max_pos << "\n";
 
 	return v;
 }
@@ -354,17 +413,16 @@ findBestAttribute(
 
 	assert( v_attrIdx.size() );   // if not, well... shouldn't happen !
 
-// step 2 - compute best IG for each of these attributes, only for the considered points
+// step 2 - compute best IG/threshold for each of these attributes, only for the considered points
 	std::vector<std::pair<float,float>> v_IG;
 	for( auto atIdx: v_attrIdx )
 		v_IG.push_back( computeIG( atIdx, vIdx, data ) );
-
 
 // step 3 - get the one with max value and compute the best threshold
 	auto it_mval = std::max_element( std::begin(v_IG), std::end(v_IG) ); // TODO: need a lambda here !
 
 	std::pair<uint,float> retval;
-	retval.first = *it_mval;
+//	retval.first = *it_mval;
 
 // Store the attribute values and the output class into a container, so it can be sorted
 	std::vector<Pfi_t> v_pairs( vIdx.size() );

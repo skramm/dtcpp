@@ -19,12 +19,12 @@ for continuous data values (aka real numbers)
 #define DEBUG
 
 #ifdef DEBUG
-	#define COUT if(1) std::cout
+	#define COUT if(1) std::cout << __FUNCTION__ << "(): "
 #else
 	#define COUT if(0) std::cout
 #endif // DEBUG
 
-#define START std::cout << __FUNCTION__ << "()\n";
+#define START std::cout << "* Start: " << __FUNCTION__ << "()\n";
 
 // forward declaration
 //template<typename U>
@@ -459,15 +459,27 @@ getGlobalGiniCoeff(
 /// Utility function, sort vector and removes values whose difference is small
 /**
 \todo Check if not faster to use a set ?
+
+This compares all the values and removes those which are "too close".
+
+Say we have the values: <code>4 - 5 - 6 - 6.1 - 7 - 8</code> <br>
+We want to remove the value "6.1"
+
+First we compute the range: highest - lowest.
+Here, \f$ range = 8 - 4 = 4 \f$ <br>
+We check the differences between two consecutive values: <br>
+\f$ d = \left| v_i - v_{i+1} \right| \f$ <br>
+If \f$ d < coeff * range \f$, then it will be considered as "too close".
 */
 void
 removeDuplicates( std::vector<float>& vec, float coeff )
 {
-		auto mm = std::minmax( std::begin(vec), std::end(vec) )	;
-		auto max_range = mm.second - mm.first;
-		COUT << "max_range=" << max_range << '\n';
+	auto mm = std::minmax_element( std::begin(vec), std::end(vec) )	;
+	auto max_range = mm.second - mm.first;
 
-		std::sort( vec.begin(), vec.end() );
+	printVector( std::cout, vec, "BEFORE std::sort()" );
+	std::sort( vec.begin(), vec.end() );
+	printVector( std::cout, vec, "AFTER std::sort()" );
 
 // remove all values that are equal
 	auto it_end = std::unique(
@@ -476,12 +488,14 @@ removeDuplicates( std::vector<float>& vec, float coeff )
 		[max_range,coeff]                        // lambda
 		( float v1, float v2 )
 		{
-			if( std::fabs(v1-v2) / max_range < coeff )
+			if( std::fabs(v1-v2) < max_range * coeff )
 				return true;
 			return false;
 		}
 	);
+	printVector( std::cout, vec, "AFTER std::unique()" );
 	vec.erase( it_end, vec.end() );
+	printVector( std::cout, vec, "AFTER erase()" );
 }
 
 //---------------------------------------------------------------------
@@ -489,7 +503,7 @@ removeDuplicates( std::vector<float>& vec, float coeff )
 /// Will return the IG value AND the threshold value for which it was produced
 /**
 Details:
-- Uses the Gini coeff: https://en.wikipedia.org/wiki/Gini_coefficient
+- Uses the Gini impurity coeff: https://en.wikipedia.org/wiki/Decision_tree_learning#Gini_impurity
 - for details, see
  - https://en.wikipedia.org/wiki/Information_gain_in_decision_trees
  - https://towardsdatascience.com/under-the-hood-decision-tree-454f8581684e
@@ -505,19 +519,23 @@ computeIG(
 {
 	START;
 
-
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
 
 	std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
 	for( size_t i=0; i<v_dpidx.size(); i++ )
 		v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
 
-	removeDuplicates( v_attribVal, 1.0 );
+//	COUT << "BEFORE: v_attribVal.size()=" << v_attribVal.size() << '\n';
+printVector( std::cout, v_attribVal, "v_attribVal" );
+	removeDuplicates( v_attribVal, 0.1 );
+//	COUT << "AFTER: v_attribVal.size()=" << v_attribVal.size() << '\n';
+printVector( std::cout, v_attribVal, "v_attribVal" );
 
-	std::sort( v_attribVal.begin(), v_attribVal.end() );         // sort the attribute values
+	if( v_attribVal.size() < 2 )         // if only one value, is pointless
+		return std::make_pair( 0., 0. );
 
-	std::vector<float> v_thresVal( v_dpidx.size()-1 ); // if 10 values, then only 9 thresholds
-	for( uint i=0; i<v_dpidx.size()-1; i++ )
+	std::vector<float> v_thresVal( v_attribVal.size()-1 ); // if 10 values, then only 9 thresholds
+	for( uint i=0; i<v_attribVal.size()-1; i++ )
 		v_thresVal[i] = 1. * ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.;
 
 	printVector( std::cout, v_thresVal, "thresholds" );
@@ -569,11 +587,13 @@ computeIG(
 		std::end( deltaGini )
 	);
 
-	COUT << "max gini for thres idx=" << std::distance( std::begin( deltaGini ), max_pos ) << " val=" << *max_pos << "\n";
+	COUT << "max gini for thres idx=" << std::distance( std::begin( deltaGini ), max_pos ) << " val=" << *max_pos
+		<< " thresval=" << v_thresVal.at( std::distance( std::begin( deltaGini ), max_pos ) ) << "\n";
 
-	std::pair<float,float> v;
-
-	return v;
+	return std::pair<float,float>(
+		v_thresVal.at( std::distance( std::begin( deltaGini ), max_pos ) ),
+		*max_pos
+	);
 }
 //---------------------------------------------------------------------
 /// Finds the best attributes to use, considering the data points of the current node
@@ -608,6 +628,7 @@ findBestAttribute(
 // step 3 - get the one with max value and compute the best threshold
 	auto it_mval = std::max_element( std::begin(v_IG), std::end(v_IG) ); // TODO: need a lambda here !
 
+	COUT << "highest Gini:" << it_mval->first << " " << it_mval->second << '\n';
 	std::pair<uint,float> retval;
 //	retval.first = *it_mval;
 

@@ -34,7 +34,7 @@ TEST_CASE( "maj vote", "[majv]" )
 }
 
 //-------------------------------------------------------------------------------------------
-TEST_CASE( "compute IG", "[cig]" )
+TEST_CASE( "computeIG", "[cig]" )
 {
 	DataSet dataset;
 	dataset.load( "sample_data/tds_2.csv" );
@@ -50,9 +50,19 @@ TEST_CASE( "compute IG", "[cig]" )
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "removeDuplicates", "[RD]" )
 {
+	std::vector<float> v0{1., 2., 3., 4., 2., 2.1 };
+	{
+		auto values = v0;
+		removeDuplicates( values, 0.1 );
+		CHECK( values.size() == 4 );
+		CHECK( values == std::vector<float>{1., 2., 3., 4. } );
+	}
+	{
+		auto values = v0;
+		removeDuplicates( values, 0.01 );
+		CHECK( values.size() == 5 );
+		CHECK( values == std::vector<float>{1., 2., 2.1, 3., 4. } );
+	}
 
-	std::vector<float> values{1., 2., 3., 4., 2. };
-	removeDuplicates( values, 1.0 );
-	CHECK( values.size() == 4 );
 }
 //-------------------------------------------------------------------------------------------

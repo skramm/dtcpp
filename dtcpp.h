@@ -13,6 +13,8 @@ for continuous data values (aka real numbers)
 #include <vector>
 #include <boost/graph/adjacency_list.hpp>
 
+#define DEBUG
+
 #ifdef DEBUG
 	#define COUT if(1) std::cout
 #else
@@ -21,16 +23,28 @@ for continuous data values (aka real numbers)
 
 #define START std::cout << __FUNCTION__ << "()\n";
 
+// forward declaration
+//template<typename U>
+//class DataSet;
 
 //---------------------------------------------------------------------
 /// A datapoint, holds a set of attributes value and a corresponding (binary) class
+//template<typename T>
 class DataPoint
 {
+//	template<typename U>
+	friend class DataSet;
+
 	private:
+//		std::vector<T> _attrValue;
 		std::vector<float> _attrValue;
 		int _class = -1;  ///< Class of the datapoint, -1 for undefined
 
 	public:
+		DataPoint( const std::vector<float>& vec, int c ) :
+			_attrValue(vec), _class(c)
+		{}
+
 		size_t nbAttribs() const
 		{
 			return _attrValue.size();
@@ -42,10 +56,23 @@ class DataPoint
 			assert( idx<_attrValue.size() );
 			return _attrValue[idx];
 		}
+
+//		template<typename U>
+		void setAttribVector( const std::vector<float>& vec )
+		{
+			assert( vec.size() == nbAttribs() );
+			_attrValue = vec;
+		}
+		void setClass( int c )
+		{
+			assert( c >=0 );  // -1 is illegal
+			_class = c;
+		}
 };
 
 //---------------------------------------------------------------------
 /// A dataset, holds a set of \ref DataPoint
+//template<typename T>
 class DataSet
 {
 	public:
@@ -54,37 +81,72 @@ class DataSet
 		}
 		DataSet( size_t n ) : _nbAttribs(n)
 		{ assert( n ); }
-		size_t size() const { return _dataPoint.size(); }
+		size_t size() const
+		{ return _dataPoint.size(); }
+
 		size_t nbAttribs() const
 		{ return _nbAttribs; }
+
+		void setNbAttribs( uint n )
+		{
+			assert( n>1 );
+			if( size() )
+				throw std::runtime_error( "cannot set size if data set not empty" );
+			_nbAttribs = n;
+		}
+
+//		template<typename U>
 		void addDataPoint( const DataPoint& dp )
 		{
 			assert( dp.nbAttribs() == _nbAttribs );
 			_dataPoint.push_back( dp );
 		}
-		DataPoint& getDataPoint( size_t idx )
+//		template<typename U>
+		DataPoint& getDataPoint( uint idx )
 		{
 			assert( idx < _dataPoint.size() );
 			return _dataPoint[idx];
 		}
-		const DataPoint& getDataPoint( size_t idx ) const
+//		template<typename U>
+		const DataPoint& getDataPoint( uint idx ) const
 		{
 			assert( idx < _dataPoint.size() );
 			return _dataPoint[idx];
 		}
 		bool load( std::string fname );
+		void print( std::ostream& ) const;
+
 	private:
 		size_t _nbAttribs = 0;
 		std::vector<DataPoint> _dataPoint;
+//		std::vector<DataPoint<T>> _dataPoint;
 };
+//using DataSetf = DataSet<float>;
+//using DataSetd = DataSet<double>;
 
 //---------------------------------------------------------------------
+//template<typename T>
 bool
 DataSet::load( std::string fname )
 {
 
 	return true;
 }
+//---------------------------------------------------------------------
+//template<typename T>
+void
+DataSet::print( std::ostream& f ) const
+{
+	f << "# Dataset, nb pts=" << size() << " nb attributes=" << nbAttribs() << "\n";
+	for( size_t i=0; i<nbAttribs(); i++ )
+		f << i << "; ";
+	f << " class\n";
+/*	for( const auto& pt: _dataPoint )
+		for( const auto& val: pt._attrValue )
+			f << val << ";";*/
+	f << "\n";
+}
+
 //---------------------------------------------------------------------
 enum NodeType
 {
@@ -155,6 +217,7 @@ using vertexC_t = boost::graph_traits<GraphC>::vertex_descriptor;
 /// This one holds edges that each have a vector holding the index of datapoints.
 /// This is memory costly, but useless for classifying, so once it is trained, we can use the \ref DecisionTree class
 /// \todo unify by templating the type of edges
+//template<typename T>
 class TrainingTree
 {
 	private:
@@ -166,6 +229,7 @@ class TrainingTree
 };
 
 //---------------------------------------------------------------------
+//template<typename T>
 class DecisionTree
 {
 	private:
@@ -181,6 +245,7 @@ class DecisionTree
 
 //---------------------------------------------------------------------
 /// Create a DT having a single decision point (root node) and 3 nodes
+//template<typename T>
 DecisionTree::DecisionTree()
 {
 /*	auto r  = boost::add_vertex(_graph);
@@ -198,6 +263,7 @@ DecisionTree::DecisionTree()
 
 //---------------------------------------------------------------------
 /// Print a DOT file of the tree
+//template<typename T>
 void
 TrainingTree::printDot( std::ostream& f ) const
 {
@@ -205,6 +271,7 @@ TrainingTree::printDot( std::ostream& f ) const
 }
 //---------------------------------------------------------------------
 /// Compute entropy of attribute \c atIdx of the subset of data given by \c v_dpidx
+//template<typename T>
 float
 computeEntropy(
 	uint                     atIdx,   ///< attribute index
@@ -221,6 +288,7 @@ computeEntropy(
 /// Finds the best attributes to use, considering the data points of the current node
 /// and compute threshold on that attribute so that the two classes are separated at best.
 /// Returns the index of this attribute
+//template<typename T>
 std::pair<uint,float>
 findBestAttribute(
 	const std::vector<uint>& vIdx,  ///< indexes of data points we need to consider
@@ -274,20 +342,52 @@ findBestAttribute(
 	return retval	;
 }
 //---------------------------------------------------------------------
+/// Returns the class that is in majority in the points defined in \c vIdx
+/// second value is the percentage of that majority, in the range [0,1] (well, ]0.5,1] actually !)
+//template<typename T>
+std::pair<int,float>
+getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
+{
+	std::map<uint,uint> classVotes; // key: class index, value: votes
+	using Pair = std::pair<uint,uint>;
+	for( auto idx: vIdx )
+	{
+		const auto& dp = data.getDataPoint( idx );
+		classVotes[ dp.classVal() ]++;
+	}
+
+	auto it_max = std::max_element(
+		std::begin( classVotes ),
+		std::end( classVotes ),
+		[]                                      // lambda
+		(const Pair& a, const Pair& b)->bool
+		{ return a.second < b.second; }
+	);
+
+	auto idx_maj = it_max->first;
+
+	return std::make_pair(
+		idx_maj,
+		1. * classVotes[idx_maj] / vIdx.size()
+	);
+
+}
+//---------------------------------------------------------------------
 /// Recursive helper function, used by TrainingTree::Train()
 /**
 Computes the threshold, splits the dataset and assigns the split to 2 sub nodes (that get created)
 */
+////template<typename T>
 bool
 splitNode(
-	vertexT_t            v,         ///< current node
+	vertexT_t            v,         ///< current node id
 	std::map<uint,bool>& aMap,      ///< attribute map, holds true for all the attributes already used
 	GraphT&              graph,     ///< graph
-	const DataSet&       data       ///< dataset
+	const DataSet&    data       ///< dataset
 )
 {
 	START;
-	auto vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
+	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
 
 
 // step 1.1 - check if there are different output classes in the given data points
@@ -314,8 +414,10 @@ splitNode(
 			foundAnother = true;
 	if( !foundAnother )
 	{
+		auto majo = getMajorityClass( vIdx, data );
 		COUT << "no more attributes, done\n";
 		graph[v]._type = NT_Final;
+		graph[v]._class = majo.first;
 		return true;
 	}
 
@@ -366,6 +468,7 @@ splitNode(
 //---------------------------------------------------------------------
 /// Train tree using data.
 /// Return false if failure
+//template<typename T>
 bool
 TrainingTree::Train( const DataSet& data )
 {
@@ -379,7 +482,7 @@ TrainingTree::Train( const DataSet& data )
 
 // step 2 - compute entropy of each attribute and find the one that maximizes information
 
-int attribIdx = 0;
+//int attribIdx = 0;
 /*
 	for( auto i=0; i<nbAttribs; i++ )
 	{
@@ -431,6 +534,7 @@ int attribIdx = 0;
 
 //---------------------------------------------------------------------
 /// Returns class of data point as classified by tree
+//template<typename T>
 int
 DecisionTree::Classify( const DataPoint& point ) const
 {
@@ -469,6 +573,7 @@ DecisionTree::Classify( const DataPoint& point ) const
 
 //---------------------------------------------------------------------
 /// Add a decision node => transform given terminal node into decision node
+//template<typename T>
 void
 DecisionTree::addDecision()
 {

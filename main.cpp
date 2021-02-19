@@ -17,6 +17,7 @@ int main()
 
     DataSet dataset;
     dataset.load( "demodata1.csv" );
+	dataset.print( std::cout );
 
     TrainingTree tt;
     tt.Train( dataset );

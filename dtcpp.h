@@ -270,18 +270,65 @@ TrainingTree::printDot( std::ostream& f ) const
 // TODO
 }
 //---------------------------------------------------------------------
-/// Compute entropy of attribute \c atIdx of the subset of data given by \c v_dpidx
+/// Computes the nb of votes for each class, for the points defined in \c v_Idx
+std::map<uint,uint>
+computeClassVotes( const std::vector<uint>& v_Idx, const DataSet&  data )
+{
+	assert( v_Idx.size()>1 );
+
+	std::map<uint,uint> classVotes; // key: class index, value: votes
+	for( auto idx: v_Idx )
+	{
+		const auto& dp = data.getDataPoint( idx );
+		classVotes[ dp.classVal() ]++;
+	}
+	return classVotes;
+}
+//---------------------------------------------------------------------
+/// Compute best IG (Information Gain) of attribute \c atIdx of the subset of data given by \c v_dpidx.
+/// Will return the IG value AND the threshold value for which is was produced
+/**
+Uses the Gini coeff: https://en.wikipedia.org/wiki/Gini_coefficient
+*/
 //template<typename T>
-float
-computeEntropy(
+std::pair<float,float>
+computeIG(
 	uint                     atIdx,   ///< attribute index
 	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
 	const DataSet&           data     ///< dataset
 )
 {
 	START;
-	float v;
-// TODO
+	std::pair<float,float> v;
+
+// step 0 - compute Gini coeff for all the points
+	auto classVotes = computeClassVotes( v_dpidx, data );
+
+	double giniCoeff = 1.;
+	for( auto elem: classVotes )
+	{
+		auto v = 1. * elem.second / v_dpidx.size();
+		giniCoeff -= v*v;
+	}
+
+// step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
+
+	std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
+	size_t i=0;
+	for( auto ptIdx: v_dpidx )
+		v_attribVal[i++] = data.getDataPoint(ptIdx).attribVal( atIdx );
+	std::sort( v_attribVal.begin(), v_attribVal.end() );         // sort the attribute values
+
+	i=0;
+	std::vector<float> v_thresVal( v_dpidx.size()-1 ); // if 10 values, then only 9 thresholds
+	for( uint i=0; i<v_dpidx.size()-1; i++ )
+		v_thresVal[i++] = 1. * ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.;
+
+//	printVector( std::cout, v_thresVal );
+
+// step 2: compute IG for each threshold value
+
+
 	return v;
 }
 //---------------------------------------------------------------------
@@ -293,11 +340,11 @@ std::pair<uint,float>
 findBestAttribute(
 	const std::vector<uint>& vIdx,  ///< indexes of data points we need to consider
 	const DataSet&           data,  ///< whole dataset
-	std::map<uint,bool>&     aMap   ///< map of the attributes that "may" be left
+	std::map<uint,bool>&     aMap   ///< map of the attributes that "may" be left to explore
 )
 {
 	START;
-	using pfi_t = std::pair<float,int>;
+	using Pfi_t = std::pair<float,int>;
 
 // step 1 - fetch the indexes of the attributes we need to explore
 	std::vector<uint> v_attrIdx;
@@ -305,19 +352,22 @@ findBestAttribute(
 		if( elem.second == false )
 			v_attrIdx.push_back(elem.first);
 
-// step 2 - compute IG for each of these attributes, only for the considered points
-	std::vector<float> v_entropy;
-	for( auto atIdx: v_attrIdx )
-		v_entropy.push_back( computeEntropy( atIdx, vIdx, data ) );
+	assert( v_attrIdx.size() );   // if not, well... shouldn't happen !
 
-// step 3 - get the one with min value and compute the best threshold
-	auto it_mval = std::min_element( std::begin(v_entropy), std::end(v_entropy) );
+// step 2 - compute best IG for each of these attributes, only for the considered points
+	std::vector<std::pair<float,float>> v_IG;
+	for( auto atIdx: v_attrIdx )
+		v_IG.push_back( computeIG( atIdx, vIdx, data ) );
+
+
+// step 3 - get the one with max value and compute the best threshold
+	auto it_mval = std::max_element( std::begin(v_IG), std::end(v_IG) ); // TODO: need a lambda here !
 
 	std::pair<uint,float> retval;
 	retval.first = *it_mval;
 
 // Store the attribute values and the output class into a container, so it can be sorted
-	std::vector<pfi_t> v_pairs( vIdx.size() );
+	std::vector<Pfi_t> v_pairs( vIdx.size() );
 	uint i=0;
 	for( auto dpIdx : vIdx )
 	{
@@ -332,7 +382,7 @@ findBestAttribute(
 		std::begin(v_pairs),
 		std::end(v_pairs),
 		[]                         // lambda
-		( pfi_t p1, pfi_t p2 )
+		( Pfi_t p1, Pfi_t p2 )
 		{
 			return p1.first < p2.first;
 		}
@@ -348,13 +398,9 @@ findBestAttribute(
 std::pair<int,float>
 getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
 {
-	std::map<uint,uint> classVotes; // key: class index, value: votes
 	using Pair = std::pair<uint,uint>;
-	for( auto idx: vIdx )
-	{
-		const auto& dp = data.getDataPoint( idx );
-		classVotes[ dp.classVal() ]++;
-	}
+
+	auto classVotes = computeClassVotes( vIdx, data );
 
 	auto it_max = std::max_element(
 		std::begin( classVotes ),

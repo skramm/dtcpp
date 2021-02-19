@@ -477,9 +477,9 @@ removeDuplicates( std::vector<float>& vec, float coeff )
 	auto mm = std::minmax_element( std::begin(vec), std::end(vec) )	;
 	auto max_range = mm.second - mm.first;
 
-	printVector( std::cout, vec, "BEFORE std::sort()" );
+//	printVector( std::cout, vec, "BEFORE std::sort()" );
 	std::sort( vec.begin(), vec.end() );
-	printVector( std::cout, vec, "AFTER std::sort()" );
+//	printVector( std::cout, vec, "AFTER std::sort()" );
 
 // remove all values that are equal
 	auto it_end = std::unique(
@@ -493,11 +493,50 @@ removeDuplicates( std::vector<float>& vec, float coeff )
 			return false;
 		}
 	);
-	printVector( std::cout, vec, "AFTER std::unique()" );
+//	printVector( std::cout, vec, "AFTER std::unique()" );
 	vec.erase( it_end, vec.end() );
-	printVector( std::cout, vec, "AFTER erase()" );
+//	printVector( std::cout, vec, "AFTER erase()" );
 }
 
+//---------------------------------------------------------------------
+/// Simple wrapper around a map, to check if an attribute has been already used or not.
+/// Benefit: has automatic initialization
+struct AttribMap
+{
+	private:
+		std::map<uint,bool> _attribMap;
+	public:
+		AttribMap( uint nbAttribs )
+		{
+			for( uint i=0; i<nbAttribs; i++ )
+				_attribMap[i] = false;
+		}
+		std::vector<uint> getUnusedAttribs() const
+		{
+			std::vector<uint> vout;
+			for( auto elem: _attribMap )
+				if( elem.second == false )
+					vout.push_back(elem.first);
+			return vout;
+		}
+
+/// Set attribute \c idx as used, so we will not use it again
+/// \todo maybe add some checking here...
+		void setAsUsed( uint idx )
+		{
+			_attribMap[idx] = true;
+		}
+
+/// Returns true if there still are some unused attributes
+		bool holdsUnusedAttribs() const
+		{
+			bool foundAnother = false;
+			for( const auto& elem: _attribMap )
+				if( elem.second == false )
+					foundAnother = true;
+			return foundAnother;
+		}
+};
 //---------------------------------------------------------------------
 /// Compute best IG (Information Gain) of attribute \c atIdx of the subset of data given by \c v_dpidx.
 /// Will return the IG value AND the threshold value for which it was produced
@@ -518,7 +557,7 @@ computeIG(
 )
 {
 	START;
-
+	COUT << "atIdx=" << atIdx << '\n';
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
 
 	std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
@@ -546,14 +585,14 @@ printVector( std::cout, v_attribVal, "v_attribVal" );
 	for( uint i=0; i<v_thresVal.size(); i++ )  // for each threshold value
 	{
 		COUT << "thres " << i << "=" << v_thresVal[i] << '\n';
-		std::map<uint,uint> m_LT, m_HT; //
+		std::map<uint,uint> m_LT, m_HT;
 		uint nb_LT = 0;
 		uint nb_HT = 0;
 		for( auto ptIdx: v_dpidx )    // for each data point
 		{
-			auto point = data.getDataPoint(ptIdx);;
+			const auto& point = data.getDataPoint(ptIdx);
 			auto attribVal = point.attribVal( atIdx );
-			if( attribVal<v_thresVal[i] )
+			if( attribVal < v_thresVal[i] )
 			{
 				m_LT[ point.classVal() ]++;
 				nb_LT++;
@@ -565,20 +604,26 @@ printVector( std::cout, v_attribVal, "v_attribVal" );
 			}
 		}
 
+//		COUT << "votes LT: 0:" << m_LT[0] << " 1:" << m_LT[1] << " total=" << nb_LT << '\n';
+//		COUT << "votes HT: 0:" << m_HT[0] << " 1:" << m_HT[1] << " total=" << nb_HT << '\n';
+
 		auto g_LT = 1.;
 		for( auto p: m_LT )  // for the values that are Lower Than the threshold
 		{
+//			COUT << "LT: f=" <<p.first << " s=" << p.second << '\n';
 			auto val = 1. * p.second / nb_LT;
 			g_LT -= val*val;
 		}
 		auto g_HT = 1.;
-		for( auto p: m_LT )  // for the values that are Higher Than the threshold
+
+		for( auto p: m_HT )  // for the values that are Higher Than the threshold
 		{
+//			COUT << "HT: f=" <<p.first << " s=" << p.second << '\n';
 			auto val = 1. * p.second / nb_HT;
 			g_HT -= val*val;
 		}
 		deltaGini[i] = giniCoeff - (g_LT + g_HT) / 2.;
-		COUT << "  => deltaGini = " << deltaGini[i] << '\n';
+		COUT << "  => g_LT=" << g_LT << " g_HT=" << g_HT << " deltaGini=" << deltaGini[i] << '\n';
 	}
 
 // step 3 - find max value of the delta Gini
@@ -598,24 +643,20 @@ printVector( std::cout, v_attribVal, "v_attribVal" );
 //---------------------------------------------------------------------
 /// Finds the best attributes to use, considering the data points of the current node
 /// and compute threshold on that attribute so that the two classes are separated at best.
-/// Returns the index of this attribute
+/// Returns the index of this attribute and the corresponding threshold to use
 //template<typename T>
 std::pair<uint,float>
 findBestAttribute(
 	const std::vector<uint>& vIdx,  ///< indexes of data points we need to consider
 	const DataSet&           data,  ///< whole dataset
-	std::map<uint,bool>&     aMap   ///< map of the attributes that "may" be left to explore
+	AttribMap&               aMap   ///< map of the attributes that "may" be left to explore
 )
 {
 	START;
 	using Pfi_t = std::pair<float,int>;
 
 // step 1 - fetch the indexes of the attributes we need to explore
-	std::vector<uint> v_attrIdx;
-	for( auto elem: aMap )
-		if( elem.second == false )
-			v_attrIdx.push_back(elem.first);
-
+	std::vector<uint> v_attrIdx = aMap.getUnusedAttribs();
 	assert( v_attrIdx.size() );   // if not, well... shouldn't happen !
 
 	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
@@ -692,9 +733,9 @@ Computes the threshold, splits the dataset and assigns the split to 2 sub nodes 
 ////template<typename T>
 bool
 splitNode(
-	vertexT_t            v,         ///< current node id
-	std::map<uint,bool>& aMap,      ///< attribute map, holds true for all the attributes already used
-	GraphT&              graph,     ///< graph
+	vertexT_t         v,         ///< current node id
+	AttribMap&        aMap,      ///< attribute map, holds true for all the attributes already used
+	GraphT&           graph,     ///< graph
 	const DataSet&    data       ///< dataset
 )
 {
@@ -720,11 +761,7 @@ splitNode(
 
 // step 1.2 - check if there are some remaining attributes to use
 // if not, then we are done
-	bool foundAnother = false;
-	for( const auto& elem: aMap )
-		if( elem.second == false )
-			foundAnother = true;
-	if( !foundAnother )
+	if( !aMap.holdsUnusedAttribs() )
 	{
 		auto majo = getMajorityClass( vIdx, data );
 		COUT << "no more attributes, done\n";
@@ -739,7 +776,8 @@ splitNode(
 	auto threshold  = pair_id_th.second;
 	COUT << "best attrib=" << attribIdx << " thres value=" << threshold << "\n";
 
-	aMap[attribIdx] = true;  // so we will not use it again
+	aMap.setAsUsed(attribIdx); // so we will not use it again
+
 	graph[v]._attrIndex = attribIdx;
 	graph[v]._threshold = threshold;
 	graph[v]._type = NT_Decision;
@@ -815,9 +853,7 @@ TrainingTree::Train( const DataSet& data )
 	_graph[n0].v_Idx = v_idx;
 	_graph[n0]._type = NT_Root;
 
-	std::map<uint,bool> attribMap;
-	for( uint i=0; i<nbAttribs; i++ )
-		attribMap[i] = false;
+	AttribMap attribMap(nbAttribs);
 
 // Call the "split" function (recursive)
 	splitNode( n0, attribMap, _graph, data );

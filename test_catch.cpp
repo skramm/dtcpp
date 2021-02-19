@@ -45,7 +45,12 @@ TEST_CASE( "computeIG", "[cig]" )
 	auto giniCoeff = getGlobalGiniCoeff( v_dpidx, dataset );
 
 	auto ig0 = computeIG( 0, v_dpidx, dataset, giniCoeff );
+	std::cout << "ig0: " << ig0.first << "," << ig0.second <<'\n';
 	auto ig1 = computeIG( 1, v_dpidx, dataset, giniCoeff );
+	std::cout << "ig1: " << ig1.first << "," << ig1.second <<'\n';
+
+	AttribMap aMap;
+	auto ba = findBestAttribute( v_dpidx, dataset, aMap );
 }
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "removeDuplicates", "[RD]" )

@@ -10,6 +10,7 @@ for continuous data values (aka real numbers)
 */
 
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <boost/graph/adjacency_list.hpp>
 
@@ -56,6 +57,15 @@ class DataPoint
 		DataPoint( const std::vector<float>& vec, int c ) :
 			_attrValue(vec), _class(c)
 		{}
+/// Constructor from a vector of strings (used by file reader)
+		DataPoint( const std::vector<std::string>& v_string )
+		{
+			assert( v_string.size() > 1 );              // at least one attribute and a class value
+
+			for( size_t i=0; i<v_string.size()-1; i++ )
+				_attrValue.push_back( std::stof( v_string[i] ) );
+			_class = std::stoi( v_string.back() );          // last value of the vector is the class
+		}
 
 		size_t nbAttribs() const
 		{
@@ -80,6 +90,7 @@ class DataPoint
 			assert( c >=0 );  // -1 is illegal
 			_class = c;
 		}
+
 };
 
 //---------------------------------------------------------------------
@@ -125,8 +136,10 @@ class DataSet
 			assert( idx < _dataPoint.size() );
 			return _dataPoint[idx];
 		}
-		bool load( std::string fname );
+		bool load( std::string fname, char sep=' ' );
 		void print( std::ostream& ) const;
+
+		void clear() { _dataPoint.clear(); }
 
 	private:
 		size_t _nbAttribs = 0;
@@ -137,10 +150,119 @@ class DataSet
 //using DataSetd = DataSet<double>;
 
 //---------------------------------------------------------------------
+/// inner namespace
+namespace priv {
+
+//-------------------------------------------------------------------
+/// Remove multiple spaces AND TABS in string, allows only one, except if in first position
+/**
+Also replaces tabs with spaces
+*/
+std::string
+trimSpaces( const std::string& input )
+{
+	assert( input.size() > 0 );
+	bool HasOneAlready( false );
+	bool FirstElem( true );
+	std::string out;
+	for( auto c: input)
+	{
+		if( c != ' ' && c != 9 )
+		{
+			out.push_back( c );
+			HasOneAlready = false;
+			FirstElem = false;
+		}
+		else {
+			if( !HasOneAlready && !FirstElem )
+			{
+				out.push_back( ' ' ); // add a space character
+				HasOneAlready = true;
+			}
+		}
+	}
+	if( out.back() == ' ' ) // if last element is a space, then remove it
+		out.erase( out.end()-1 );
+
+	return out;
+}
+
+//---------------------------------------------------------------------
+/// General string tokenizer, taken from http://stackoverflow.com/a/236803/193789
+/**
+- see also this one: http://stackoverflow.com/a/53878/193789
+*/
+inline
+std::vector<std::string>
+split_string( const std::string &s, char delim )
+{
+	std::vector<std::string> velems;
+    std::stringstream ss( trimSpaces(s) );
+    std::string item;
+    while( std::getline( ss, item, delim ) )
+        velems.push_back(item);
+
+    return velems;
+}
+} // namespace priv
+
+//---------------------------------------------------------------------
 //template<typename T>
 bool
-DataSet::load( std::string fname )
+DataSet::load( std::string fname, char sep )
 {
+	std::ifstream f( fname );
+	if( !f.is_open() )
+	{
+		std::cerr << "Unable to open file " << fname << "\n";
+		return false;
+	}
+	clear();
+
+	size_t nb_lines     = 0;
+	size_t nb_empty     = 0;
+	size_t nb_comment   = 0;
+	do
+	{
+		std::string temp;
+		std::getline( f, temp );
+		nb_lines++;
+
+		if( temp.empty() )          // if empty
+			nb_empty++;
+		else                        // if NOT empty
+		{
+			if( temp.at(0) == '#' )  // if comment
+				nb_comment++;
+			else                     // if NOT comment
+			{
+//				CERR << "line=" << temp << ENDL;
+				auto v_tok = priv::split_string( temp, sep );
+				if( v_tok.size() < 2 )
+				{
+					std::cerr << "-Error: only one value on line " << nb_lines
+						<< "\n-Line=" << temp << " \n-length=" << temp.size() << '\n';
+					return false;
+				}
+//				CERR << "v_tok size=" << v_tok.size() << ENDL;
+				if( nb_lines == 1 )
+					setNbAttribs( v_tok.size()-1 );
+
+				_dataPoint.push_back( DataPoint( v_tok ) );
+			}
+		}
+	}
+	while( !f.eof() );
+
+	#if 1
+		std::cerr << " - Read " << size() << " points in file " << fname;
+		std::cerr << "\n - file info:"
+			<< "\n  - nb lines=" << nb_lines
+			<< "\n  - nb empty=" << nb_empty
+			<< "\n  - nb comment=" << nb_comment
+			<< '\n';
+	#endif
+
 
 	return true;
 }

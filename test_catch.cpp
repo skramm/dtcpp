@@ -41,5 +41,7 @@ TEST_CASE( "compute IG", "[cig]" )
 	REQUIRE( dataset.size() == 10 );
 	std::vector<uint> v_dpidx{0,1,2,3,4};   // all the points
 	auto ig0 = computeIG( 0, v_dpidx, dataset );
+
+	auto ig1 = computeIG( 0, v_dpidx, dataset );
 }
 //-------------------------------------------------------------------------------------------

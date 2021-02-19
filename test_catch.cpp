@@ -49,7 +49,8 @@ TEST_CASE( "computeIG", "[cig]" )
 	auto ig1 = computeIG( 1, v_dpidx, dataset, giniCoeff );
 	std::cout << "ig1: " << ig1.first << "," << ig1.second <<'\n';
 
-	AttribMap aMap;
+	AttribMap aMap( dataset.nbAttribs() );
+	COUT << "nbUnusedAttribs=" << aMap.nbUnusedAttribs() << '\n';
 	auto ba = findBestAttribute( v_dpidx, dataset, aMap );
 }
 //-------------------------------------------------------------------------------------------

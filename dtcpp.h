@@ -249,8 +249,8 @@ DataSet::load( std::string fname, char sep )
 						<< "\n-Line=" << temp << " \n-length=" << temp.size() << '\n';
 					return false;
 				}
-//				CERR << "v_tok size=" << v_tok.size() << ENDL;
-				if( nb_lines == 1 )
+
+				if( size() == 0 )                     // if this is the first datapoint, then set the nb of attributes
 					setNbAttribs( v_tok.size()-1 );
 
 				_dataPoint.push_back( DataPoint( v_tok ) );
@@ -528,13 +528,14 @@ struct AttribMap
 		}
 
 /// Returns true if there still are some unused attributes
-		bool holdsUnusedAttribs() const
+		uint nbUnusedAttribs() const
 		{
+			uint c=0;
 			bool foundAnother = false;
 			for( const auto& elem: _attribMap )
 				if( elem.second == false )
-					foundAnother = true;
-			return foundAnother;
+					c++;
+			return c;
 		}
 };
 //---------------------------------------------------------------------
@@ -761,7 +762,7 @@ splitNode(
 
 // step 1.2 - check if there are some remaining attributes to use
 // if not, then we are done
-	if( !aMap.holdsUnusedAttribs() )
+	if( aMap.nbUnusedAttribs() == 0 )
 	{
 		auto majo = getMajorityClass( vIdx, data );
 		COUT << "no more attributes, done\n";

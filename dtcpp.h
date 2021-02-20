@@ -135,6 +135,12 @@ splitString( const std::string &s, char delim )
 } // namespace priv
 
 //---------------------------------------------------------------------
+struct Params
+{
+	float minGiniCoeffForSplitting = 0.05f;
+};
+
+//---------------------------------------------------------------------
 /// A datapoint, holds a set of attributes value and a corresponding (binary) class
 //template<typename T>
 class DataPoint
@@ -490,6 +496,7 @@ computeClassVotes( const std::vector<uint>& v_Idx, const DataSet&  data )
 	return classVotes;
 }
 //---------------------------------------------------------------------
+/// Computes the Gini coefficient for points listed in \c vdpidx
 double
 getGlobalGiniCoeff(
 	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
@@ -800,7 +807,8 @@ splitNode(
 	vertexT_t         v,         ///< current node id
 	AttribMap&        aMap,      ///< attribute map, holds true for all the attributes already used
 	GraphT&           graph,     ///< graph
-	const DataSet&    data       ///< dataset
+	const DataSet&    data,      ///< dataset
+	const Params&     params     ///< parameters
 )
 {
 	START;
@@ -808,6 +816,15 @@ splitNode(
 
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done
+
+#if 1
+	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
+	if( giniCoeff < params.minGiniCoeffForSplitting )
+	{
+		COUT << "dataset is (almost or completely) pure, gini coeff=" << giniCoeff << ", STOP\n";
+		return true;
+	}
+#else
 	size_t c1 = 0;
 	for( auto idx: vIdx )
 		if( data.getDataPoint( idx ).classVal() )
@@ -821,6 +838,7 @@ splitNode(
 		graph[v]._class = (c0 ? 0 : 1);
 		return true;
 	}
+#endif
 
 // step 1.2 - check if there are some remaining attributes to use
 // if not, then we are done
@@ -830,6 +848,7 @@ splitNode(
 		COUT << "no more attributes, done\n";
 		graph[v]._type = NT_Final;
 		graph[v]._class = majo.first;
+		COUT << "all attributes are used, STOP\n";
 		return true;
 	}
 
@@ -868,14 +887,15 @@ splitNode(
 			graph[v1].v_Idx.push_back( idx );
 		else
 			graph[v2].v_Idx.push_back( idx );
-		auto b1 = splitNode( v1, aMap, graph, data );
-		auto b2 = splitNode( v2, aMap, graph, data );
+		auto b1 = splitNode( v1, aMap, graph, data, params );
+		auto b2 = splitNode( v2, aMap, graph, data, params );
 		if( b1 && b2 )
 		{
 			COUT << "both nodes are done, return true\n";
 			return true;
 		}
 	}
+	COUT << "Return false\n";
 	return false;
 }
 //---------------------------------------------------------------------
@@ -917,9 +937,9 @@ TrainingTree::Train( const DataSet& data )
 	_graph[n0]._type = NT_Root;
 
 	AttribMap attribMap(nbAttribs);
-
+	Params params;
 // Call the "split" function (recursive)
-	splitNode( n0, attribMap, _graph, data );
+	splitNode( n0, attribMap, _graph, data, params );
 
 
 //order attribute by entropy, so we start with the attribute that has the highest entropy

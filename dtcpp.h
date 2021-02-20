@@ -26,10 +26,46 @@ for continuous data values (aka real numbers)
 
 #define START std::cout << "* Start: " << __FUNCTION__ << "()\n";
 
+
+//---------------------------------------------------------------------
+/// A template to have strong types, taken from J. Boccara
+/**
+ * https://www.fluentcpp.com/2016/12/08/strong-types-for-strong-interfaces/
+*/
+template <typename T, typename Parameter>
+class NamedType
+{
+public:
+    explicit NamedType(T const& value) : value_(value) {}
+    explicit NamedType(T&& value) : value_(std::move(value)) {}
+    T& get() { return value_; }
+    T const& get() const {return value_; }
+private:
+    T value_;
+};
+using ThresholdVal = NamedType<float,struct ThresholdValTag>;
+//---------------------------------------------------------------------
+
 // forward declaration
 //template<typename U>
 //class DataSet;
 
+//---------------------------------------------------------------------
+/// inner namespace
+namespace priv {
+
+#if 0
+/// Returns either max of first or max of second
+/**
+ * Argument: a container holding pairs of type <T1,T2>
+ *
+ * \return iterator on found element
+*/
+template<typename T1,typename T2>
+getMaxElement(T)
+{
+}
+#endif
 //---------------------------------------------------------------------
 /// General utility function
 template<typename T>
@@ -44,6 +80,59 @@ printVector( std::ostream& f, const std::vector<T>& vec, const char* msg=0 )
 		f << elem << "-";
 	f << "\n";
 }
+
+//-------------------------------------------------------------------
+/// Remove multiple spaces AND TABS in string, allows only one, except if in first position
+/**
+Also replaces tabs with spaces
+*/
+std::string
+trimSpaces( const std::string& input )
+{
+	assert( input.size() > 0 );
+	bool HasOneAlready( false );
+	bool FirstElem( true );
+	std::string out;
+	for( auto c: input)
+	{
+		if( c != ' ' && c != 9 )
+		{
+			out.push_back( c );
+			HasOneAlready = false;
+			FirstElem = false;
+		}
+		else {
+			if( !HasOneAlready && !FirstElem )
+			{
+				out.push_back( ' ' ); // add a space character
+				HasOneAlready = true;
+			}
+		}
+	}
+	if( out.back() == ' ' ) // if last element is a space, then remove it
+		out.erase( out.end()-1 );
+
+	return out;
+}
+
+//---------------------------------------------------------------------
+/// General string tokenizer, taken from http://stackoverflow.com/a/236803/193789
+/**
+- see also this one: http://stackoverflow.com/a/53878/193789
+*/
+inline
+std::vector<std::string>
+splitString( const std::string &s, char delim )
+{
+	std::vector<std::string> velems;
+    std::stringstream ss( trimSpaces(s) );
+    std::string item;
+    while( std::getline( ss, item, delim ) )
+        velems.push_back(item);
+
+    return velems;
+}
+} // namespace priv
 
 //---------------------------------------------------------------------
 /// A datapoint, holds a set of attributes value and a corresponding (binary) class
@@ -110,7 +199,7 @@ class DataSet
 		DataSet( size_t n ) : _nbAttribs(n)
 		{ assert( n ); }
 		size_t size() const
-		{ return _dataPoint.size(); }
+		{ return _data.size(); }
 
 		size_t nbAttribs() const
 		{ return _nbAttribs; }
@@ -127,89 +216,32 @@ class DataSet
 		void addDataPoint( const DataPoint& dp )
 		{
 			assert( dp.nbAttribs() == _nbAttribs );
-			_dataPoint.push_back( dp );
+			_data.push_back( dp );
 		}
 //		template<typename U>
 		DataPoint& getDataPoint( uint idx )
 		{
-			assert( idx < _dataPoint.size() );
-			return _dataPoint[idx];
+			assert( idx < _data.size() );
+			return _data[idx];
 		}
 //		template<typename U>
 		const DataPoint& getDataPoint( uint idx ) const
 		{
-			assert( idx < _dataPoint.size() );
-			return _dataPoint[idx];
+			assert( idx < _data.size() );
+			return _data[idx];
 		}
 		bool load( std::string fname, char sep=' ' );
 		void print( std::ostream& ) const;
 
-		void clear() { _dataPoint.clear(); }
+		void clear() { _data.clear(); }
 
 	private:
 		size_t _nbAttribs = 0;
-		std::vector<DataPoint> _dataPoint;
+		std::vector<DataPoint> _data;
 //		std::vector<DataPoint<T>> _dataPoint;
 };
 //using DataSetf = DataSet<float>;
 //using DataSetd = DataSet<double>;
-
-//---------------------------------------------------------------------
-/// inner namespace
-namespace priv {
-
-//-------------------------------------------------------------------
-/// Remove multiple spaces AND TABS in string, allows only one, except if in first position
-/**
-Also replaces tabs with spaces
-*/
-std::string
-trimSpaces( const std::string& input )
-{
-	assert( input.size() > 0 );
-	bool HasOneAlready( false );
-	bool FirstElem( true );
-	std::string out;
-	for( auto c: input)
-	{
-		if( c != ' ' && c != 9 )
-		{
-			out.push_back( c );
-			HasOneAlready = false;
-			FirstElem = false;
-		}
-		else {
-			if( !HasOneAlready && !FirstElem )
-			{
-				out.push_back( ' ' ); // add a space character
-				HasOneAlready = true;
-			}
-		}
-	}
-	if( out.back() == ' ' ) // if last element is a space, then remove it
-		out.erase( out.end()-1 );
-
-	return out;
-}
-
-//---------------------------------------------------------------------
-/// General string tokenizer, taken from http://stackoverflow.com/a/236803/193789
-/**
-- see also this one: http://stackoverflow.com/a/53878/193789
-*/
-inline
-std::vector<std::string>
-split_string( const std::string &s, char delim )
-{
-	std::vector<std::string> velems;
-    std::stringstream ss( trimSpaces(s) );
-    std::string item;
-    while( std::getline( ss, item, delim ) )
-        velems.push_back(item);
-
-    return velems;
-}
-} // namespace priv
 
 //---------------------------------------------------------------------
 //template<typename T>
@@ -242,7 +274,7 @@ DataSet::load( std::string fname, char sep )
 			else                     // if NOT comment
 			{
 //				CERR << "line=" << temp << ENDL;
-				auto v_tok = priv::split_string( temp, sep );
+				auto v_tok = priv::splitString( temp, sep );
 				if( v_tok.size() < 2 )
 				{
 					std::cerr << "-Error: only one value on line " << nb_lines
@@ -253,7 +285,7 @@ DataSet::load( std::string fname, char sep )
 				if( size() == 0 )                     // if this is the first datapoint, then set the nb of attributes
 					setNbAttribs( v_tok.size()-1 );
 
-				_dataPoint.push_back( DataPoint( v_tok ) );
+				_data.push_back( DataPoint( v_tok ) );
 			}
 		}
 	}
@@ -276,14 +308,19 @@ DataSet::load( std::string fname, char sep )
 void
 DataSet::print( std::ostream& f ) const
 {
+	f << "# -------------------------------------------\n";
 	f << "# Dataset, nb pts=" << size() << " nb attributes=" << nbAttribs() << "\n";
 	for( size_t i=0; i<nbAttribs(); i++ )
 		f << i << "; ";
 	f << " class\n";
-	for( const auto& pt: _dataPoint )
+	for( const auto& pt: _data )
+	{
 		for( const auto& val: pt._attrValue )
 			f << val << ";";
-	f << "\n";
+
+		f << pt.classVal() << "\n";
+	}
+	f << "# -------------------------------------------\n";
 }
 
 //---------------------------------------------------------------------
@@ -365,6 +402,8 @@ class TrainingTree
 	public:
 		bool Train( const DataSet& );
 		void printDot( std::ostream& ) const;
+		void printInfo( std::ostream& ) const;
+		size_t maxDepth() const { return _maxDepth; }
 };
 
 //---------------------------------------------------------------------
@@ -408,6 +447,20 @@ TrainingTree::printDot( std::ostream& f ) const
 {
 // TODO
 }
+
+//---------------------------------------------------------------------
+/// Print a DOT file of the tree
+//template<typename T>
+void
+TrainingTree::printInfo( std::ostream& f ) const
+{
+	f << "Training tree info\n"
+		<< " -nb nodes=" << boost::num_vertices( _graph )
+		<< " -max depth=" << maxDepth()
+		<< '\n';
+}
+
+
 
 //---------------------------------------------------------------------
 /// Utility functions, returns a vector of indexes holding all the points
@@ -475,31 +528,29 @@ void
 removeDuplicates( std::vector<float>& vec, float coeff )
 {
 	auto mm = std::minmax_element( std::begin(vec), std::end(vec) )	;
-	auto max_range = mm.second - mm.first;
+	auto k = (mm.second - mm.first) * coeff;
 
-//	printVector( std::cout, vec, "BEFORE std::sort()" );
 	std::sort( vec.begin(), vec.end() );
-//	printVector( std::cout, vec, "AFTER std::sort()" );
 
 // remove all values that are equal
 	auto it_end = std::unique(
 		std::begin(vec),
 		std::end(vec),
-		[max_range,coeff]                        // lambda
+		[k]                        // lambda
 		( float v1, float v2 )
 		{
-			if( std::fabs(v1-v2) < max_range * coeff )
+			if( std::fabs(v1-v2) < k )
 				return true;
 			return false;
 		}
 	);
-//	printVector( std::cout, vec, "AFTER std::unique()" );
+
 	vec.erase( it_end, vec.end() );
-//	printVector( std::cout, vec, "AFTER erase()" );
 }
 
 //---------------------------------------------------------------------
-/// Simple wrapper around a map, to check if an attribute has been already used or not.
+/// Simple wrapper around a map holding a bool for each attribute index.
+/// Used to check if an attribute has been already used or not.
 /// Benefit: has automatic initialization
 struct AttribMap
 {
@@ -527,11 +578,10 @@ struct AttribMap
 			_attribMap[idx] = true;
 		}
 
-/// Returns true if there still are some unused attributes
+/// Returns number of unused attributes
 		uint nbUnusedAttribs() const
 		{
 			uint c=0;
-			bool foundAnother = false;
 			for( const auto& elem: _attribMap )
 				if( elem.second == false )
 					c++;
@@ -540,8 +590,9 @@ struct AttribMap
 };
 //---------------------------------------------------------------------
 /// Compute best IG (Information Gain) of attribute \c atIdx of the subset of data given by \c v_dpidx.
-/// Will return the IG value AND the threshold value for which it was produced
 /**
+\return Returns a pair holding the IG value AND the threshold value for which it was produced
+
 Details:
 - Uses the Gini impurity coeff: https://en.wikipedia.org/wiki/Decision_tree_learning#Gini_impurity
 - for details, see
@@ -549,7 +600,7 @@ Details:
  - https://towardsdatascience.com/under-the-hood-decision-tree-454f8581684e
 */
 //template<typename T>
-std::pair<float,float>
+std::pair<float,ThresholdVal>
 computeIG(
 	uint                     atIdx,     ///< attribute index
 	const std::vector<uint>& v_dpidx,   ///< datapoint indexes to consider
@@ -559,26 +610,22 @@ computeIG(
 {
 	START;
 	COUT << "atIdx=" << atIdx << '\n';
+
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
 
 	std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
 	for( size_t i=0; i<v_dpidx.size(); i++ )
 		v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
-
-//	COUT << "BEFORE: v_attribVal.size()=" << v_attribVal.size() << '\n';
-printVector( std::cout, v_attribVal, "v_attribVal" );
 	removeDuplicates( v_attribVal, 0.1 );
-//	COUT << "AFTER: v_attribVal.size()=" << v_attribVal.size() << '\n';
-printVector( std::cout, v_attribVal, "v_attribVal" );
 
 	if( v_attribVal.size() < 2 )         // if only one value, is pointless
-		return std::make_pair( 0., 0. );
+		return std::make_pair( 0.f, ThresholdVal(0.f) );
 
 	std::vector<float> v_thresVal( v_attribVal.size()-1 ); // if 10 values, then only 9 thresholds
 	for( uint i=0; i<v_attribVal.size()-1; i++ )
-		v_thresVal[i] = 1. * ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.;
+		v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
 
-	printVector( std::cout, v_thresVal, "thresholds" );
+	priv::printVector( std::cout, v_thresVal, "thresholds" );
 
 // step 2: compute IG for each threshold value
 
@@ -636,17 +683,19 @@ printVector( std::cout, v_attribVal, "v_attribVal" );
 	COUT << "max gini for thres idx=" << std::distance( std::begin( deltaGini ), max_pos ) << " val=" << *max_pos
 		<< " thresval=" << v_thresVal.at( std::distance( std::begin( deltaGini ), max_pos ) ) << "\n";
 
-	return std::pair<float,float>(
-		v_thresVal.at( std::distance( std::begin( deltaGini ), max_pos ) ),
-		*max_pos
+	return std::pair<float,ThresholdVal>(
+		*max_pos,
+		ThresholdVal(v_thresVal.at( std::distance( std::begin( deltaGini ), max_pos ) ) )
 	);
 }
 //---------------------------------------------------------------------
 /// Finds the best attributes to use, considering the data points of the current node
 /// and compute threshold on that attribute so that the two classes are separated at best.
-/// Returns the index of this attribute and the corresponding threshold to use
+/**
+\return A pair holding 1-the index of this attribute and 2-the corresponding threshold value
+*/
 //template<typename T>
-std::pair<uint,float>
+std::pair<uint,ThresholdVal>
 findBestAttribute(
 	const std::vector<uint>& vIdx,  ///< indexes of data points we need to consider
 	const DataSet&           data,  ///< whole dataset
@@ -654,7 +703,7 @@ findBestAttribute(
 )
 {
 	START;
-	using Pfi_t = std::pair<float,int>;
+	using P_Tf = std::pair<float,ThresholdVal>;
 
 // step 1 - fetch the indexes of the attributes we need to explore
 	std::vector<uint> v_attrIdx = aMap.getUnusedAttribs();
@@ -663,17 +712,31 @@ findBestAttribute(
 	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
 
 // step 2 - compute best IG/threshold for each of these attributes, only for the considered points
-	std::vector<std::pair<float,float>> v_IG;
+
+	std::vector<P_Tf> v_IG;
 	for( auto atIdx: v_attrIdx )
 		v_IG.push_back( computeIG( atIdx, vIdx, data, giniCoeff ) );
 
-// step 3 - get the one with max value and compute the best threshold
-	auto it_mval = std::max_element( std::begin(v_IG), std::end(v_IG) ); // TODO: need a lambda here !
+// step 3 - get the one with max value
+	auto it_mval = std::max_element(
+		std::begin(v_IG),
+		std::end(v_IG),
+		[]                         // lambda
+		( P_Tf p1, P_Tf p2 )
+		{
+			return p1.first < p2.first;
+		}
+	);
 
-	COUT << "highest Gini:" << it_mval->first << " " << it_mval->second << '\n';
-	std::pair<uint,float> retval;
-//	retval.first = *it_mval;
+	COUT << "highest Gini:" << it_mval->first << " " << it_mval->second.get() << '\n';
+//	COUT << "returning pair: " << retval.first << " - " << retval.second << "\n";
 
+	return std::make_pair(
+		std::distance( std::begin(v_IG), it_mval ),  // index of the attribute
+		it_mval->second
+	);
+
+/*
 // Store the attribute values and the output class into a container, so it can be sorted
 	std::vector<Pfi_t> v_pairs( vIdx.size() );
 	uint i=0;
@@ -695,9 +758,9 @@ findBestAttribute(
 			return p1.first < p2.first;
 		}
 	);
+*/
 
-
-	return retval	;
+//	return retval	;
 }
 //---------------------------------------------------------------------
 /// Returns the class that is in majority in the points defined in \c vIdx
@@ -743,7 +806,6 @@ splitNode(
 	START;
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
 
-
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done
 	size_t c1 = 0;
@@ -775,12 +837,12 @@ splitNode(
 	auto pair_id_th = findBestAttribute( vIdx, data, aMap );
 	auto attribIdx  = pair_id_th.first;
 	auto threshold  = pair_id_th.second;
-	COUT << "best attrib=" << attribIdx << " thres value=" << threshold << "\n";
+	COUT << "best attrib=" << attribIdx << " thres value=" << threshold.get() << "\n";
 
 	aMap.setAsUsed(attribIdx); // so we will not use it again
 
 	graph[v]._attrIndex = attribIdx;
-	graph[v]._threshold = threshold;
+	graph[v]._threshold = threshold.get();
 	graph[v]._type = NT_Decision;
 
 // step 3 - different classes here: we create two child nodes and split the dataset
@@ -802,7 +864,7 @@ splitNode(
 	{
 		auto point = data.getDataPoint( idx );
 		auto attrVal = point.attribVal( attribIdx );
-		if( attrVal < threshold )
+		if( attrVal < threshold.get() )
 			graph[v1].v_Idx.push_back( idx );
 		else
 			graph[v2].v_Idx.push_back( idx );

@@ -1,17 +1,42 @@
 
+
+BIN_DIR=build/bin
+OBJ_DIR=build/obj
+
+SRC_FILES = $(wildcard *.cpp)
+
+OBJ_FILES = $(patsubst %.cpp,$(OBJ_DIR)/%,$(SRC_FILES))
+
+all: $(BIN_DIR)/main
+	$(BIN_DIR)/main
+	@echo "done"
+
+show:
+	@echo $(OBJ_FILES)
+	@echo $(EXEC_FILES)
+
+$(OBJ_DIR)/%.o: %.cpp dtcpp.h $(SRC_FILES)
+	$(CXX) -Wall -std=gnu++14 -fexceptions -O2 -c $< -o $@
+
+$(BIN_DIR)/%:$(OBJ_DIR)/%.o
+	$(CXX) -o $@ $< -s
+
 doc:
 	@doxygen Doxyfile
 	@xdg-open html/index.html
 
 test: build/bin/test_catch
-	build/bin/test_catch
+	$(BIN_DIR)/test_catch
 
-build/bin/test_catch: build/obj/test_catch.o
-	$(CXX) -o build/bin/test_catch build/obj/test_catch.o -s
+#$(BIN_DIR)/test_catch: build/obj/test_catch.o
+#	$(CXX) -o $(BIN_DIR)/test_catch build/obj/test_catch.o -s
 
-build/obj/test_catch.o: test_catch.cpp dtcpp.h
-	$(CXX) -Wall -std=gnu++14 -fexceptions -O2 -c test_catch.cpp -o build/obj/test_catch.o
+#build/obj/test_catch.o: test_catch.cpp dtcpp.h
+#	$(CXX) -Wall -std=gnu++14 -fexceptions -O2 -c test_catch.cpp -o build/obj/test_catch.o
 
 clean:
 	@-rm html/*
+	@-rm $(OBJ_DIR)/*
 
+cleanall: clean
+	@-rm $(BIN_DIR)/*

@@ -16,10 +16,11 @@ int main()
     cout << "Hello world!" << endl;
 
     DataSet dataset;
-    dataset.load( "demodata1.csv" );
+    dataset.load( "sample_data/tds_1.csv" );
 	dataset.print( std::cout );
 
     TrainingTree tt;
     tt.Train( dataset );
+    tt.printInfo( std::cout );
     tt.printDot( std::cout );
 }

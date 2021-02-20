@@ -15,6 +15,7 @@ for continuous data values (aka real numbers)
 #include <numeric>
 
 #include <boost/graph/adjacency_list.hpp>
+#include "boost/graph/graphviz.hpp"
 
 #define DEBUG
 
@@ -38,12 +39,18 @@ class NamedType
 public:
     explicit NamedType(T const& value) : value_(value) {}
     explicit NamedType(T&& value) : value_(std::move(value)) {}
-    T& get() { return value_; }
-    T const& get() const {return value_; }
+    T&       get()       { return value_; }
+    T const& get() const { return value_; }
+	friend std::ostream& operator << ( std::ostream& f, const NamedType& nt )
+	{
+		f << nt.value_;
+		return f;
+	}
 private:
     T value_;
 };
 using ThresholdVal = NamedType<float,struct ThresholdValTag>;
+
 //---------------------------------------------------------------------
 
 // forward declaration
@@ -93,7 +100,7 @@ trimSpaces( const std::string& input )
 	bool HasOneAlready( false );
 	bool FirstElem( true );
 	std::string out;
-	for( auto c: input)
+	for( auto c: input )
 	{
 		if( c != ' ' && c != 9 )
 		{
@@ -403,7 +410,7 @@ using GraphC = boost::adjacency_list<
 /// Used for training
 /**
 \note IMPORTANT: we use list because when splitting the vector of indexes of points of a node,
-we use the currents node vector as a reference (to avoid copying the whole vector).
+we use the current node's vector as a reference (to avoid copying the whole vector).
 BUT: if we where using \c vectS, adding new nodes may invalidate the current vertex descriptor.
 Thus, we use \c listS
 */
@@ -455,26 +462,35 @@ class DecisionTree
 //template<typename T>
 DecisionTree::DecisionTree()
 {
-/*	auto r  = boost::add_vertex(_graph);
-	auto v1 = boost::add_vertex(_graph);
-	auto v2 = boost::add_vertex(_graph);
-	_graph[r]._type  = NT_Root;
-	_graph[v1]._type = NT_Final;
-	_graph[v2]._type = NT_Final;
+}
 
-	auto et = boost::add_edge( r, v1, _graph );
-	auto ef = boost::add_edge( r, v2, _graph );
-	_graph[et.first]._res = true;
-	_graph[ef.first]._res = false;*/
+//---------------------------------------------------------------------
+/// Recursive function, prints the current node
+inline
+void
+printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
+{
+	for( auto pit=boost::out_edges(v, graph); pit.first != pit.second; pit.first++ )
+	{
+		auto target = boost::target ( *pit.first, graph );
+		f << target << " [label=\"LABEL\"];\n";
+		f << v << "->" << target << ";\n";
+	}
 }
 
 //---------------------------------------------------------------------
 /// Print a DOT file of the tree
 //template<typename T>
+inline
 void
 TrainingTree::printDot( std::ostream& f ) const
 {
-// TODO
+	f << " graph g {\n";
+	vertexT_t v = 0;
+	f << v << ";\n";
+	printNodeChilds( f, v, _graph );
+
+	f << "}";
 }
 
 //---------------------------------------------------------------------
@@ -483,9 +499,10 @@ TrainingTree::printDot( std::ostream& f ) const
 void
 TrainingTree::printInfo( std::ostream& f ) const
 {
-	f << "Training tree info\n"
-		<< " -nb nodes=" << boost::num_vertices( _graph )
-		<< " -max depth=" << maxDepth()
+	f << "Training tree info:"
+		<< "\n -nb nodes=" << boost::num_vertices( _graph )
+		<< "\n -nb edges=" << boost::num_edges( _graph )
+		<< "\n -max depth=" << maxDepth()
 		<< '\n';
 }
 
@@ -825,9 +842,10 @@ getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
 /// Recursive helper function, used by TrainingTree::Train()
 /**
 Computes the threshold, splits the dataset and assigns the split to 2 sub nodes (that get created)
+\return false is some more splitting needs to be done, true it all done
 */
 ////template<typename T>
-bool
+void
 splitNode(
 	vertexT_t         v,         ///< current node id
 	AttribMap&        aMap,      ///< attribute map, holds true for all the attributes already used
@@ -839,6 +857,9 @@ splitNode(
 	START;
 	static int s_recDepth;
 	s_recDepth++;
+	if( s_recDepth>10)
+		std::exit(1);
+
 	COUT << "RECDEPTH="<< s_recDepth << "\n";
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
 	COUT << "A-set holds " << vIdx.size() << " points\n";
@@ -852,7 +873,7 @@ splitNode(
 	{
 		COUT << "dataset is (almost or completely) pure, gini coeff=" << giniCoeff << ", STOP\n";
 		s_recDepth--;
-		return true;
+		return; // true;
 	}
 #else
 	size_t c1 = 0;
@@ -879,38 +900,29 @@ splitNode(
 		graph[v]._class = majo.first;
 		COUT << "all attributes are used, STOP\n";
 		s_recDepth--;
-		return true;
+		return;
 	}
-	COUT << s_recDepth << " B-set holds " << vIdx.size() << " points\n";
 
 // step 2 - find the best attribute to use to split the data, considering the data points of the current node
 	auto pair_id_th = findBestAttribute( vIdx, data, aMap );
 	auto attribIdx  = pair_id_th.first;
 	auto threshold  = pair_id_th.second;
-	COUT << "best attrib=" << attribIdx << " thres value=" << threshold.get() << "\n";
-
-	COUT << s_recDepth << " B2-set holds " << vIdx.size() << " points\n";
+	COUT << "best attrib=" << attribIdx << " thres value=" << threshold << "\n";
 
 	aMap.setAsUsed(attribIdx); // so we will not use it again
-	COUT << s_recDepth << " B22-set holds " << vIdx.size() << " points\n";
 
 	graph[v]._attrIndex = attribIdx;
 	graph[v]._threshold = threshold.get();
 	graph[v]._type = NT_Decision;
 
-	COUT << s_recDepth << " B23-set holds " << vIdx.size() << " points\n";
-
 // step 3 - different classes here: we create two child nodes and split the dataset
 	auto v1 = boost::add_vertex(graph);
 	auto v2 = boost::add_vertex(graph);
-	COUT << s_recDepth << " B3-set holds " << vIdx.size() << " points\n";
 
 	graph[v1].depth = graph[v].depth+1;
 	graph[v2].depth = graph[v].depth+1;
 //	graph[v1]._type = NT_Decision;
 //	graph[v2]._type = NT_Decision;
-
-	COUT << s_recDepth << " B4-set holds " << vIdx.size() << " points\n";
 
 	auto et = boost::add_edge( v, v1, graph );
 	auto ef = boost::add_edge( v, v2, graph );
@@ -918,7 +930,6 @@ splitNode(
 	graph[ef.first].side = false;
 
 	COUT << "two nodes added, total nb=" << boost::num_vertices(graph) << "\n";
-	COUT << s_recDepth << " C-set holds " << vIdx.size() << " points\n";
 
 	for( auto idx: vIdx )           // separate the data points into two sets
 	{
@@ -930,19 +941,15 @@ splitNode(
 			graph[v2].v_Idx.push_back( idx );
 	}
 	COUT << "after split: v1:"<< graph[v1].v_Idx.size() << " points, v2:"<< graph[v2].v_Idx.size() << " points\n";
-	auto b1 = splitNode( v1, aMap, graph, data, params );
-	auto b2 = splitNode( v2, aMap, graph, data, params );
-	if( b1 && b2 )
-	{
-		COUT << "both nodes are done, return true\n";
-		s_recDepth--;
-		return true;
-	}
 
-	COUT << "Return false\n";
+	if( graph[v1].v_Idx.size() )
+		splitNode( v1, aMap, graph, data, params );
 
+	if( graph[v2].v_Idx.size() )
+		splitNode( v2, aMap, graph, data, params );
+
+	COUT << "Return\n";
 	s_recDepth--;
-	return false;
 }
 //---------------------------------------------------------------------
 /// Train tree using data.
@@ -957,22 +964,8 @@ TrainingTree::Train( const DataSet& data )
 	auto nbAttribs = data.nbAttribs();
 	if( !nbAttribs )
 		return false;
-
-// step 1 - compute entropy of dataset
-
-
-// step 2 - compute entropy of each attribute and find the one that maximizes information
-
-//int attribIdx = 0;
-/*
-	for( auto i=0; i<nbAttribs; i++ )
-	{
-		for( auto j=0; j<data.size(); j++ )
-		{
-			auto datapoint = data.getDataPoint( j );
-			auto attrVal = datapoint.attribVal( i );
-		}
-	}*/
+	if( data.size()<2 )
+		return false;
 
 // step 3 - Create initial node, and assign to it the whole dataset
 
@@ -988,25 +981,6 @@ TrainingTree::Train( const DataSet& data )
 	Params params;
 // Call the "split" function (recursive)
 	splitNode( n0, attribMap, _graph, data, params );
-
-
-//order attribute by entropy, so we start with the attribute that has the highest entropy
-
-
-//	std::vector<size_t> sortedAttributeIndex(nbAttribs);
-
-// step 4 - split iteratively dataset and build tree
-/*	bool done = true;
-	for( uint i=0; i<nbAttribs; i++ )
-	{
-		for( uint dpidx=0; dpidx<data.size(); dpidx++ )
-		{
-			auto point = data.getDataPoint( dpidx );
-//			if( point.class() )
-
-		}
-
-	}*/
 
 	return true;
 }

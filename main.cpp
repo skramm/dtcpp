@@ -13,8 +13,6 @@ using namespace std;
 
 int main()
 {
-    cout << "Hello world!" << endl;
-
     DataSet dataset;
     dataset.load( "sample_data/tds_1.csv" );
 	dataset.print( std::cout );

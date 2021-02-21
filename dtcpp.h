@@ -154,7 +154,7 @@ splitString( const std::string &s, char delim )
 struct Params
 {
 	float minGiniCoeffForSplitting = 0.05f;
-	uint minNbPoints = 1;                   ///< minumum nb of points to create a node
+	uint minNbPoints = 2;                   ///< minumum nb of points to create a node
 };
 
 //---------------------------------------------------------------------
@@ -171,17 +171,19 @@ class DataPoint
 		int _class = -1;  ///< Class of the datapoint, -1 for undefined
 
 	public:
+/// Constructor used in tests
 		DataPoint( const std::vector<float>& vec, int c ) :
 			_attrValue(vec), _class(c)
 		{}
 /// Constructor from a vector of strings (used by file reader)
-		DataPoint( const std::vector<std::string>& v_string )
+		DataPoint( const std::vector<std::string>& v_string, int c )
 		{
-			assert( v_string.size() > 1 );              // at least one attribute and a class value
+			assert( v_string.size() > 0 );              // at least one attribute and a class value
 
-			for( size_t i=0; i<v_string.size()-1; i++ )
+			for( size_t i=0; i<v_string.size(); i++ )
 				_attrValue.push_back( std::stof( v_string[i] ) );
-			_class = std::stoi( v_string.back() );          // last value of the vector is the class
+//			_class = std::stoi( v_string.back() );          // last value of the vector is the class
+			_class = c;
 		}
 
 		size_t nbAttribs() const
@@ -211,6 +213,14 @@ class DataPoint
 };
 
 //---------------------------------------------------------------------
+/// PArameters for data file
+struct Fparams
+{
+	char sep = ' ';  ///< field separator
+	bool classAsString = false;  ///< class values are given as strings
+};
+//---------------------------------------------------------------------
+
 /// A dataset, holds a set of \ref DataPoint
 //template<typename T>
 class DataSet
@@ -253,7 +263,7 @@ class DataSet
 			assert( idx < _data.size() );
 			return _data[idx];
 		}
-		bool load( std::string fname, char sep=' ' );
+		bool load( std::string fname, const Fparams& );
 		void print( std::ostream& ) const;
 		void print( std::ostream&, const std::vector<uint>& ) const;
 
@@ -270,7 +280,7 @@ class DataSet
 //---------------------------------------------------------------------
 //template<typename T>
 bool
-DataSet::load( std::string fname, char sep )
+DataSet::load( std::string fname, const Fparams& params )
 {
 	std::ifstream f( fname );
 	if( !f.is_open() )
@@ -279,6 +289,9 @@ DataSet::load( std::string fname, char sep )
 		return false;
 	}
 	clear();
+
+	std::map<std::string,uint> classMap;  // used only if classes are given as strings
+	uint classIndexCounter = 0;
 
 	size_t nb_lines     = 0;
 	size_t nb_empty     = 0;
@@ -298,7 +311,7 @@ DataSet::load( std::string fname, char sep )
 			else                     // if NOT comment
 			{
 //				CERR << "line=" << temp << ENDL;
-				auto v_tok = priv::splitString( temp, sep );
+				auto v_tok = priv::splitString( temp, params.sep );
 				if( v_tok.size() < 2 )
 				{
 					std::cerr << "-Error: only one value on line " << nb_lines
@@ -309,7 +322,21 @@ DataSet::load( std::string fname, char sep )
 				if( size() == 0 )                     // if this is the first datapoint, then set the nb of attributes
 					setNbAttribs( v_tok.size()-1 );
 
-				_data.push_back( DataPoint( v_tok ) );
+				int classIndex = -1;
+				auto cl = v_tok.back();
+				if( !params.classAsString )
+					classIndex = std::stoi( cl );
+				else
+				{
+					auto it = classMap.find( cl );
+					if( it == classMap.end() )  // not there
+						classMap[ cl ] = classIndexCounter++; // new class
+					else
+						classIndex = classMap[ cl ];
+				}
+				v_tok.resize( v_tok.size()-1 );  // remove last element (class)
+				_data.push_back( DataPoint( v_tok, classIndex ) );
+
 			}
 		}
 	}
@@ -415,6 +442,7 @@ struct NodeT
 	size_t   _attrIndex = 0;     ///< Attribute Index that this nodes classifies
 	float    _threshold = 0.f;   ///< Threshold on the attribute value (only for decision nodes)
 	uint     depth = 0;         ///< depth of the node in the tree
+	float    giniImpurity = 0.f;
 
 	std::vector<uint> v_Idx; ///< data point indexes
 	friend std::ostream& operator << ( std::ostream& f, const NodeT& n )
@@ -539,7 +567,8 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 			f << "attr=" << graph[target]._attrIndex
 				<< " thres=" << graph[target]._threshold;
 		else
-			f << "class=" << graph[target]._class;
+			f << "class=" << graph[target]._class
+				<< " GI=" << graph[target].giniImpurity;
 
 		f << "\\ndepth=" << graph[target].depth
 			<< " #=" << graph[target].v_Idx.size()
@@ -747,11 +776,6 @@ struct AttributeData
 
 	AttributeData()
 	{}
-/*	AttributeData( uint idx, const std::pair<float,ThresholdVal>& p ) :
-		_atIndex(idx),
-		_gain( p.first),
-		_threshold( p.second )
-	{}*/
 	AttributeData( uint atIdx, float ig, ThresholdVal tval, uint nbpLT ) :
 		_atIndex(atIdx),
 		_gain(ig),
@@ -771,7 +795,7 @@ struct AttributeData
 };
 
 //---------------------------------------------------------------------
-/// Compute best IG (Information Gain) of attribute \c atIdx of the subset of data given by \c v_dpidx.
+/// Compute "Gini impurity" (Information Gain) of attribute \c atIdx of the subset of data given by \c v_dpidx.
 /**
 \return Returns a pair holding the IG value AND the threshold value for which it was produced
 
@@ -993,6 +1017,7 @@ splitNode(
 	{
 		graph[v]._type = NT_Final;
 		graph[v]._class = majo.first;
+		graph[v].giniImpurity = giniCoeff;
 		COUT << "dataset is (almost or completely) pure, gini coeff=" << giniCoeff << ", STOP\n";
 		s_recDepth--;
 		return;
@@ -1004,6 +1029,7 @@ splitNode(
 	{
 		graph[v]._type = NT_Final;
 		graph[v]._class = majo.first;
+		graph[v].giniImpurity = giniCoeff;
 		COUT << "all attributes are used, STOP\n";
 		s_recDepth--;
 		return;
@@ -1013,9 +1039,22 @@ splitNode(
 	auto bestAttrib = findBestAttribute( vIdx, data, aMap );
 	auto attribIdx  = bestAttrib._atIndex;
 	auto threshold  = bestAttrib._threshold;
-	COUT << "best attrib=" << attribIdx << " thres value=" << threshold << "\n";
+	COUT << "best attrib:" << bestAttrib << "\n";
 
 	aMap.setAsUsed(attribIdx); // so we will not use it again
+
+// before splitting, make sure that one of the childs will not have an insufficient number of points
+	auto n1= bestAttrib._nbPtsLessThan;
+	auto n2 = vIdx.size() - n1;
+	if( n1 < params.minNbPoints || n2 < params.minNbPoints )
+	{
+		graph[v]._type = NT_Final;
+		graph[v]._class = majo.first;
+		graph[v].giniImpurity = giniCoeff;
+		COUT << "not enough points if splitting: n1=" << n1 << " n2=" << n2 << ", STOP\n";
+		s_recDepth--;
+		return;
+	}
 
 	graph[v]._attrIndex = attribIdx;
 	graph[v]._threshold = threshold.get();

@@ -11,8 +11,10 @@ PNG_FILES = $(patsubst %.dot,%.png,$(DOT_FILES))
 OBJ_FILES = $(patsubst %.cpp,$(OBJ_DIR)/%,$(SRC_FILES))
 
 all: $(BIN_DIR)/main
-	$(BIN_DIR)/main
 	@echo "done"
+
+run: all
+	$(BIN_DIR)/main
 
 show:
 	@echo "OBJ_FILES=$(OBJ_FILES)"

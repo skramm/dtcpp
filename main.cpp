@@ -20,5 +20,5 @@ int main()
     TrainingTree tt;
     tt.Train( dataset );
     tt.printInfo( std::cout );
-    tt.printDot( std::cout );
+    tt.printDot( "demo.dot" );
 }

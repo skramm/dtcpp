@@ -62,7 +62,9 @@ using ThresholdVal = NamedType<float,struct ThresholdValTag>;
 
 //---------------------------------------------------------------------
 /// inner namespace
+// % % % % % % % % % % % % % %
 namespace priv {
+// % % % % % % % % % % % % % %
 
 #if 0
 /// Returns either max of first or max of second
@@ -142,13 +144,17 @@ splitString( const std::string &s, char delim )
 
     return velems;
 }
+
+// % % % % % % % % % % % % % %
 } // namespace priv
+// % % % % % % % % % % % % % %
 
 //---------------------------------------------------------------------
 /// Parameters
 struct Params
 {
 	float minGiniCoeffForSplitting = 0.05f;
+	uint minNbPoints = 1;                   ///< minumum nb of points to create a node
 };
 
 //---------------------------------------------------------------------
@@ -414,10 +420,10 @@ struct NodeT
 	friend std::ostream& operator << ( std::ostream& f, const NodeT& n )
 	{
 		f << "C=" << n._class
-			<< " attr=" << n._attrIndex
-			<< " thres=" << n._threshold
-			<< " depth=" << n.depth
-			<< " #v=" << n.v_Idx.size()
+			<< "\nattr=" << n._attrIndex
+			<< "\nthres=" << n._threshold
+			<< "\ndepth=" << n.depth
+			<< "\n#v=" << n.v_Idx.size()
 			;
 		return f;
 	}
@@ -483,6 +489,7 @@ class TrainingTree
 	public:
 		bool Train( const DataSet& );
 		void printDot( std::ostream& ) const;
+		void printDot( std::string fname ) const;
 		void printInfo( std::ostream& ) const;
 		size_t maxDepth() const { return _maxDepth; }
 };
@@ -544,13 +551,24 @@ void
 TrainingTree::printDot( std::ostream& f ) const
 {
 	START;
-	f << " graph g {\n";
+	f << "digraph g {\nnode [shape=\"box\"];\n";
 	f << _graph[_initialVertex].TEMP_IDX
 		<< " [label=\""
 		<< _graph[_initialVertex]
-		<< "\"];\n";
+		<<"\",color = red"
+		<< "];\n";
 	priv::printNodeChilds( f, _initialVertex, _graph );
 	f << "}\n";
+}
+
+inline
+void
+TrainingTree::printDot( std::string fname ) const
+{
+	START;
+	std::ofstream f(fname);
+	assert( f.is_open() );
+	printDot( f );
 }
 
 //---------------------------------------------------------------------
@@ -570,7 +588,9 @@ TrainingTree::printInfo( std::ostream& f ) const
 
 //---------------------------------------------------------------------
 /// Utility functions, returns a vector of indexes holding all the points
+// % % % % % % % % % % % % % %
 namespace priv {
+// % % % % % % % % % % % % % %
 std::vector<uint>
 setAllDataPoints( const DataSet& dataset )
 {
@@ -578,7 +598,9 @@ setAllDataPoints( const DataSet& dataset )
 	std::iota( v.begin(), v.end(), 0 );
 	return v;
 }
+// % % % % % % % % % % % % % %
 } // namespace priv
+// % % % % % % % % % % % % % %
 
 //---------------------------------------------------------------------
 /// Computes the nb of votes for each class, for the points defined in \c v_Idx

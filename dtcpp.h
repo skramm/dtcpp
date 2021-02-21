@@ -30,7 +30,6 @@ for continuous data values (aka real numbers)
 #endif // DEBUG
 
 
-
 //---------------------------------------------------------------------
 /// A template to have strong types, taken from J. Boccara
 /**
@@ -62,23 +61,12 @@ using ThresholdVal = NamedType<float,struct ThresholdValTag>;
 //class DataSet;
 
 //---------------------------------------------------------------------
-/// inner namespace
+
 // % % % % % % % % % % % % % %
+/// inner namespace
 namespace priv {
 // % % % % % % % % % % % % % %
 
-#if 0
-/// Returns either max of first or max of second
-/**
- * Argument: a container holding pairs of type <T1,T2>
- *
- * \return iterator on found element
-*/
-template<typename T1,typename T2>
-getMaxElement(T)
-{
-}
-#endif
 //---------------------------------------------------------------------
 /// General utility function
 template<typename T>
@@ -213,7 +201,7 @@ class DataPoint
 };
 
 //---------------------------------------------------------------------
-/// PArameters for data file
+/// Parameters for data file
 struct Fparams
 {
 	char sep = ' ';  ///< field separator
@@ -330,21 +318,16 @@ DataSet::load( std::string fname, const Fparams& params )
 					classIndex = std::stoi( cla );
 				else
 				{
-//					std::cout << "cla=" << cla << '\n';
 					auto it = classMap.find( cla );
 					if( it == classMap.end() )  // not there
-					{
 						classMap[ cla ] = classIndexCounter++; // new class
-						std::cout << "NEW CLASS !: -" << cla << "- , nb ="<< classMap.size() << '\n';
-					}
 					else
 						classIndex = classMap[ cla ];
 				}
 				classValues[classIndex]++;
-				std::cout << "incremetnaing cindex" << classIndex << " countval=" <<classValues[classIndex] << "\n";
-				v_tok.resize( v_tok.size()-1 );  // remove last element (class)
+//				v_tok.resize( v_tok.size()-1 );
+				v_tok.erase( v_tok.end()-1 );   // remove last element (class)
 				_data.push_back( DataPoint( v_tok, classIndex ) );
-
 			}
 		}
 	}

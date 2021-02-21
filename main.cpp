@@ -22,7 +22,7 @@ int main( int argc, const char** argv )
     auto sepcl = cmdl("sep").str();
     if( !sepcl.empty() )
     {
-        std::cout << " - using '" << sepcl << " as datafile field separator\n";
+        std::cout << " - using '" << sepcl << "' as datafile field separator\n";
         fparams.sep = sepcl[0];
     }
 

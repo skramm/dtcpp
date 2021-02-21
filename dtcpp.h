@@ -545,7 +545,7 @@ class TrainingTree
 		vertexT_t _initialVertex;
 		size_t _maxDepth = 1;  ///< defined by training
 	public:
-		bool train( const DataSet&, Params params=Params() );
+		Perf train( const DataSet&, Params params=Params() );
 		Perf classify( const DataSet& ) const;
 		void printDot( std::ostream& ) const;
 		void printDot( std::string fname ) const;
@@ -1153,18 +1153,20 @@ splitNode(
 //---------------------------------------------------------------------
 /// Train tree using data.
 /**
- * \return false if failure
+\return false if failure
+
+\todo proceed to measure classification error
 */
 //template<typename T>
-bool
+Perf
 TrainingTree::train( const DataSet& data, const Params params )
 {
 	START;
 	auto nbAttribs = data.nbAttribs();
 	if( !nbAttribs )
-		return false;
+		throw std::runtime_error( "no attributes!" );
 	if( data.size()<2 )
-		return false;
+		throw std::runtime_error( "no enough data points!" );
 
 // step 3 - Create initial node, and assign to it the whole dataset
 
@@ -1183,7 +1185,8 @@ TrainingTree::train( const DataSet& data, const Params params )
 //	splitNode( n0, attribMap, _graph, data, params );
 	splitNode( n0, _graph, data, params );
 
-	return true;
+
+	return Perf();
 }
 
 //---------------------------------------------------------------------

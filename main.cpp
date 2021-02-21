@@ -59,7 +59,8 @@ int main( int argc, const char** argv )
     TrainingTree tt;
     if( !doFolding )
     {
-        tt.train( dataset );
+        auto perf = tt.train( dataset );
+        std::cout << "Score=" << perf << "\n";
         tt.printInfo( std::cout );
         tt.printDot( "demo.dot" );
     }
@@ -71,9 +72,13 @@ int main( int argc, const char** argv )
             auto p_data_subsets = dataset.getFolds( i, nbFolds );
             auto data_train = p_data_subsets.first;
             auto data_test  = p_data_subsets.second;
-            tt.train( data_train );
-            auto perf = tt.classify( data_test );
-            std::cout << "Fold " << i+1 << "/" << nbFolds << ": perf=" << perf << "\n";
+
+            auto perf_t = tt.train( data_train );
+            auto perf_c = tt.classify( data_test );
+            std::cout << "Fold " << i+1 << "/" << nbFolds
+				<< "- Training score=" << perf_t
+				<< "- Test score=" << perf_c
+				<< "\n";
         }
     }
 }

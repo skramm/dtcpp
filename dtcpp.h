@@ -487,7 +487,7 @@ class TrainingTree
 		vertexT_t _initialVertex;
 		size_t _maxDepth = 1;  ///< defined by training
 	public:
-		bool Train( const DataSet& );
+		bool Train( const DataSet&, Params params=Params() );
 		void printDot( std::ostream& ) const;
 		void printDot( std::string fname ) const;
 		void printInfo( std::ostream& ) const;
@@ -570,9 +570,10 @@ TrainingTree::printDot( std::ostream& f ) const
 	f << "digraph g {\nnode [shape=\"box\"];\n";
 	f << _graph[_initialVertex].TEMP_IDX
 		<< " [label=\""
-		<< _graph[_initialVertex]
-		<<"\",color = blue"
-		<< "];\n";
+		<< "attr="   << _graph[_initialVertex]._attrIndex
+		<< " thres=" << _graph[_initialVertex]._threshold
+		<< "\n#="    << _graph[_initialVertex].v_Idx.size()
+		<< "\",color = blue];\n";
 	priv::printNodeChilds( f, _initialVertex, _graph );
 	f << "}\n";
 }
@@ -745,6 +746,9 @@ Details:
 - for details, see
  - https://en.wikipedia.org/wiki/Information_gain_in_decision_trees
  - https://towardsdatascience.com/under-the-hood-decision-tree-454f8581684e
+
+\todo Add the number of values less than threshold in return value
+(so we can decide to split or not to split local dataset without recounting them).
 */
 //template<typename T>
 std::pair<float,ThresholdVal>
@@ -893,7 +897,7 @@ findBestAttribute(
 		std::cout << elem.first << "-" << elem.second << "\n"; */
 
 
-// step 3 - get the one with max value
+// step 3 - get the one with max gain value
 	auto it_mval = std::max_element(
 		std::begin(v_IG),
 		std::end(v_IG),
@@ -1047,7 +1051,7 @@ splitNode(
 */
 //template<typename T>
 bool
-TrainingTree::Train( const DataSet& data )
+TrainingTree::Train( const DataSet& data, const Params params )
 {
 	START;
 	auto nbAttribs = data.nbAttribs();
@@ -1068,7 +1072,7 @@ TrainingTree::Train( const DataSet& data )
 	_graph[n0]._type = NT_Root;
 
 	AttribMap attribMap(nbAttribs);
-	Params params;
+
 // Call the "split" function (recursive)
 	splitNode( n0, attribMap, _graph, data, params );
 

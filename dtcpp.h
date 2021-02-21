@@ -541,7 +541,7 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 		else
 			f << "class=" << graph[target]._class;
 
-		f << "\ndepth=" << graph[target].depth
+		f << "\\ndepth=" << graph[target].depth
 			<< " #=" << graph[target].v_Idx.size()
 			<< "\"";
 		switch( graph[target]._type )
@@ -737,6 +737,40 @@ struct AttribMap
 		}
 };
 //---------------------------------------------------------------------
+/// Holds all the data relative to an attribute to choose
+struct AttributeData
+{
+	uint         _atIndex = 0u;         ///< (absolute) attribute index
+	float        _gain  = 0.f;          ///< information gain, will be used to select which attribute we use
+	ThresholdVal _threshold;            ///< threshold value, will be used to classify
+	uint         _nbPtsLessThan = 0u;   ///< Nb of points that are less than the threshold
+
+	AttributeData()
+	{}
+/*	AttributeData( uint idx, const std::pair<float,ThresholdVal>& p ) :
+		_atIndex(idx),
+		_gain( p.first),
+		_threshold( p.second )
+	{}*/
+	AttributeData( uint atIdx, float ig, ThresholdVal tval, uint nbpLT ) :
+		_atIndex(atIdx),
+		_gain(ig),
+		_threshold(tval),
+		_nbPtsLessThan(nbpLT)
+	{}
+
+	friend std::ostream&operator << ( std::ostream& f, const AttributeData& ad )
+	{
+		f << "AttributeData: index=" << ad._atIndex
+			<< " gain=" << ad._gain
+			<< " thres=" << ad._threshold
+			<< " nbPointsLessThan=" << ad._nbPtsLessThan
+			<< "\n";
+		return f;
+	}
+};
+
+//---------------------------------------------------------------------
 /// Compute best IG (Information Gain) of attribute \c atIdx of the subset of data given by \c v_dpidx.
 /**
 \return Returns a pair holding the IG value AND the threshold value for which it was produced
@@ -751,9 +785,9 @@ Details:
 (so we can decide to split or not to split local dataset without recounting them).
 */
 //template<typename T>
-std::pair<float,ThresholdVal>
+AttributeData
 computeIG(
-	uint                     atIdx,     ///< attribute index
+	uint                     atIdx,     ///< attribute index we want to process
 	const std::vector<uint>& v_dpidx,   ///< datapoint indexes to consider
 	const DataSet&           data,      ///< dataset
 	double                   giniCoeff  ///< Global Gini coeff for all the points
@@ -770,22 +804,22 @@ computeIG(
 	removeDuplicates( v_attribVal, 0.1 );
 
 	if( v_attribVal.size() < 2 )         // if only one value, is pointless
-		return std::make_pair( 0.f, ThresholdVal(0.f) );
+		return AttributeData();
+//		return std::make_pair( 0.f, ThresholdVal(0.f) );
 
 	std::vector<float> v_thresVal( v_attribVal.size()-1 ); // if 10 values, then only 9 thresholds
-	for( uint i=0; i<v_attribVal.size()-1; i++ )
+	for( uint i=0; i<v_thresVal.size(); i++ )
 		v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
-
-//	priv::printVector( std::cout, v_thresVal, "thresholds" );
 
 // step 2: compute IG for each threshold value
 
 	std::vector<float> deltaGini( v_thresVal.size() );
+	std::vector<uint> nb_LT( v_thresVal.size(), 0u );
 	for( uint i=0; i<v_thresVal.size(); i++ )              // for each threshold value
 	{
 //		COUT << "thres " << i << "=" << v_thresVal[i] << '\n';
 		std::map<uint,uint> m_LT, m_HT;
-		uint nb_LT = 0;
+
 		uint nb_HT = 0;
 		for( auto ptIdx: v_dpidx )                         // for each data point
 		{
@@ -794,7 +828,7 @@ computeIG(
 			if( attribVal < v_thresVal[i] )
 			{
 				m_LT[ point.classVal() ]++;
-				nb_LT++;
+				nb_LT[i]++;
 			}
 			else
 			{
@@ -810,7 +844,7 @@ computeIG(
 		for( auto p: m_LT )  // for the values that are Lower Than the threshold
 		{
 //			COUT << "LT: f=" <<p.first << " s=" << p.second << '\n';
-			auto val = 1. * p.second / nb_LT;
+			auto val = 1. * p.second / nb_LT[i];
 			g_LT -= val*val;
 		}
 		auto g_HT = 1.;
@@ -834,31 +868,15 @@ computeIG(
 	COUT << "max gini for thres idx=" << std::distance( std::begin( deltaGini ), max_pos ) << " val=" << *max_pos
 		<< " thresval=" << v_thresVal.at( std::distance( std::begin( deltaGini ), max_pos ) ) << "\n";
 
-	return std::pair<float,ThresholdVal>(
+	auto best_thres_idx = std::distance( std::begin( deltaGini ), max_pos );
+
+	return AttributeData(
+		atIdx,
 		*max_pos,
-		ThresholdVal(v_thresVal.at( std::distance( std::begin( deltaGini ), max_pos ) ) )
+		ThresholdVal(v_thresVal.at( best_thres_idx ) ),
+		nb_LT.at( best_thres_idx )
 	);
 }
-//---------------------------------------------------------------------
-/// Holds all the data relative to an attribute to choose
-struct AttributeData
-{
-	uint         _index = 0;    ///< (absolute) attribute index
-	float        _gain  = 0.f;  ///< information gain, will be used to select which attribute we use
-	ThresholdVal _threshold;    ///< threshold value, will be used to classify
-	AttributeData()
-	{}
-	AttributeData( uint idx, const std::pair<float,ThresholdVal>& p ) :
-		_index(idx),
-		_gain( p.first),
-		_threshold( p.second )
-	{}
-	friend std::ostream&operator << ( std::ostream& f, const AttributeData& ad )
-	{
-		f << "AttributeData: index=" << ad._index << " gain=" << ad._gain << " thres=" << ad._threshold << "\n";
-		return f;
-	}
-};
 //---------------------------------------------------------------------
 /// Finds the best attributes to use, considering the data points of the current node
 /// and compute threshold on that attribute so that the two classes are separated at best.
@@ -867,7 +885,6 @@ struct AttributeData
 \return AttributeData
 */
 //template<typename T>
-//std::pair<uint,ThresholdVal>
 AttributeData
 findBestAttribute(
 	const std::vector<uint>& vIdx,  ///< indexes of data points we need to consider
@@ -889,13 +906,12 @@ findBestAttribute(
 
 	std::vector<AttributeData> v_IG;
 	for( auto atIdx: v_attrIdx )
-		v_IG.push_back( AttributeData( atIdx, computeIG( atIdx, vIdx, data, giniCoeff ) ) );
+		v_IG.push_back( computeIG( atIdx, vIdx, data, giniCoeff ) );
 
 	priv::printVector( std::cout, v_IG, "v_IG" );
 /*	COUT << "vector v_IG, #=" << v_IG.size() << "\n";
 	for( const auto& elem : v_IG )
 		std::cout << elem.first << "-" << elem.second << "\n"; */
-
 
 // step 3 - get the one with max gain value
 	auto it_mval = std::max_element(
@@ -907,15 +923,13 @@ findBestAttribute(
 			return p1._gain < p2._gain;
 		}
 	);
-
 	COUT << "highest Gain:" << *it_mval << "\n";
-//		<< " Gini coeff val=" << it_mval->first << " threshold val=" << it_mval->second.get() << '\n';
+
+/*	auto best_attr_idx = std::distance( std::begin(v_IG), it_mval );
+	COUT << "best_attr_idx=" << best_attr_idx << '\n';
+	it_mval->_atIndex = best_attr_idx; */
 
 	return *it_mval;
-/*	std::make_pair(
-		std::distance( std::begin(v_IG), it_mval ),  // index of the attribute
-		it_mval->second
-	);*/
 }
 //---------------------------------------------------------------------
 /// Returns the class that is in majority in the points defined in \c vIdx
@@ -963,8 +977,7 @@ splitNode(
 	START;
 	static int s_recDepth;
 	s_recDepth++;
-	if( s_recDepth>10)
-		std::exit(1);
+	if( s_recDepth>10){ COUT << "TOO MUCH DEPTH!!!\n"; std::exit(1);}
 
 	COUT << "RECDEPTH="<< s_recDepth << "\n";
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
@@ -998,7 +1011,7 @@ splitNode(
 
 // step 2 - find the best attribute to use to split the data, considering the data points of the current node
 	auto bestAttrib = findBestAttribute( vIdx, data, aMap );
-	auto attribIdx  = bestAttrib._index;
+	auto attribIdx  = bestAttrib._atIndex;
 	auto threshold  = bestAttrib._threshold;
 	COUT << "best attrib=" << attribIdx << " thres value=" << threshold << "\n";
 

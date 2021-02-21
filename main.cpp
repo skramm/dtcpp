@@ -11,12 +11,15 @@ for continuous data values (aka real numbers)
 
 using namespace std;
 
-int main()
+int main( int argc, const char** argv )
 {
     DataSet dataset;
-    dataset.load( "sample_data/tds_1.csv" );
-	dataset.print( std::cout );
+    if( argc > 1 )
+        dataset.load( argv[1] );
+    else
+        dataset.load( "sample_data/tds_1.csv" );
 
+	dataset.print( std::cout );
     TrainingTree tt;
     tt.Train( dataset );
     tt.printInfo( std::cout );

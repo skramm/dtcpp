@@ -34,12 +34,6 @@ int main( int argc, const char** argv )
     if( cmdl["-i"] )
         fparams.noProcess = true;
 
-/*cout << "Positional args:\n";
-for (auto& pos_arg : cmdl)
-  cout << '\t' << pos_arg << '\n';
-  cout << "cmdl size=" << cmdl.size() << '\n';
-*/
-
     DataSet dataset;
     std::string fname = "sample_data/tds_1.csv";
     if( cmdl.size() > 1 )

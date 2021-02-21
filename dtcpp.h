@@ -29,6 +29,9 @@ for continuous data values (aka real numbers)
 	#define START ;
 #endif // DEBUG
 
+#define LOG \
+	if( params.verbose ) \
+		std::cout
 
 //---------------------------------------------------------------------
 /// A template to have strong types, taken from J. Boccara
@@ -143,7 +146,9 @@ splitString( const std::string &s, char delim )
 struct Params
 {
 	float minGiniCoeffForSplitting = 0.05f;
-	uint minNbPoints = 2;                   ///< minumum nb of points to create a node
+	uint  minNbPoints = 2;                   ///< minumum nb of points to create a node
+	float removalCoeff = 0.05f; ///< used to remove close attribute values when searching ofr best threshold. See removeDuplicates()
+	bool  verbose = true;        ///< to allow logging of some run-time details
 };
 
 //---------------------------------------------------------------------
@@ -698,12 +703,16 @@ We check the differences between two consecutive values: <br>
 \f$ d = \left| v_i - v_{i+1} \right| \f$ <br>
 If \f$ d < coeff * range \f$, then it will be considered as "too close".
 */
-void
-removeDuplicates( std::vector<float>& vec, float coeff )
+size_t
+removeDuplicates( std::vector<float>& vec, const Params& params )
 {
 	auto mm = std::minmax_element( std::begin(vec), std::end(vec) )	;
-	auto k = (mm.second - mm.first) * coeff;
+	auto k = (*mm.second - *mm.first) * params.removalCoeff;
 
+	COUT << "min=" << *mm.first
+		<< " max=" << *mm.second
+		<< " range=" << (*mm.second - *mm.first)
+		<< " k=" << k << "\n";
 	std::sort( vec.begin(), vec.end() );
 
 // remove all values that are equal
@@ -718,8 +727,9 @@ removeDuplicates( std::vector<float>& vec, float coeff )
 			return false;
 		}
 	);
-
+	size_t nb_removal = vec.end() - it_end;
 	vec.erase( it_end, vec.end() );
+	return nb_removal;
 }
 
 //---------------------------------------------------------------------
@@ -811,22 +821,28 @@ computeIG(
 	uint                     atIdx,     ///< attribute index we want to process
 	const std::vector<uint>& v_dpidx,   ///< datapoint indexes to consider
 	const DataSet&           data,      ///< dataset
-	double                   giniCoeff  ///< Global Gini coeff for all the points
+	double                   giniCoeff, ///< Global Gini coeff for all the points
+	const Params&            params     ///< run-time parameters
 )
 {
 	START;
-	COUT << "atIdx=" << atIdx << '\n';
+	COUT << "atIdx=" << atIdx << " nb pts=" << v_dpidx.size() << '\n';
 
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
 
 	std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
 	for( size_t i=0; i<v_dpidx.size(); i++ )
 		v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
-	removeDuplicates( v_attribVal, 0.1 );
+
+	auto nbRemoval = removeDuplicates( v_attribVal, params );
+	std::cout << "Removal of " << nbRemoval << " attribute values\n";
 
 	if( v_attribVal.size() < 2 )         // if only one value, is pointless
+	{
+		std::cout << "WARNING, unable to compute best threshold value for attribute " << atIdx
+			<< ", maybe check value of 'removalCoeff'\n";
 		return AttributeData();
-//		return std::make_pair( 0.f, ThresholdVal(0.f) );
+	}
 
 	std::vector<float> v_thresVal( v_attribVal.size()-1 ); // if 10 values, then only 9 thresholds
 	for( uint i=0; i<v_thresVal.size(); i++ )
@@ -858,13 +874,9 @@ computeIG(
 			}
 		}
 
-//		COUT << "votes LT: 0:" << m_LT[0] << " 1:" << m_LT[1] << " total=" << nb_LT << '\n';
-//		COUT << "votes HT: 0:" << m_HT[0] << " 1:" << m_HT[1] << " total=" << nb_HT << '\n';
-
 		auto g_LT = 1.;
 		for( auto p: m_LT )  // for the values that are Lower Than the threshold
 		{
-//			COUT << "LT: f=" <<p.first << " s=" << p.second << '\n';
 			auto val = 1. * p.second / nb_LT[i];
 			g_LT -= val*val;
 		}
@@ -872,19 +884,14 @@ computeIG(
 
 		for( auto p: m_HT )  // for the values that are Higher Than the threshold
 		{
-//			COUT << "HT: f=" <<p.first << " s=" << p.second << '\n';
 			auto val = 1. * p.second / nb_HT;
 			g_HT -= val*val;
 		}
 		deltaGini[i] = giniCoeff - (g_LT + g_HT) / 2.;
-//		COUT << "  => g_LT=" << g_LT << " g_HT=" << g_HT << " deltaGini=" << deltaGini[i] << '\n';
 	}
 
 // step 3 - find max value of the delta Gini
-	auto max_pos = std::max_element(
-		std::begin( deltaGini ),
-		std::end( deltaGini )
-	);
+	auto max_pos = std::max_element( std::begin( deltaGini ), std::end( deltaGini ) );
 
 	COUT << "max gini for thres idx=" << std::distance( std::begin( deltaGini ), max_pos ) << " val=" << *max_pos
 		<< " thresval=" << v_thresVal.at( std::distance( std::begin( deltaGini ), max_pos ) ) << "\n";
@@ -908,15 +915,18 @@ computeIG(
 //template<typename T>
 AttributeData
 findBestAttribute(
-	const std::vector<uint>& vIdx,  ///< indexes of data points we need to consider
-	const DataSet&           data,  ///< whole dataset
-	AttribMap&               aMap   ///< map of the attributes that "may" be left to explore
+	const std::vector<uint>& vIdx,   ///< indexes of data points we need to consider
+	const DataSet&           data,   ///< whole dataset
+	AttribMap&               aMap,   ///< map of the attributes that "may" be left to explore
+	const Params&            params  ///< parameters
 )
 {
 	START;
-//	using P_Tf = std::pair<float,ThresholdVal>;
+
 	COUT << "nb of attributes left=" << aMap.nbUnusedAttribs() << '\n';
+
 // step 1 - fetch the indexes of the attributes we need to explore
+
 	std::vector<uint> v_attrIdx = aMap.getUnusedAttribs();
 	assert( v_attrIdx.size() );   // if not, well... shouldn't happen !
 
@@ -927,9 +937,9 @@ findBestAttribute(
 
 	std::vector<AttributeData> v_IG;
 	for( auto atIdx: v_attrIdx )
-		v_IG.push_back( computeIG( atIdx, vIdx, data, giniCoeff ) );
+		v_IG.push_back( computeIG( atIdx, vIdx, data, giniCoeff, params ) );
 
-	priv::printVector( std::cout, v_IG, "v_IG" );
+//	priv::printVector( std::cout, v_IG, "v_IG" );
 /*	COUT << "vector v_IG, #=" << v_IG.size() << "\n";
 	for( const auto& elem : v_IG )
 		std::cout << elem.first << "-" << elem.second << "\n"; */
@@ -946,15 +956,11 @@ findBestAttribute(
 	);
 	COUT << "highest Gain:" << *it_mval << "\n";
 
-/*	auto best_attr_idx = std::distance( std::begin(v_IG), it_mval );
-	COUT << "best_attr_idx=" << best_attr_idx << '\n';
-	it_mval->_atIndex = best_attr_idx; */
-
 	return *it_mval;
 }
 //---------------------------------------------------------------------
-/// Returns the class that is in majority in the points defined in \c vIdx
-/// second value is the percentage of that majority, in the range \f$ [0,1]\f$  (well, \f$ ]0.5,1]\f$  actually !)
+/// Returns the class that is in majority in the points defined in \c vIdx.
+/// The second value is the percentage of that majority, in the range \f$ [0,1]\f$  (well, \f$ ]0.5,1]\f$  actually !)
 //template<typename T>
 std::pair<int,float>
 getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
@@ -1002,7 +1008,7 @@ splitNode(
 
 	COUT << "RECDEPTH="<< s_recDepth << "\n";
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
-	COUT << "A-set holds " << vIdx.size() << " points\n";
+	COUT << "set holds " << vIdx.size() << " points\n";
 	data.print( std::cout, vIdx );
 
 // step 1.1 - check if there are different output classes in the given data points
@@ -1010,12 +1016,14 @@ splitNode(
 
 	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
 	auto majo = getMajorityClass( vIdx, data );
+
+	graph[v]._class = majo.first;
+	graph[v].giniImpurity = giniCoeff;
+	graph[v]._type = NT_Final;
+
 	if( giniCoeff < params.minGiniCoeffForSplitting )
 	{
-		graph[v]._type = NT_Final;
-		graph[v]._class = majo.first;
-		graph[v].giniImpurity = giniCoeff;
-		COUT << "dataset is (almost or completely) pure, gini coeff=" << giniCoeff << ", STOP\n";
+		LOG << "dataset is (almost or completely) pure, gini coeff=" << giniCoeff << ", STOP\n";
 		s_recDepth--;
 		return;
 	}
@@ -1024,16 +1032,13 @@ splitNode(
 // if not, then we are done
 	if( aMap.nbUnusedAttribs() == 0 )
 	{
-		graph[v]._type = NT_Final;
-		graph[v]._class = majo.first;
-		graph[v].giniImpurity = giniCoeff;
-		COUT << "all attributes are used, STOP\n";
+		LOG << "all attributes are used, STOP\n";
 		s_recDepth--;
 		return;
 	}
 
 // step 2 - find the best attribute to use to split the data, considering the data points of the current node
-	auto bestAttrib = findBestAttribute( vIdx, data, aMap );
+	auto bestAttrib = findBestAttribute( vIdx, data, aMap, params );
 	auto attribIdx  = bestAttrib._atIndex;
 	auto threshold  = bestAttrib._threshold;
 	COUT << "best attrib:" << bestAttrib << "\n";
@@ -1045,16 +1050,15 @@ splitNode(
 	auto n2 = vIdx.size() - n1;
 	if( n1 < params.minNbPoints || n2 < params.minNbPoints )
 	{
-		graph[v]._type = NT_Final;
-		graph[v]._class = majo.first;
-		graph[v].giniImpurity = giniCoeff;
-		COUT << "not enough points if splitting: n1=" << n1 << " n2=" << n2 << ", STOP\n";
+		LOG << "not enough points if splitting: n1=" << n1 << " n2=" << n2 << ", STOP\n";
 		s_recDepth--;
 		return;
 	}
 
+// from here, a split will occur
 	graph[v]._attrIndex = attribIdx;
 	graph[v]._threshold = threshold.get();
+	graph[v].giniImpurity = -1.f;
 	graph[v]._type = NT_Decision;
 
 // step 3 - different classes here: we create two child nodes and split the dataset
@@ -1063,8 +1067,6 @@ splitNode(
 
 	graph[v1].depth = graph[v].depth+1;
 	graph[v2].depth = graph[v].depth+1;
-//	graph[v1]._type = NT_Decision;
-//	graph[v2]._type = NT_Decision;
 
 	auto et = boost::add_edge( v, v1, graph );
 	auto ef = boost::add_edge( v, v2, graph );
@@ -1073,10 +1075,11 @@ splitNode(
 
 	COUT << "two nodes added, total nb=" << boost::num_vertices(graph) << "\n";
 
+	graph[v1].v_Idx.reserve( vIdx.size() );
+	graph[v2].v_Idx.reserve( vIdx.size() );
 	for( auto idx: vIdx )           // separate the data points into two sets
 	{
-		auto point = data.getDataPoint( idx );
-		auto attrVal = point.attribVal( attribIdx );
+		auto attrVal = data.getDataPoint( idx ).attribVal( attribIdx );
 		if( attrVal < threshold.get() )
 			graph[v1].v_Idx.push_back( idx );
 		else

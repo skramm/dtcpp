@@ -23,9 +23,13 @@ for continuous data values (aka real numbers)
 
 #ifdef DEBUG
 	#define COUT if(1) std::cout << __FUNCTION__ << "(): "
-	#define START if(1) std::cout << "* Start: " << __FUNCTION__ << "()\n"
 #else
 	#define COUT if(0) std::cout
+#endif // DEBUG
+
+#ifdef DEBUG_START
+	#define START if(1) std::cout << "* Start: " << __FUNCTION__ << "()\n"
+#else
 	#define START ;
 #endif // DEBUG
 
@@ -149,6 +153,7 @@ struct Params
 	uint  minNbPoints = 3;                   ///< minumum nb of points to create a node
 	float removalCoeff = 0.05f; ///< used to remove close attribute values when searching ofr best threshold. See removeDuplicates()
 	bool  verbose = true;        ///< to allow logging of some run-time details
+	bool  doFolding = false;
 };
 
 //---------------------------------------------------------------------
@@ -262,6 +267,7 @@ class DataSet
 		void print( std::ostream&, const std::vector<uint>& ) const;
 
 		void clear() { _data.clear(); }
+		std::pair<DataSet,DataSet> getFolds( uint i, uint nbFolds ) const;
 
 	private:
 		size_t _nbAttribs = 0;
@@ -270,6 +276,15 @@ class DataSet
 };
 //using DataSetf = DataSet<float>;
 //using DataSetd = DataSet<double>;
+
+//---------------------------------------------------------------------
+std::pair<DataSet,DataSet>
+DataSet::getFolds( uint i, uint nbFolds ) const
+{
+ 	DataSet ds_train, ds_test;
+// TODO
+	return std::make_pair( ds_train, ds_test );
+}
 
 //---------------------------------------------------------------------
 //template<typename T>
@@ -305,7 +320,6 @@ DataSet::load( std::string fname, const Fparams& params )
 				nb_comment++;
 			else                     // if NOT comment
 			{
-//				CERR << "line=" << temp << ENDL;
 				auto v_tok = priv::splitString( temp, params.sep );
 				if( v_tok.size() < 2 )
 				{
@@ -400,6 +414,7 @@ DataSet::print( std::ostream& f, const std::vector<uint>& vIdx ) const
 }
 
 //---------------------------------------------------------------------
+/// Holds the node type
 enum NodeType
 {
 	 NT_undef, NT_Root, NT_Decision, NT_Final
@@ -506,6 +521,19 @@ using vertexT_t = boost::graph_traits<GraphT>::vertex_descriptor;
 using vertexC_t = boost::graph_traits<GraphC>::vertex_descriptor;
 
 //---------------------------------------------------------------------
+/// Classification performance (to be expanded)
+struct Perf
+{
+	float errorRate = 0.f;
+	friend std::ostream& operator << ( std::ostream& f, const Perf& p )
+	{
+		f << "Perf: errorRate=" << p.errorRate
+			<< "\n";
+		return f;
+	}
+
+};
+//---------------------------------------------------------------------
 /// This one holds edges that each have a vector holding the index of datapoints.
 /// This is memory costly, but useless for classifying, so once it is trained, we can use the \ref DecisionTree class
 /// \todo unify by templating the type of edges
@@ -517,7 +545,8 @@ class TrainingTree
 		vertexT_t _initialVertex;
 		size_t _maxDepth = 1;  ///< defined by training
 	public:
-		bool Train( const DataSet&, Params params=Params() );
+		bool train( const DataSet&, Params params=Params() );
+		Perf classify( const DataSet& ) const;
 		void printDot( std::ostream& ) const;
 		void printDot( std::string fname ) const;
 		void printInfo( std::ostream& ) const;
@@ -629,7 +658,6 @@ inline
 void
 TrainingTree::printDot( std::string fname ) const
 {
-	START;
 	std::ofstream f(fname);
 	if( !f.is_open() )
 		throw std::runtime_error( "unable to open file " + fname );
@@ -936,26 +964,29 @@ AttributeData
 findBestAttribute(
 	const std::vector<uint>& vIdx,   ///< indexes of data points we need to consider
 	const DataSet&           data,   ///< whole dataset
-	AttribMap&               aMap,   ///< map of the attributes that "may" be left to explore
+//	AttribMap&               aMap,   ///< map of the attributes that "may" be left to explore
 	const Params&            params  ///< parameters
 )
 {
 	START;
 
-	COUT << "nb of attributes left=" << aMap.nbUnusedAttribs() << '\n';
+	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
+
+//	COUT << "nb of attributes left=" << aMap.nbUnusedAttribs() << '\n';
 
 // step 1 - fetch the indexes of the attributes we need to explore
-
+#if 0
 	std::vector<uint> v_attrIdx = aMap.getUnusedAttribs();
 	assert( v_attrIdx.size() );   // if not, well... shouldn't happen !
 
 	priv::printVector( std::cout, v_attrIdx, "attributes left" );
-	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
+#endif
 
 // step 2 - compute best IG/threshold for each of these attributes, only for the considered points
 
 	std::vector<AttributeData> v_IG;
-	for( auto atIdx: v_attrIdx )
+//	for( auto atIdx: v_attrIdx )
+	for( uint atIdx=0; atIdx<data.nbAttribs(); atIdx++ )
 		v_IG.push_back( computeIG( atIdx, vIdx, data, giniCoeff, params ) );
 
 //	priv::printVector( std::cout, v_IG, "v_IG" );
@@ -1006,7 +1037,7 @@ getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
 
 }
 //---------------------------------------------------------------------
-/// Recursive helper function, used by TrainingTree::Train()
+/// Recursive helper function, used by TrainingTree::train()
 /**
 Computes the threshold, splits the dataset and assigns the split to 2 sub nodes (that get created)
 */
@@ -1014,7 +1045,7 @@ Computes the threshold, splits the dataset and assigns the split to 2 sub nodes 
 void
 splitNode(
 	vertexT_t         v,         ///< current node id
-	AttribMap&        aMap,      ///< attribute map, holds true for all the attributes already used
+//	AttribMap&        aMap,      ///< attribute map, holds true for all the attributes already used
 	GraphT&           graph,     ///< graph
 	const DataSet&    data,      ///< dataset
 	const Params&     params     ///< parameters
@@ -1028,7 +1059,7 @@ splitNode(
 	COUT << "RECDEPTH="<< s_recDepth << "\n";
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
 	COUT << "set holds " << vIdx.size() << " points\n";
-	data.print( std::cout, vIdx );
+//	data.print( std::cout, vIdx );
 
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done
@@ -1047,6 +1078,7 @@ splitNode(
 		return;
 	}
 
+#if 0
 // step 1.2 - check if there are some remaining attributes to use
 // if not, then we are done
 	if( aMap.nbUnusedAttribs() == 0 )
@@ -1055,14 +1087,16 @@ splitNode(
 		s_recDepth--;
 		return;
 	}
+#endif
 
 // step 2 - find the best attribute to use to split the data, considering the data points of the current node
-	auto bestAttrib = findBestAttribute( vIdx, data, aMap, params );
+//	auto bestAttrib = findBestAttribute( vIdx, data, aMap, params );
+	auto bestAttrib = findBestAttribute( vIdx, data, params );
 	auto attribIdx  = bestAttrib._atIndex;
 	auto threshold  = bestAttrib._threshold;
 	COUT << "best attrib:" << bestAttrib << "\n";
 
-	aMap.setAsUsed(attribIdx); // so we will not use it again
+//	aMap.setAsUsed(attribIdx); // so we will not use it again
 
 // before splitting, make sure that one of the childs will not have an insufficient number of points
 	auto n1= bestAttrib._nbPtsLessThan;
@@ -1108,10 +1142,10 @@ splitNode(
 	COUT << "after split: v1:"<< graph[v1].v_Idx.size() << " points, v2:"<< graph[v2].v_Idx.size() << " points\n";
 
 	if( graph[v1].v_Idx.size() )
-		splitNode( v1, aMap, graph, data, params );
+		splitNode( v1, graph, data, params );
 
 	if( graph[v2].v_Idx.size() )
-		splitNode( v2, aMap, graph, data, params );
+		splitNode( v2, graph, data, params );
 
 	COUT << "Return\n";
 	s_recDepth--;
@@ -1123,7 +1157,7 @@ splitNode(
 */
 //template<typename T>
 bool
-TrainingTree::Train( const DataSet& data, const Params params )
+TrainingTree::train( const DataSet& data, const Params params )
 {
 	START;
 	auto nbAttribs = data.nbAttribs();
@@ -1138,17 +1172,25 @@ TrainingTree::Train( const DataSet& data, const Params params )
 	_initialVertex = n0;
 	std::vector<uint> v_idx( data.size() );
 	std::iota( v_idx.begin(), v_idx.end(), 0 );
-	priv::printVector( std::cout, v_idx, "initial set of pt indexes" );
+//	priv::printVector( std::cout, v_idx, "initial set of pt indexes" );
 
 	_graph[n0].v_Idx = v_idx;
 	_graph[n0]._type = NT_Root;
 
-	AttribMap attribMap(nbAttribs);
+//	AttribMap attribMap(nbAttribs);
 
 // Call the "split" function (recursive)
-	splitNode( n0, attribMap, _graph, data, params );
+//	splitNode( n0, attribMap, _graph, data, params );
+	splitNode( n0, _graph, data, params );
 
 	return true;
+}
+
+//---------------------------------------------------------------------
+Perf
+TrainingTree::classify( const DataSet& dataset ) const
+{
+	return Perf();
 }
 
 //---------------------------------------------------------------------

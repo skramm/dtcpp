@@ -16,6 +16,8 @@ for continuous data values (aka real numbers)
 
 #include <boost/graph/adjacency_list.hpp>
 #include "boost/graph/graphviz.hpp"
+#include <boost/graph/graph_utility.hpp> // needed only for print_graph();
+
 
 #define DEBUG
 
@@ -37,6 +39,7 @@ template <typename T, typename Parameter>
 class NamedType
 {
 public:
+	NamedType() {}
     explicit NamedType(T const& value) : value_(value) {}
     explicit NamedType(T&& value) : value_(std::move(value)) {}
     T&       get()       { return value_; }
@@ -494,6 +497,7 @@ inline
 void
 printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 {
+	START;
 	for( auto pit=boost::out_edges(v, graph); pit.first != pit.second; pit.first++ )
 	{
 		auto target = boost::target( *pit.first, graph );
@@ -510,6 +514,7 @@ inline
 void
 TrainingTree::printDot( std::ostream& f ) const
 {
+	START;
 	f << " graph g {\n";
 	vertexT_t v = 0;
 	f << v << ";\n";
@@ -529,6 +534,8 @@ TrainingTree::printInfo( std::ostream& f ) const
 		<< "\n -nb edges=" << boost::num_edges( _graph )
 		<< "\n -max depth=" << maxDepth()
 		<< '\n';
+	f << "Boost printing:\n";
+	boost::print_graph( _graph );
 }
 
 
@@ -762,13 +769,35 @@ computeIG(
 	);
 }
 //---------------------------------------------------------------------
+/// Holds all the data relative to an attribute to choose
+struct AttributeData
+{
+	uint         _index = 0;    ///< (absolute) attribute index
+	float        _gain  = 0.f;  ///< information gain, will be used to select which attribute we use
+	ThresholdVal _threshold;    ///< threshold value, will be used to classify
+	AttributeData()
+	{}
+	AttributeData( uint idx, const std::pair<float,ThresholdVal>& p ) :
+		_index(idx),
+		_gain( p.first),
+		_threshold( p.second )
+	{}
+	friend std::ostream&operator << ( std::ostream& f, const AttributeData& ad )
+	{
+		f << "AttributeData: index=" << ad._index << " gain=" << ad._gain << " thres=" << ad._threshold << "\n";
+		return f;
+	}
+};
+//---------------------------------------------------------------------
 /// Finds the best attributes to use, considering the data points of the current node
 /// and compute threshold on that attribute so that the two classes are separated at best.
 /**
 \return A pair holding 1-the index of this attribute and 2-the corresponding threshold value
+\return AttributeData
 */
 //template<typename T>
-std::pair<uint,ThresholdVal>
+//std::pair<uint,ThresholdVal>
+AttributeData
 findBestAttribute(
 	const std::vector<uint>& vIdx,  ///< indexes of data points we need to consider
 	const DataSet&           data,  ///< whole dataset
@@ -777,38 +806,45 @@ findBestAttribute(
 {
 	START;
 	using P_Tf = std::pair<float,ThresholdVal>;
-
+	COUT << "nb of attributes left=" << aMap.nbUnusedAttribs() << '\n';
 // step 1 - fetch the indexes of the attributes we need to explore
 	std::vector<uint> v_attrIdx = aMap.getUnusedAttribs();
 	assert( v_attrIdx.size() );   // if not, well... shouldn't happen !
 
+	priv::printVector( std::cout, v_attrIdx, "attributes left" );
 	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
 
 // step 2 - compute best IG/threshold for each of these attributes, only for the considered points
 
-	std::vector<P_Tf> v_IG;
+	std::vector<AttributeData> v_IG;
 	for( auto atIdx: v_attrIdx )
-		v_IG.push_back( computeIG( atIdx, vIdx, data, giniCoeff ) );
+		v_IG.push_back( AttributeData( atIdx, computeIG( atIdx, vIdx, data, giniCoeff ) ) );
+
+	priv::printVector( std::cout, v_IG, "v_IG" );
+/*	COUT << "vector v_IG, #=" << v_IG.size() << "\n";
+	for( const auto& elem : v_IG )
+		std::cout << elem.first << "-" << elem.second << "\n"; */
+
 
 // step 3 - get the one with max value
 	auto it_mval = std::max_element(
 		std::begin(v_IG),
 		std::end(v_IG),
 		[]                         // lambda
-		( P_Tf p1, P_Tf p2 )
+		( const AttributeData& p1, const AttributeData& p2 )
 		{
-			return p1.first < p2.first;
+			return p1._gain < p2._gain;
 		}
 	);
 
-	COUT << "highest Gini: pos= " << std::distance( std::begin(v_IG), it_mval )
-		<< " Gini coeff val=" << it_mval->first << " threshold val=" << it_mval->second.get() << '\n';
-//	COUT << "returning pair: " << retval.first << " - " << retval.second << "\n";
+	COUT << "highest Gain:" << *it_mval << "\n";
+//		<< " Gini coeff val=" << it_mval->first << " threshold val=" << it_mval->second.get() << '\n';
 
-	return std::make_pair(
+	return *it_mval;
+/*	std::make_pair(
 		std::distance( std::begin(v_IG), it_mval ),  // index of the attribute
 		it_mval->second
-	);
+	);*/
 }
 //---------------------------------------------------------------------
 /// Returns the class that is in majority in the points defined in \c vIdx
@@ -842,7 +878,6 @@ getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
 /// Recursive helper function, used by TrainingTree::Train()
 /**
 Computes the threshold, splits the dataset and assigns the split to 2 sub nodes (that get created)
-\return false is some more splitting needs to be done, true it all done
 */
 ////template<typename T>
 void
@@ -905,9 +940,9 @@ splitNode(
 	}
 
 // step 2 - find the best attribute to use to split the data, considering the data points of the current node
-	auto pair_id_th = findBestAttribute( vIdx, data, aMap );
-	auto attribIdx  = pair_id_th.first;
-	auto threshold  = pair_id_th.second;
+	auto bestAttrib = findBestAttribute( vIdx, data, aMap );
+	auto attribIdx  = bestAttrib._index;
+	auto threshold  = bestAttrib._threshold;
 	COUT << "best attrib=" << attribIdx << " thres value=" << threshold << "\n";
 
 	aMap.setAsUsed(attribIdx); // so we will not use it again

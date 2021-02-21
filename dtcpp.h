@@ -246,6 +246,7 @@ class DataSet
 		}
 		bool load( std::string fname, char sep=' ' );
 		void print( std::ostream& ) const;
+		void print( std::ostream&, const std::vector<uint>& ) const;
 
 		void clear() { _data.clear(); }
 
@@ -329,6 +330,29 @@ DataSet::print( std::ostream& f ) const
 	f << " class\n";
 	for( const auto& pt: _data )
 	{
+		for( const auto& val: pt._attrValue )
+			f << val << ";";
+
+		f << pt.classVal() << "\n";
+	}
+	f << "# -------------------------------------------\n";
+}
+//---------------------------------------------------------------------
+//template<typename T>
+void
+DataSet::print( std::ostream& f, const std::vector<uint>& vIdx ) const
+{
+	f << "# -------------------------------------------\n";
+	f << "# Dataset, total nb pts=" << size()
+		<< " requested=" << vIdx.size()
+		<< " nb attributes=" << nbAttribs() << "\n";
+	for( size_t i=0; i<nbAttribs(); i++ )
+		f << i << "; ";
+	f << " class\n";
+	for( const auto& id: vIdx )
+	{
+		const auto& pt = getDataPoint( id );
+		f << id << " ";
 		for( const auto& val: pt._attrValue )
 			f << val << ";";
 
@@ -472,9 +496,10 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 {
 	for( auto pit=boost::out_edges(v, graph); pit.first != pit.second; pit.first++ )
 	{
-		auto target = boost::target ( *pit.first, graph );
+		auto target = boost::target( *pit.first, graph );
 		f << target << " [label=\"LABEL\"];\n";
 		f << v << "->" << target << ";\n";
+		printNodeChilds( f, target, graph );
 	}
 }
 
@@ -673,18 +698,18 @@ computeIG(
 	for( uint i=0; i<v_attribVal.size()-1; i++ )
 		v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
 
-	priv::printVector( std::cout, v_thresVal, "thresholds" );
+//	priv::printVector( std::cout, v_thresVal, "thresholds" );
 
 // step 2: compute IG for each threshold value
 
 	std::vector<float> deltaGini( v_thresVal.size() );
-	for( uint i=0; i<v_thresVal.size(); i++ )  // for each threshold value
+	for( uint i=0; i<v_thresVal.size(); i++ )              // for each threshold value
 	{
-		COUT << "thres " << i << "=" << v_thresVal[i] << '\n';
+//		COUT << "thres " << i << "=" << v_thresVal[i] << '\n';
 		std::map<uint,uint> m_LT, m_HT;
 		uint nb_LT = 0;
 		uint nb_HT = 0;
-		for( auto ptIdx: v_dpidx )    // for each data point
+		for( auto ptIdx: v_dpidx )                         // for each data point
 		{
 			const auto& point = data.getDataPoint(ptIdx);
 			auto attribVal = point.attribVal( atIdx );
@@ -719,7 +744,7 @@ computeIG(
 			g_HT -= val*val;
 		}
 		deltaGini[i] = giniCoeff - (g_LT + g_HT) / 2.;
-		COUT << "  => g_LT=" << g_LT << " g_HT=" << g_HT << " deltaGini=" << deltaGini[i] << '\n';
+//		COUT << "  => g_LT=" << g_LT << " g_HT=" << g_HT << " deltaGini=" << deltaGini[i] << '\n';
 	}
 
 // step 3 - find max value of the delta Gini
@@ -776,39 +801,14 @@ findBestAttribute(
 		}
 	);
 
-	COUT << "highest Gini:" << it_mval->first << " " << it_mval->second.get() << '\n';
+	COUT << "highest Gini: pos= " << std::distance( std::begin(v_IG), it_mval )
+		<< " Gini coeff val=" << it_mval->first << " threshold val=" << it_mval->second.get() << '\n';
 //	COUT << "returning pair: " << retval.first << " - " << retval.second << "\n";
 
 	return std::make_pair(
 		std::distance( std::begin(v_IG), it_mval ),  // index of the attribute
 		it_mval->second
 	);
-
-/*
-// Store the attribute values and the output class into a container, so it can be sorted
-	std::vector<Pfi_t> v_pairs( vIdx.size() );
-	uint i=0;
-	for( auto dpIdx : vIdx )
-	{
-		const auto& dataPoint = data.getDataPoint( dpIdx );
-		v_pairs.at(i).first  = dataPoint.attribVal( retval.first );
-		v_pairs.at(i).second = dataPoint.classVal();
-		i++;
-	}
-
-// sort it
-	std::sort(
-		std::begin(v_pairs),
-		std::end(v_pairs),
-		[]                         // lambda
-		( Pfi_t p1, Pfi_t p2 )
-		{
-			return p1.first < p2.first;
-		}
-	);
-*/
-
-//	return retval	;
 }
 //---------------------------------------------------------------------
 /// Returns the class that is in majority in the points defined in \c vIdx
@@ -863,6 +863,7 @@ splitNode(
 	COUT << "RECDEPTH="<< s_recDepth << "\n";
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
 	COUT << "A-set holds " << vIdx.size() << " points\n";
+	data.print( std::cout, vIdx );
 
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done

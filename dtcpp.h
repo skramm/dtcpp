@@ -402,6 +402,8 @@ struct NodeC
 /// A node of the training tree
 struct NodeT
 {
+	static uint s_Counter;
+	uint TEMP_IDX = 0;
 	NodeType _type = NT_undef;
 	int      _class = -1;        ///< (only for terminal nodes)
 	size_t   _attrIndex = 0;     ///< Attribute Index that this nodes classifies
@@ -409,7 +411,22 @@ struct NodeT
 	uint     depth = 0;         ///< depth of the node in the tree
 
 	std::vector<uint> v_Idx; ///< data point indexes
+	friend std::ostream& operator << ( std::ostream& f, const NodeT& n )
+	{
+		f << "C=" << n._class
+			<< " attr=" << n._attrIndex
+			<< " thres=" << n._threshold
+			<< " depth=" << n.depth
+			<< " #v=" << n.v_Idx.size()
+			;
+		return f;
+	}
+	NodeT() { TEMP_IDX = s_Counter; s_Counter++; }
+	NodeT( const NodeT& n ) {  TEMP_IDX = s_Counter; s_Counter++; }
 };
+
+ /// Instanciation of static
+ uint NodeT::s_Counter = 0;
 
 //---------------------------------------------------------------------
 /// Edge of the tree. Single parameter is true/false of the above decision, depending on threshold
@@ -461,6 +478,7 @@ class TrainingTree
 {
 	private:
 		GraphT _graph;
+		vertexT_t _initialVertex;
 		size_t _maxDepth = 1;  ///< defined by training
 	public:
 		bool Train( const DataSet& );
@@ -491,24 +509,35 @@ DecisionTree::DecisionTree()
 {
 }
 
+// % % % % % % % % % % % % % %
+namespace priv {
+// % % % % % % % % % % % % % %
+
 //---------------------------------------------------------------------
 /// Recursive function, prints the current node
 inline
 void
 printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 {
-	START;
+//	START;
+//	COUT << "nb out edges=" << boost::out_degree( v, graph ) << "\n";
 	for( auto pit=boost::out_edges(v, graph); pit.first != pit.second; pit.first++ )
 	{
 		auto target = boost::target( *pit.first, graph );
-		f << target << " [label=\"LABEL\"];\n";
-		f << v << "->" << target << ";\n";
+		f << graph[target].TEMP_IDX
+			<< " [label=\""
+			<< graph[target]
+			<< "\"];\n";
+		f << graph[v].TEMP_IDX << "->" << graph[target].TEMP_IDX  << ";\n";
 		printNodeChilds( f, target, graph );
 	}
 }
+// % % % % % % % % % % % % % %
+} // namespace priv
+// % % % % % % % % % % % % % %
 
 //---------------------------------------------------------------------
-/// Print a DOT file of the tree
+/// Print a DOT file of the tree by calling the recursive function \ref printNodeChilds()
 //template<typename T>
 inline
 void
@@ -516,11 +545,12 @@ TrainingTree::printDot( std::ostream& f ) const
 {
 	START;
 	f << " graph g {\n";
-	vertexT_t v = 0;
-	f << v << ";\n";
-	printNodeChilds( f, v, _graph );
-
-	f << "}";
+	f << _graph[_initialVertex].TEMP_IDX
+		<< " [label=\""
+		<< _graph[_initialVertex]
+		<< "\"];\n";
+	priv::printNodeChilds( f, _initialVertex, _graph );
+	f << "}\n";
 }
 
 //---------------------------------------------------------------------
@@ -534,11 +564,9 @@ TrainingTree::printInfo( std::ostream& f ) const
 		<< "\n -nb edges=" << boost::num_edges( _graph )
 		<< "\n -max depth=" << maxDepth()
 		<< '\n';
-	f << "Boost printing:\n";
-	boost::print_graph( _graph );
+//	f << "Boost printing:\n";
+//	boost::print_graph( _graph );
 }
-
-
 
 //---------------------------------------------------------------------
 /// Utility functions, returns a vector of indexes holding all the points
@@ -805,7 +833,7 @@ findBestAttribute(
 )
 {
 	START;
-	using P_Tf = std::pair<float,ThresholdVal>;
+//	using P_Tf = std::pair<float,ThresholdVal>;
 	COUT << "nb of attributes left=" << aMap.nbUnusedAttribs() << '\n';
 // step 1 - fetch the indexes of the attributes we need to explore
 	std::vector<uint> v_attrIdx = aMap.getUnusedAttribs();
@@ -1006,6 +1034,7 @@ TrainingTree::Train( const DataSet& data )
 // step 3 - Create initial node, and assign to it the whole dataset
 
 	auto n0  = boost::add_vertex(_graph);
+	_initialVertex = n0;
 	std::vector<uint> v_idx( data.size() );
 	std::iota( v_idx.begin(), v_idx.end(), 0 );
 	priv::printVector( std::cout, v_idx, "initial set of pt indexes" );

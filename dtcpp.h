@@ -531,10 +531,26 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 	for( auto pit=boost::out_edges(v, graph); pit.first != pit.second; pit.first++ )
 	{
 		auto target = boost::target( *pit.first, graph );
+		assert( graph[target]._type != NT_undef );
+
 		f << graph[target].TEMP_IDX
-			<< " [label=\""
-			<< graph[target]
-			<< "\"];\n";
+			<< " [label=\"";
+		if( graph[target]._type == NT_Decision )
+			f << "attr=" << graph[target]._attrIndex
+				<< " thres=" << graph[target]._threshold;
+		else
+			f << "class=" << graph[target]._class;
+
+		f << "\ndepth=" << graph[target].depth
+			<< " #=" << graph[target].v_Idx.size()
+			<< "\"";
+		switch( graph[target]._type )
+		{
+			case NT_Final:    f << ",color=red"; break;
+			case NT_Decision: f << ",color=green"; break;
+			default: assert(0);
+		}
+		f << "];\n";
 		f << graph[v].TEMP_IDX << "->" << graph[target].TEMP_IDX  << ";\n";
 		printNodeChilds( f, target, graph );
 	}
@@ -555,7 +571,7 @@ TrainingTree::printDot( std::ostream& f ) const
 	f << _graph[_initialVertex].TEMP_IDX
 		<< " [label=\""
 		<< _graph[_initialVertex]
-		<<"\",color = red"
+		<<"\",color = blue"
 		<< "];\n";
 	priv::printNodeChilds( f, _initialVertex, _graph );
 	f << "}\n";
@@ -567,7 +583,8 @@ TrainingTree::printDot( std::string fname ) const
 {
 	START;
 	std::ofstream f(fname);
-	assert( f.is_open() );
+	if( !f.is_open() )
+		throw std::runtime_error( "unable to open file " + fname );
 	printDot( f );
 }
 
@@ -953,35 +970,21 @@ splitNode(
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done
 
-#if 1
 	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
+	auto majo = getMajorityClass( vIdx, data );
 	if( giniCoeff < params.minGiniCoeffForSplitting )
 	{
+		graph[v]._type = NT_Final;
+		graph[v]._class = majo.first;
 		COUT << "dataset is (almost or completely) pure, gini coeff=" << giniCoeff << ", STOP\n";
 		s_recDepth--;
-		return; // true;
+		return;
 	}
-#else
-	size_t c1 = 0;
-	for( auto idx: vIdx )
-		if( data.getDataPoint( idx ).classVal() )
-			c1++;
-	size_t c0 = vIdx.size() - c1;
-	COUT << "c0=" << c0 << " c1=" << c1 << "\n";
-	if( c0 == 0 || c1 == 0 )
-	{
-		COUT << "single class in current dataset split holding " << vIdx.size() << " pts\n";
-		graph[v]._type = NT_Final;
-		graph[v]._class = (c0 ? 0 : 1);
-		return true;
-	}
-#endif
 
 // step 1.2 - check if there are some remaining attributes to use
 // if not, then we are done
 	if( aMap.nbUnusedAttribs() == 0 )
 	{
-		auto majo = getMajorityClass( vIdx, data );
 		graph[v]._type = NT_Final;
 		graph[v]._class = majo.first;
 		COUT << "all attributes are used, STOP\n";

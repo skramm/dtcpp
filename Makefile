@@ -4,6 +4,9 @@ BIN_DIR=build/bin
 OBJ_DIR=build/obj
 
 SRC_FILES = $(wildcard *.cpp)
+DOT_FILES = $(wildcard *.dot)
+
+PNG_FILES = $(patsubst %.dot,%.png,$(DOT_FILES))
 
 OBJ_FILES = $(patsubst %.cpp,$(OBJ_DIR)/%,$(SRC_FILES))
 
@@ -12,8 +15,10 @@ all: $(BIN_DIR)/main
 	@echo "done"
 
 show:
-	@echo $(OBJ_FILES)
-	@echo $(EXEC_FILES)
+	@echo "OBJ_FILES=$(OBJ_FILES)"
+	@echo "EXEC_FILES=$(EXEC_FILES)"
+	@echo "DOT_FILES=$(DOT_FILES)"
+	@echo "PNG_FILES=$(PNG_FILES)"
 
 $(OBJ_DIR)/%.o: %.cpp dtcpp.h $(SRC_FILES)
 	$(CXX) -Wall -std=gnu++14 -fexceptions -O2 -c $< -o $@
@@ -33,6 +38,11 @@ test: build/bin/test_catch
 
 #build/obj/test_catch.o: test_catch.cpp dtcpp.h
 #	$(CXX) -Wall -std=gnu++14 -fexceptions -O2 -c test_catch.cpp -o build/obj/test_catch.o
+
+dot: $(PNG_FILES)
+
+%.png:%.dot
+	dot -Tpng $< >$@
 
 clean:
 	@-rm html/*

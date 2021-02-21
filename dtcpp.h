@@ -146,7 +146,7 @@ splitString( const std::string &s, char delim )
 struct Params
 {
 	float minGiniCoeffForSplitting = 0.05f;
-	uint  minNbPoints = 2;                   ///< minumum nb of points to create a node
+	uint  minNbPoints = 3;                   ///< minumum nb of points to create a node
 	float removalCoeff = 0.05f; ///< used to remove close attribute values when searching ofr best threshold. See removeDuplicates()
 	bool  verbose = true;        ///< to allow logging of some run-time details
 };
@@ -522,7 +522,23 @@ class TrainingTree
 		void printDot( std::string fname ) const;
 		void printInfo( std::ostream& ) const;
 		size_t maxDepth() const { return _maxDepth; }
+		size_t nbLeaves() const;
 };
+
+inline
+size_t
+TrainingTree::nbLeaves() const
+{
+	size_t c = 0;
+	for(
+		auto pit = boost::vertices( _graph );
+		pit.first != pit.second;
+		pit.first++
+	)
+		if( _graph[*pit.first]._type == NT_Final )
+			c++;
+	return c;
+}
 
 //---------------------------------------------------------------------
 //template<typename T>
@@ -536,7 +552,7 @@ class DecisionTree
 		DecisionTree();
 		int Classify( const DataPoint& ) const;
 		void addDecision();
-		size_t maxDepth() const { return _maxDepth; }
+		size_t maxDepth()  const { return _maxDepth; }
 };
 
 //---------------------------------------------------------------------
@@ -630,6 +646,7 @@ TrainingTree::printInfo( std::ostream& f ) const
 		<< "\n -nb nodes=" << boost::num_vertices( _graph )
 		<< "\n -nb edges=" << boost::num_edges( _graph )
 		<< "\n -max depth=" << maxDepth()
+		<< "\n -nb of leaves=" << nbLeaves()
 		<< '\n';
 //	f << "Boost printing:\n";
 //	boost::print_graph( _graph );
@@ -735,7 +752,9 @@ removeDuplicates( std::vector<float>& vec, const Params& params )
 //---------------------------------------------------------------------
 /// Simple wrapper around a map holding a bool for each attribute index.
 /// Used to check if an attribute has been already used or not.
-/// Benefit: has automatic initialization
+/**
+ * Benefit: has automatic initialization
+*/
 struct AttribMap
 {
 	private:
@@ -773,7 +792,7 @@ struct AttribMap
 		}
 };
 //---------------------------------------------------------------------
-/// Holds all the data relative to an attribute to choose
+/// Holds all the data relative to an attribute to be able to select it.
 struct AttributeData
 {
 	uint         _atIndex = 0u;         ///< (absolute) attribute index
@@ -1054,8 +1073,9 @@ splitNode(
 		s_recDepth--;
 		return;
 	}
-
-// from here, a split will occur
+//
+// !!! from here, a split will occur !!!
+//
 	graph[v]._attrIndex = attribIdx;
 	graph[v]._threshold = threshold.get();
 	graph[v].giniImpurity = -1.f;

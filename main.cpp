@@ -3,7 +3,7 @@
 Implementation of a Decision Tree using boost::graph
 for continuous data values (aka real numbers)
 
-- Limited to binary tree (a node has only two childs)
+- Limited to binary tree (a node has only two childs, i.e. a single threshold value)
 - Does not handle missing values
 */
 

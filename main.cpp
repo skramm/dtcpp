@@ -18,7 +18,7 @@ int main( int argc, const char** argv )
     argh::parser cmdl({ "-sep"});
     cmdl.parse(argc, argv, argh::parser::PREFER_PARAM_FOR_UNREG_OPTION );
 
-
+// optional arg: -sep X => X used as datafile field separator
     auto sepcl = cmdl("sep").str();
     if( !sepcl.empty() )
     {
@@ -26,6 +26,13 @@ int main( int argc, const char** argv )
         fparams.sep = sepcl[0];
     }
 
+// optional arg: -cs => the class value in the datafile is given as a string value
+    if( cmdl["-cs"] )
+        fparams.classAsString = true;
+
+// optional arg: -i => only prints info about the data set and exit
+    if( cmdl["-i"] )
+        fparams.noProcess = true;
 
 /*cout << "Positional args:\n";
 for (auto& pos_arg : cmdl)
@@ -42,6 +49,10 @@ for (auto& pos_arg : cmdl)
     {
         std::cerr << "Error, unable to load data file: " << fname << '\n';
         std::exit(1);
+    }
+    if( fparams.noProcess )
+    {
+        std::exit(2);
     }
 
 	dataset.print( std::cout );

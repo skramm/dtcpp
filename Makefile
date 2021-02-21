@@ -43,7 +43,7 @@ test: build/bin/test_catch
 
 dot: $(PNG_FILES)
 
-%.png:%.dot
+%.png:%.dot $(DOT_FILES)
 	dot -Tpng $< >$@
 
 clean:

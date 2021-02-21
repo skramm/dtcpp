@@ -23,11 +23,12 @@ for continuous data values (aka real numbers)
 
 #ifdef DEBUG
 	#define COUT if(1) std::cout << __FUNCTION__ << "(): "
+	#define START if(1) std::cout << "* Start: " << __FUNCTION__ << "()\n"
 #else
 	#define COUT if(0) std::cout
+	#define START ;
 #endif // DEBUG
 
-#define START std::cout << "* Start: " << __FUNCTION__ << "()\n";
 
 
 //---------------------------------------------------------------------
@@ -209,7 +210,6 @@ class DataPoint
 			assert( c >=0 );  // -1 is illegal
 			_class = c;
 		}
-
 };
 
 //---------------------------------------------------------------------
@@ -218,6 +218,7 @@ struct Fparams
 {
 	char sep = ' ';  ///< field separator
 	bool classAsString = false;  ///< class values are given as strings
+	bool noProcess = false;      ///< no processing if true
 };
 //---------------------------------------------------------------------
 
@@ -293,6 +294,7 @@ DataSet::load( std::string fname, const Fparams& params )
 	std::map<std::string,uint> classMap;  // used only if classes are given as strings
 	uint classIndexCounter = 0;
 
+	std::map<uint,uint> classValues;
 	size_t nb_lines     = 0;
 	size_t nb_empty     = 0;
 	size_t nb_comment   = 0;
@@ -322,18 +324,24 @@ DataSet::load( std::string fname, const Fparams& params )
 				if( size() == 0 )                     // if this is the first datapoint, then set the nb of attributes
 					setNbAttribs( v_tok.size()-1 );
 
-				int classIndex = -1;
-				auto cl = v_tok.back();
+				int classIndex = 0;
+				auto cla = v_tok.back();
 				if( !params.classAsString )
-					classIndex = std::stoi( cl );
+					classIndex = std::stoi( cla );
 				else
 				{
-					auto it = classMap.find( cl );
+//					std::cout << "cla=" << cla << '\n';
+					auto it = classMap.find( cla );
 					if( it == classMap.end() )  // not there
-						classMap[ cl ] = classIndexCounter++; // new class
+					{
+						classMap[ cla ] = classIndexCounter++; // new class
+						std::cout << "NEW CLASS !: -" << cla << "- , nb ="<< classMap.size() << '\n';
+					}
 					else
-						classIndex = classMap[ cl ];
+						classIndex = classMap[ cla ];
 				}
+				classValues[classIndex]++;
+				std::cout << "incremetnaing cindex" << classIndex << " countval=" <<classValues[classIndex] << "\n";
 				v_tok.resize( v_tok.size()-1 );  // remove last element (class)
 				_data.push_back( DataPoint( v_tok, classIndex ) );
 
@@ -343,12 +351,18 @@ DataSet::load( std::string fname, const Fparams& params )
 	while( !f.eof() );
 
 	#if 1
-		std::cerr << " - Read " << size() << " points in file " << fname;
-		std::cerr << "\n - file info:"
+		std::cout << " - Read " << size() << " points in file " << fname;
+		std::cout << "\n - file info:"
 			<< "\n  - nb lines=" << nb_lines
 			<< "\n  - nb empty=" << nb_empty
 			<< "\n  - nb comment=" << nb_comment
-			<< '\n';
+			<< "\n  - nb classes=" << classValues.size()
+			<< "\nClasses frequency:\n";
+		for( const auto& cval: classValues )
+			std::cout << cval.first << ": "
+				<< cval.second
+				<< " (" << 1. * cval.second/size()
+				<< " %)\n";
 	#endif
 
 

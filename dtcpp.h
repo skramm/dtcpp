@@ -652,6 +652,7 @@ struct EdgeData
 };
 
 //---------------------------------------------------------------------
+#if 0
 /// used for classifying
 using GraphC = boost::adjacency_list<
 		boost::vecS,
@@ -660,7 +661,7 @@ using GraphC = boost::adjacency_list<
 		NodeC,
 		EdgeData
 	>;
-
+#endif
 /// Used for training
 /**
 \note IMPORTANT: we use list because when splitting the vector of indexes of points of a node,
@@ -677,7 +678,7 @@ using GraphT = boost::adjacency_list<
 	>;
 
 using vertexT_t = boost::graph_traits<GraphT>::vertex_descriptor;
-using vertexC_t = boost::graph_traits<GraphC>::vertex_descriptor;
+//using vertexC_t = boost::graph_traits<GraphC>::vertex_descriptor;
 
 //---------------------------------------------------------------------
 /// Classification performance (to be expanded)
@@ -1312,43 +1313,36 @@ TrainingTree::classify( const DataPoint& point ) const
 {
 	ClassVal retval{-1};
 	vertexT_t v = _initialVertex;   // initialize to first node
-	COUT << point << '\n';
+//	COUT << point << '\n';
 	bool done = false;
 	uint iter = 0;
 	do
 	{
-		COUT << "\n*iter=" << iter++ << " NODE " << _graph[v]._nodeId << std::endl;
+//		COUT << "\n*iter=" << iter++ << " NODE " << _graph[v]._nodeId << std::endl;
 		if( _graph[v]._type == NT_Final ) // then, we are done !
 		{
 			done = true;
 			retval = _graph[v]._class;
-			COUT << "Final node: class = " << retval << "\n";
+//			COUT << "Final node: class = " << retval << "\n";
 		}
 		else
 		{
 			auto attrIndex = _graph[v]._attrIndex;  // get attrib index that this node handles
 			auto atValue = point.attribVal( attrIndex );  // get data point value for this attribute
-			COUT << "Considering attribute " << attrIndex << " with value " << atValue << std::endl;
+//			COUT << "Considering attribute " << attrIndex << " with value " << atValue << std::endl;
 			assert( boost::out_degree( v, _graph ) == 2 );
 
 			auto edges = boost::out_edges( v, _graph );    // get the two output edges of the node
-			auto et = *edges.first;
-			auto ef = *edges.second;
-//			if( _graph[ef].edgeSide )
-//				std::swap( et, ef );
+			auto et = edges.first++;
+			auto ef = edges.first;
+			if( _graph[*ef].edgeSide )
+				std::swap( et, ef );
 
-			COUT << "node thres=" << _graph[v]._threshold << std::endl;
+//			COUT << "node thres=" << _graph[v]._threshold << std::endl;
 			if( atValue < _graph[v]._threshold )  // depending on threshold, define the next node
-			{
-				auto v2 = boost::target( et, _graph );
-				v = v2;
-			}
+				v = boost::target( *et, _graph );
 			else
-			{
-				auto v2 = boost::target( ef, _graph );
-				v = v2;
-			}
-			COUT << "switching to node " << _graph[v]._nodeId << std::endl;
+				v = boost::target( *ef, _graph );
 		}
 	}
 	while( !done );

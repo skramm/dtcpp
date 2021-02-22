@@ -13,6 +13,8 @@ for continuous data values (aka real numbers)
 #include <fstream>
 #include <vector>
 #include <numeric>
+#include <algorithm>
+#include <random>
 
 #include <boost/graph/adjacency_list.hpp>
 #include "boost/graph/graphviz.hpp"
@@ -146,7 +148,7 @@ splitString( const std::string &s, char delim )
 // % % % % % % % % % % % % % %
 
 //---------------------------------------------------------------------
-/// Parameters
+/// Run-time parameters for training
 struct Params
 {
 	float minGiniCoeffForSplitting = 0.05f;
@@ -154,6 +156,7 @@ struct Params
 	float removalCoeff = 0.05f; ///< used to remove close attribute values when searching ofr best threshold. See removeDuplicates()
 	bool  verbose = true;        ///< to allow logging of some run-time details
 	bool  doFolding = false;
+	uint  maxTreeDepth = 10;
 };
 
 //---------------------------------------------------------------------
@@ -269,6 +272,12 @@ class DataSet
 		void clear() { _data.clear(); }
 		std::pair<DataSet,DataSet> getFolds( uint i, uint nbFolds ) const;
 
+/// Shuffle the data (taken from https://stackoverflow.com/a/6926473/193789)
+		void shuffle()
+		{
+			std::shuffle(std::begin(_data), std::end(_data), std::random_device() );
+		}
+
 	private:
 		size_t _nbAttribs = 0;
 		std::vector<DataPoint> _data;
@@ -278,11 +287,35 @@ class DataSet
 //using DataSetd = DataSet<double>;
 
 //---------------------------------------------------------------------
+/// Returns sub-datasets
+/**
+If 100 pts and nbFolds=5, this will return 20 pts in \c ds_test and 80 pts in \c ds_train
+
+
+*/
 std::pair<DataSet,DataSet>
-DataSet::getFolds( uint i, uint nbFolds ) const
+DataSet::getFolds( uint index, uint nbFolds ) const
 {
- 	DataSet ds_train, ds_test;
-// TODO
+ 	DataSet ds_train( nbAttribs() );
+ 	DataSet ds_test(  nbAttribs() );
+	uint nb = size() / nbFolds;
+	for( uint i=0; i<size(); i++ )
+	{
+		if( i / nb == index )
+		{
+//			COUT << "adding pt " << i << " to test\n";
+			ds_test.addDataPoint( getDataPoint(i) );
+		}
+		else
+		{
+//			COUT << "adding pt " << i << " to train\n";
+			ds_train.addDataPoint( getDataPoint(i) );
+		}
+	}
+
+	COUT << "ds_test #=" << ds_test.size()
+		<< " ds_train #=" << ds_train.size() << "\n";
+
 	return std::make_pair( ds_train, ds_test );
 }
 
@@ -1052,9 +1085,9 @@ splitNode(
 )
 {
 	START;
-	static int s_recDepth;
+	static uint s_recDepth;
 	s_recDepth++;
-	if( s_recDepth>10){ COUT << "TOO MUCH DEPTH!!!\n"; std::exit(1);}
+
 
 	COUT << "RECDEPTH="<< s_recDepth << "\n";
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
@@ -1070,6 +1103,13 @@ splitNode(
 	graph[v]._class = majo.first;
 	graph[v].giniImpurity = giniCoeff;
 	graph[v]._type = NT_Final;
+
+	if( s_recDepth>params.maxTreeDepth )
+	{
+		LOG << "tree reached max depth (=" << params.maxTreeDepth << "), STOP\n";
+		s_recDepth--;
+		return;
+	}
 
 	if( giniCoeff < params.minGiniCoeffForSplitting )
 	{
@@ -1147,7 +1187,6 @@ splitNode(
 	if( graph[v2].v_Idx.size() )
 		splitNode( v2, graph, data, params );
 
-	COUT << "Return\n";
 	s_recDepth--;
 }
 //---------------------------------------------------------------------

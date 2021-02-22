@@ -13,8 +13,14 @@ OBJ_FILES = $(patsubst %.cpp,$(OBJ_DIR)/%,$(SRC_FILES))
 all: $(BIN_DIR)/main
 	@echo "done"
 
+# default run
 run: all
-	$(BIN_DIR)/main
+	$(BIN_DIR)/main -f
+
+# iris dataset
+run2: all
+	$(BIN_DIR)/main ~/data/iris.data -sep , -cs
+
 
 show:
 	@echo "OBJ_FILES=$(OBJ_FILES)"

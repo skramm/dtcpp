@@ -54,7 +54,7 @@ int main( int argc, const char** argv )
         std::exit(2);
     }
 
-	dataset.print( std::cout );
+//	dataset.print( std::cout );
 
     TrainingTree tt;
     if( !doFolding )
@@ -66,6 +66,8 @@ int main( int argc, const char** argv )
     }
     else
     {
+		dataset.shuffle();
+
         uint nbFolds = 5;
         for( uint i=0; i<nbFolds; i++ )
         {

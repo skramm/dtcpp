@@ -184,7 +184,6 @@ class DataPoint
 
 			for( size_t i=0; i<v_string.size(); i++ )
 				_attrValue.push_back( std::stof( v_string[i] ) );
-//			_class = std::stoi( v_string.back() );          // last value of the vector is the class
 			_class = c;
 		}
 
@@ -221,8 +220,45 @@ struct Fparams
 	bool classAsString = false;  ///< class values are given as strings
 	bool noProcess = false;      ///< no processing if true
 };
-//---------------------------------------------------------------------
 
+//---------------------------------------------------------------------
+/// Stats for a single attribute
+template<typename T>
+struct AttribStats
+{
+	T _minVal;
+	T _maxVal;
+	T _meanVal;
+	T _stddevVal;
+	T _medianVal;
+
+	friend std::ostream& operator << ( std::ostream& f, const AttribStats& st )
+	{
+		f << "min="      << st._minVal
+			<< " max="    << st._maxVal
+			<< " range="  << st._maxVal - st._minVal
+			<< " mean="   << st._meanVal
+			<< " stddev=" << st._stddevVal
+			<< " median=" << st._medianVal
+			<< "\n";
+		return f;
+	}
+};
+//---------------------------------------------------------------------
+/// Holds attribute stats
+template<typename T>
+struct DatasetStats
+{
+	std::vector<AttribStats<T>> v_stats;
+	friend std::ostream& operator << ( std::ostream& f, const DatasetStats& st )
+	{
+		f << "DatasetStats: " << st.v_stats.size() << " attributes";
+		for( uint i=0; i<st.v_stats.size(); i++ )
+			f << "\n -attribute " << i << ": " << st.v_stats[i];
+		return f;
+	}
+};
+//---------------------------------------------------------------------
 /// A dataset, holds a set of \ref DataPoint
 //template<typename T>
 class DataSet
@@ -288,6 +324,8 @@ class DataSet
 		{
 			std::shuffle(std::begin(_data), std::end(_data), std::random_device() );
 		}
+		template<typename T>
+		DatasetStats<T> computeStats() const;
 
 	private:
 		size_t _nbAttribs = 0;
@@ -298,11 +336,67 @@ class DataSet
 //using DataSetd = DataSet<double>;
 
 //---------------------------------------------------------------------
+/// Compute statistics of the dataset, attributes by attribute.
+/**
+Done by storing for a given attribute all the values in a vector, then getting stats on that vector
+
+- median: https://stackoverflow.com/a/42791986/193789
+- stddev: https://stackoverflow.com/a/7616783/193789
+
+*/
+template<typename T>
+DatasetStats<T>
+DataSet::computeStats() const
+{
+	DatasetStats<T> dstats;
+	for( uint i=0; i<nbAttribs(); i++ )
+	{
+		std::vector<float> vat;
+		vat.reserve( size() );               // guarantees we won't have any reallocating
+		for( const auto& point: _data )
+			vat.push_back( point.attribVal(i) );
+
+		auto it_mm = std::minmax_element( vat.begin(), vat.end() );
+		AttribStats<T> pt_stat { *it_mm.first, *it_mm.second };
+
+		auto sum = std::accumulate( vat.begin(), vat.end(), 0. );
+		auto mean = sum / size();
+		pt_stat._meanVal = mean;
+
+		std::vector<double> diff( size() );
+		std::transform( vat.begin(), vat.end(), diff.begin(), [mean](double x) { return x - mean; });
+
+		auto sq_sum = std::inner_product( diff.begin(), diff.end(), diff.begin(), 0. );
+
+		pt_stat._stddevVal = std::sqrt( sq_sum / size() );
+
+		if( size() % 2 == 0)
+		{
+			const auto median_it1 = vat.begin() + vat.size() / 2 - 1;
+			const auto median_it2 = vat.begin() + vat.size() / 2;
+
+			std::nth_element( vat.begin(), median_it1 , vat.end() );
+			const auto e1 = *median_it1;
+
+			std::nth_element( vat.begin(), median_it2 , vat.end() );
+			const auto e2 = *median_it2;
+
+			pt_stat._medianVal = (e1 + e2) / 2;
+
+		} else
+		{
+			const auto median_it = vat.begin() + vat.size() / 2;
+			std::nth_element( vat.begin(), median_it , vat.end() );
+			pt_stat._medianVal = *median_it;
+		}
+		dstats.v_stats.push_back( pt_stat );
+	}
+	return dstats;
+}
+//---------------------------------------------------------------------
 /// Returns sub-datasets
 /**
 If 100 pts and nbFolds=5, this will return 20 pts in \c ds_test and 80 pts in \c ds_train
-
-
 */
 std::pair<DataSet,DataSet>
 DataSet::getFolds( uint index, uint nbFolds ) const
@@ -628,7 +722,7 @@ class DecisionTree
 	public:
 		DecisionTree();
 //		int Classify( const DataPoint& ) const;
-		void addDecision();
+
 		size_t maxDepth()  const { return _maxDepth; }
 };
 
@@ -1211,8 +1305,6 @@ TrainingTree::train( const DataSet& data, const Params params )
 	if( data.size()<2 )
 		throw std::runtime_error( "no enough data points!" );
 
-// step 3 - Create initial node, and assign to it the whole dataset
-
 	_initialVertex  = boost::add_vertex(_graph);  // create initial vertex
 
 	std::vector<uint> v_idx( data.size() );  // create vector holding indexes of all the data points
@@ -1280,11 +1372,4 @@ TrainingTree::classify( const DataSet& dataset ) const
 }
 
 //---------------------------------------------------------------------
-/// Add a decision node => transform given terminal node into decision node
-//template<typename T>
-void
-DecisionTree::addDecision()
-{
-
-}
 

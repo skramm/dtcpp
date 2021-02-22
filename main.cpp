@@ -54,7 +54,8 @@ int main( int argc, const char** argv )
         std::exit(2);
     }
 
-//	dataset.print( std::cout );
+	auto stats = dataset.computeStats<float>();
+	std::cout << stats;
 
     TrainingTree tt;
     if( !doFolding )

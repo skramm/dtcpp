@@ -153,7 +153,7 @@ struct Params
 {
 	float minGiniCoeffForSplitting = 0.05f;
 	uint  minNbPoints = 3;                   ///< minumum nb of points to create a node
-	float removalCoeff = 0.05f; ///< used to remove close attribute values when searching ofr best threshold. See removeDuplicates()
+	float removalCoeff = 0.05f;  ///< used to remove close attribute values when searching the best threshold. See removeDuplicates()
 	bool  verbose = true;        ///< to allow logging of some run-time details
 	bool  doFolding = false;
 	uint  maxTreeDepth = 10;
@@ -247,6 +247,17 @@ class DataSet
 			_nbAttribs = n;
 		}
 
+		std::vector<DataPoint>::const_iterator
+		begin() const
+		{
+			return _data.begin();
+		}
+		std::vector<DataPoint>::const_iterator
+		end() const
+		{
+			return _data.end();
+		}
+
 //		template<typename U>
 		void addDataPoint( const DataPoint& dp )
 		{
@@ -265,7 +276,7 @@ class DataSet
 			assert( idx < _data.size() );
 			return _data[idx];
 		}
-		bool load( std::string fname, const Fparams& );
+		bool load( std::string fname, const Fparams=Fparams() );
 		void print( std::ostream& ) const;
 		void print( std::ostream&, const std::vector<uint>& ) const;
 
@@ -322,7 +333,7 @@ DataSet::getFolds( uint index, uint nbFolds ) const
 //---------------------------------------------------------------------
 //template<typename T>
 bool
-DataSet::load( std::string fname, const Fparams& params )
+DataSet::load( std::string fname, const Fparams params )
 {
 	std::ifstream f( fname );
 	if( !f.is_open() )
@@ -557,6 +568,8 @@ using vertexC_t = boost::graph_traits<GraphC>::vertex_descriptor;
 /// Classification performance (to be expanded)
 struct Perf
 {
+	Perf( float err ): errorRate(err) {}
+
 	float errorRate = 0.f;
 	friend std::ostream& operator << ( std::ostream& f, const Perf& p )
 	{
@@ -574,12 +587,13 @@ struct Perf
 class TrainingTree
 {
 	private:
-		GraphT _graph;
+		GraphT    _graph;
 		vertexT_t _initialVertex;
-		size_t _maxDepth = 1;  ///< defined by training
+		size_t    _maxDepth = 1;  ///< defined by training
 	public:
-		Perf train( const DataSet&, Params params=Params() );
+		void train( const DataSet&, Params params=Params() );
 		Perf classify( const DataSet& ) const;
+		int  classify( const DataPoint& ) const;
 		void printDot( std::ostream& ) const;
 		void printDot( std::string fname ) const;
 		void printInfo( std::ostream& ) const;
@@ -587,6 +601,7 @@ class TrainingTree
 		size_t nbLeaves() const;
 };
 
+//---------------------------------------------------------------------
 inline
 size_t
 TrainingTree::nbLeaves() const
@@ -612,7 +627,7 @@ class DecisionTree
 
 	public:
 		DecisionTree();
-		int Classify( const DataPoint& ) const;
+//		int Classify( const DataPoint& ) const;
 		void addDecision();
 		size_t maxDepth()  const { return _maxDepth; }
 };
@@ -810,6 +825,7 @@ removeDuplicates( std::vector<float>& vec, const Params& params )
 	return nb_removal;
 }
 
+#if 0
 //---------------------------------------------------------------------
 /// Simple wrapper around a map holding a bool for each attribute index.
 /// Used to check if an attribute has been already used or not.
@@ -852,6 +868,8 @@ struct AttribMap
 			return c;
 		}
 };
+#endif // 0
+
 //---------------------------------------------------------------------
 /// Holds all the data relative to an attribute to be able to select it.
 struct AttributeData
@@ -997,7 +1015,6 @@ AttributeData
 findBestAttribute(
 	const std::vector<uint>& vIdx,   ///< indexes of data points we need to consider
 	const DataSet&           data,   ///< whole dataset
-//	AttribMap&               aMap,   ///< map of the attributes that "may" be left to explore
 	const Params&            params  ///< parameters
 )
 {
@@ -1078,7 +1095,6 @@ Computes the threshold, splits the dataset and assigns the split to 2 sub nodes 
 void
 splitNode(
 	vertexT_t         v,         ///< current node id
-//	AttribMap&        aMap,      ///< attribute map, holds true for all the attributes already used
 	GraphT&           graph,     ///< graph
 	const DataSet&    data,      ///< dataset
 	const Params&     params     ///< parameters
@@ -1117,17 +1133,6 @@ splitNode(
 		s_recDepth--;
 		return;
 	}
-
-#if 0
-// step 1.2 - check if there are some remaining attributes to use
-// if not, then we are done
-	if( aMap.nbUnusedAttribs() == 0 )
-	{
-		LOG << "all attributes are used, STOP\n";
-		s_recDepth--;
-		return;
-	}
-#endif
 
 // step 2 - find the best attribute to use to split the data, considering the data points of the current node
 //	auto bestAttrib = findBestAttribute( vIdx, data, aMap, params );
@@ -1194,10 +1199,9 @@ splitNode(
 /**
 \return false if failure
 
-\todo proceed to measure classification error
 */
 //template<typename T>
-Perf
+void
 TrainingTree::train( const DataSet& data, const Params params )
 {
 	START;
@@ -1209,40 +1213,25 @@ TrainingTree::train( const DataSet& data, const Params params )
 
 // step 3 - Create initial node, and assign to it the whole dataset
 
-	auto n0  = boost::add_vertex(_graph);
-	_initialVertex = n0;
-	std::vector<uint> v_idx( data.size() );
+	_initialVertex  = boost::add_vertex(_graph);  // create initial vertex
+
+	std::vector<uint> v_idx( data.size() );  // create vector holding indexes of all the data points
 	std::iota( v_idx.begin(), v_idx.end(), 0 );
-//	priv::printVector( std::cout, v_idx, "initial set of pt indexes" );
 
-	_graph[n0].v_Idx = v_idx;
-	_graph[n0]._type = NT_Root;
+	_graph[_initialVertex].v_Idx = v_idx;
+	_graph[_initialVertex]._type = NT_Root;
 
-//	AttribMap attribMap(nbAttribs);
-
-// Call the "split" function (recursive)
-//	splitNode( n0, attribMap, _graph, data, params );
-	splitNode( n0, _graph, data, params );
-
-
-	return Perf();
-}
-
-//---------------------------------------------------------------------
-Perf
-TrainingTree::classify( const DataSet& dataset ) const
-{
-	return Perf();
+	splitNode( _initialVertex, _graph, data, params ); // Call the "split" function (recursive)
 }
 
 //---------------------------------------------------------------------
 /// Returns class of data point as classified by tree
 //template<typename T>
 int
-DecisionTree::Classify( const DataPoint& point ) const
+TrainingTree::classify( const DataPoint& point ) const
 {
 	int retval = -1;
-	vertexC_t v = 0;   ///< initialize for first node
+	vertexT_t v = _initialVertex;   ///< initialize for first node
 	bool done = true;
 	do
 	{
@@ -1250,12 +1239,12 @@ DecisionTree::Classify( const DataPoint& point ) const
 		{
 			done = true;
 			retval = _graph[v]._class;
-			COUT << "Final node " << v << ", class = " << retval << "\n";
+//			COUT << "Final node: class = " << retval << "\n";
 		}
 		else
 		{
 			auto attrIndex = _graph[v]._attrIndex;  // get attrib index that this node handles
-			auto pt_val = point.attribVal( attrIndex );  // get data point value for this attribute
+			auto atValue = point.attribVal( attrIndex );  // get data point value for this attribute
 
 			auto edges = boost::out_edges( v, _graph );    // get the two output edges of the node
 			auto et = *edges.first;
@@ -1263,15 +1252,31 @@ DecisionTree::Classify( const DataPoint& point ) const
 			if( _graph[et].side )
 				std::swap( et, ef );
 
-			if( pt_val < _graph[v]._threshold )  // depending on threshold, define the next node
+			if( atValue < _graph[v]._threshold )  // depending on threshold, define the next node
 				v = boost::target( et, _graph );
 			else
 				v = boost::target( ef, _graph );
-			COUT << "switching to node " << v << "\n";
+//			COUT << "switching to node " << v << "\n";
 		}
 	}
 	while( !done );
 	return retval;
+}
+
+//---------------------------------------------------------------------
+Perf
+TrainingTree::classify( const DataSet& dataset ) const
+{
+	size_t nbErrors = 0;
+	for( const auto& datapoint: dataset )
+	{
+		auto cla1 = datapoint.classVal();
+		auto cla2 = classify( datapoint );
+		if( cla1 != cla2 )
+			nbErrors++;
+	}
+
+	return Perf( 1.f * nbErrors/ dataset.size() );
 }
 
 //---------------------------------------------------------------------

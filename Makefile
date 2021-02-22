@@ -19,7 +19,7 @@ run: all
 
 # iris dataset
 run2: all
-	$(BIN_DIR)/main ~/data/iris.data -sep , -cs
+	$(BIN_DIR)/main ~/data/iris.data -sep , -cs -f
 
 
 show:

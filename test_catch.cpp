@@ -44,28 +44,30 @@ TEST_CASE( "computeIG", "[cig]" )
 
 	auto giniCoeff = getGlobalGiniCoeff( v_dpidx, dataset );
 
-	auto ig0 = computeIG( 0, v_dpidx, dataset, giniCoeff );
-	std::cout << "ig0: " << ig0.first << "," << ig0.second <<'\n';
-	auto ig1 = computeIG( 1, v_dpidx, dataset, giniCoeff );
-	std::cout << "ig1: " << ig1.first << "," << ig1.second <<'\n';
+	Params params;
+	auto ig0 = computeIG( 0, v_dpidx, dataset, giniCoeff, params );
+	std::cout << "ig0: " << ig0 <<'\n';
+	auto ig1 = computeIG( 1, v_dpidx, dataset, giniCoeff, params );
+	std::cout << "ig1: " << ig1 <<'\n';
 
-	AttribMap aMap( dataset.nbAttribs() );
-	COUT << "nbUnusedAttribs=" << aMap.nbUnusedAttribs() << '\n';
-	auto ba = findBestAttribute( v_dpidx, dataset, aMap );
+	auto ba = findBestAttribute( v_dpidx, dataset, params );
 }
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "removeDuplicates", "[RD]" )
 {
+	Params params;
 	std::vector<float> v0{1., 2., 3., 4., 2., 2.1 };
 	{
 		auto values = v0;
-		removeDuplicates( values, 0.1 );
+		params.removalCoeff = 0.1;
+		removeDuplicates( values, params );
 		CHECK( values.size() == 4 );
 		CHECK( values == std::vector<float>{1., 2., 3., 4. } );
 	}
 	{
 		auto values = v0;
-		removeDuplicates( values, 0.01 );
+		params.removalCoeff = 0.01;
+		removeDuplicates( values, params );
 		CHECK( values.size() == 5 );
 		CHECK( values == std::vector<float>{1., 2., 2.1, 3., 4. } );
 	}

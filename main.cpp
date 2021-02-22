@@ -34,7 +34,7 @@ int main( int argc, const char** argv )
     if( cmdl["-i"] )
         fparams.noProcess = true;
 
-// optional arg: -f => evaluate performance by doing folds an data
+// optional arg: -f => evaluate performance on training dataset by doing folds on data
     bool doFolding = false;
     if( cmdl["-f"] )
         doFolding = true;
@@ -59,7 +59,8 @@ int main( int argc, const char** argv )
     TrainingTree tt;
     if( !doFolding )
     {
-        auto perf = tt.train( dataset );
+        tt.train( dataset );
+        auto perf = tt.classify( dataset );
         std::cout << "Score=" << perf << "\n";
         tt.printInfo( std::cout );
         tt.printDot( "demo.dot" );
@@ -75,11 +76,12 @@ int main( int argc, const char** argv )
             auto data_train = p_data_subsets.first;
             auto data_test  = p_data_subsets.second;
 
-            auto perf_t = tt.train( data_train );
+            tt.train( data_train );
+            auto perf_t = tt.classify( data_train );
             auto perf_c = tt.classify( data_test );
             std::cout << "Fold " << i+1 << "/" << nbFolds
-				<< "- Training score=" << perf_t
-				<< "- Test score=" << perf_c
+				<< "\n- Training score=" << perf_t
+				<< "\n- Test score=" << perf_c
 				<< "\n";
         }
     }

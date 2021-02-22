@@ -22,6 +22,7 @@ for continuous data values (aka real numbers)
 
 
 #define DEBUG
+#define DEBUG_START
 
 #ifdef DEBUG
 	#define COUT if(1) std::cout << __FUNCTION__ << "(): "
@@ -74,8 +75,9 @@ public:
 private:
     T value_;
 };
+
 using ThresholdVal = NamedType<float,struct ThresholdValTag>;
-using ClassVal     = NamedType<int,struct ThresholdValTag>;
+using ClassVal     = NamedType<int,  struct ClassValTag>;
 
 //---------------------------------------------------------------------
 
@@ -253,12 +255,12 @@ struct AttribStats
 			<< " mean="   << st._meanVal
 			<< " stddev=" << st._stddevVal
 			<< " median=" << st._medianVal
-			<< "\n";
+			<< ' ';
 		return f;
 	}
 };
 //---------------------------------------------------------------------
-/// Holds attribute stats
+/// Holds attribute stats, see DataSet::computeStats()
 template<typename T>
 struct DatasetStats
 {
@@ -351,7 +353,7 @@ class DataSet
 //---------------------------------------------------------------------
 /// Compute statistics of the dataset, attributes by attribute.
 /**
-Done by storing for a given attribute all the values in a vector, then getting stats on that vector
+Done by storing for a given attribute all the values in a vector, then computing stats on that vector
 
 - median: https://stackoverflow.com/a/42791986/193789
 - stddev: https://stackoverflow.com/a/7616783/193789
@@ -383,7 +385,7 @@ DataSet::computeStats() const
 
 		pt_stat._stddevVal = std::sqrt( sq_sum / size() );
 
-		if( size() % 2 == 0)
+		if( size() % 2 == 0)  // if even
 		{
 			const auto median_it1 = vat.begin() + vat.size() / 2 - 1;
 			const auto median_it2 = vat.begin() + vat.size() / 2;
@@ -396,7 +398,8 @@ DataSet::computeStats() const
 
 			pt_stat._medianVal = (e1 + e2) / 2;
 
-		} else
+		}
+		else                // if odd
 		{
 			const auto median_it = vat.begin() + vat.size() / 2;
 			std::nth_element( vat.begin(), median_it , vat.end() );
@@ -718,27 +721,6 @@ TrainingTree::nbLeaves() const
 	return c;
 }
 
-//---------------------------------------------------------------------
-//template<typename T>
-class DecisionTree
-{
-	private:
-		GraphC _graph;
-		size_t _maxDepth = 1;  ///< defined by training
-
-	public:
-		DecisionTree();
-//		int Classify( const DataPoint& ) const;
-
-		size_t maxDepth()  const { return _maxDepth; }
-};
-
-//---------------------------------------------------------------------
-/// Create a DT having a single decision point (root node) and 3 nodes
-//template<typename T>
-DecisionTree::DecisionTree()
-{
-}
 
 // % % % % % % % % % % % % % %
 namespace priv {
@@ -832,7 +814,7 @@ TrainingTree::printInfo( std::ostream& f ) const
 //---------------------------------------------------------------------
 /// Computes the nb of votes for each class, for the points defined in \c v_Idx
 std::map<ClassVal,uint>
-computeClassVotes( const std::vector<uint>& v_Idx, const DataSet&  data )
+computeClassVotes( const std::vector<uint>& v_Idx, const DataSet& data )
 {
 	START;
 	assert( v_Idx.size()>0 );
@@ -845,6 +827,7 @@ computeClassVotes( const std::vector<uint>& v_Idx, const DataSet&  data )
 	}
 	return classVotes;
 }
+
 //---------------------------------------------------------------------
 /// Computes the Gini coefficient for points listed in \c vdpidx
 double
@@ -865,6 +848,98 @@ getGlobalGiniCoeff(
 	COUT << "global Gini Coeff=" << giniCoeff << '\n';
 	return giniCoeff;
 }
+//---------------------------------------------------------------------
+/// Returns the class that is in majority in the points defined in \c vIdx.
+/// The second value is the percentage of that majority, in the range \f$ [0,1]\f$  (well, \f$ ]0.5,1]\f$  actually !)
+//template<typename T>
+std::pair<ClassVal,float>
+getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
+{
+	START;
+	using Pair = std::pair<ClassVal,uint>;
+
+	auto classVotes = computeClassVotes( vIdx, data );
+
+	auto it_max = std::max_element(
+		std::begin( classVotes ),
+		std::end( classVotes ),
+		[]                                      // lambda
+		(const Pair& a, const Pair& b)->bool
+		{ return a.second < b.second; }
+	);
+
+	auto idx_maj = it_max->first;
+
+	return std::make_pair(
+		idx_maj,
+		1. * classVotes[idx_maj] / vIdx.size()
+	);
+
+}
+
+//---------------------------------------------------------------------
+/// Describes how a node holds different classes
+struct NodeContent
+{
+	double   GiniImpurity = 0.;
+	ClassVal dominantClass;
+	size_t   datasize = 0u;
+	size_t   nbOtherClasses = 0u;
+
+	friend std::ostream& operator << ( std::ostream& f, const NodeContent& nc )
+	{
+		f << "NodeContent: "
+		<< " GiniImpurity="   << nc.GiniImpurity
+		<< " dominantClass="  << nc.dominantClass
+		<< " datasize="       << nc.datasize
+		<< " nbOtherClasses=" << nc.nbOtherClasses
+		<< '\n';
+		return f;
+	}
+};
+
+//---------------------------------------------------------------------
+/// Returns some info on what a node holding the points defined by \c v_dpidx holds.
+/**
+\todo Here, we iterate twice on the set, that could probably be done with a single iteration.
+*/
+NodeContent
+getNodeContent(
+	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
+	const DataSet&           data     ///< dataset
+)
+{
+	START;
+	auto classVotes = computeClassVotes( v_dpidx, data );
+
+	double GiniImp = 1.;
+	for( auto elem: classVotes )
+	{
+		auto v = 1. * elem.second / v_dpidx.size();
+		GiniImp -= v*v;
+	}
+	COUT << "global Gini Impurity=" << GiniImp << '\n';
+
+	using Pair = std::pair<ClassVal,uint>;
+	auto it_max = std::max_element(  // search max value based on nb of votes
+		std::begin( classVotes ),
+		std::end( classVotes ),
+		[]                                      // lambda
+		(const Pair& a, const Pair& b)->bool
+		{ return a.second < b.second; }
+	);
+
+	auto idx_maj = it_max->first;
+
+	return NodeContent{
+		GiniImp,
+		idx_maj,
+		v_dpidx.size(),
+		v_dpidx.size() - classVotes[idx_maj]
+	};
+}
+
+
 //---------------------------------------------------------------------
 /// Utility function, sort vector and removes values whose difference is small
 /**
@@ -1084,34 +1159,7 @@ findBestAttribute(
 
 	return *it_mval;
 }
-//---------------------------------------------------------------------
-/// Returns the class that is in majority in the points defined in \c vIdx.
-/// The second value is the percentage of that majority, in the range \f$ [0,1]\f$  (well, \f$ ]0.5,1]\f$  actually !)
-//template<typename T>
-std::pair<ClassVal,float>
-getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
-{
-	START;
-	using Pair = std::pair<ClassVal,uint>;
 
-	auto classVotes = computeClassVotes( vIdx, data );
-
-	auto it_max = std::max_element(
-		std::begin( classVotes ),
-		std::end( classVotes ),
-		[]                                      // lambda
-		(const Pair& a, const Pair& b)->bool
-		{ return a.second < b.second; }
-	);
-
-	auto idx_maj = it_max->first;
-
-	return std::make_pair(
-		idx_maj,
-		1. * classVotes[idx_maj] / vIdx.size()
-	);
-
-}
 //---------------------------------------------------------------------
 /// Recursive helper function, used by TrainingTree::train()
 /**
@@ -1131,13 +1179,16 @@ splitNode(
 	s_recDepth++;
 
 
-	COUT << "RECDEPTH="<< s_recDepth << "\n";
+//	COUT << "RECDEPTH="<< s_recDepth << "\n";
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
-	COUT << "set holds " << vIdx.size() << " points\n";
+//	COUT << "set holds " << vIdx.size() << " points\n";
 //	data.print( std::cout, vIdx );
 
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done
+
+	auto nodeContent = getNodeContent( vIdx, data );
+	COUT << nodeContent;
 
 	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
 	auto majo = getMajorityClass( vIdx, data );

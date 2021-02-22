@@ -81,7 +81,7 @@ int main( int argc, const char** argv )
             tt.train( data_train );
             auto perf_t = tt.classify( data_train );
             auto perf_c = tt.classify( data_test );
-            std::cout << "Fold " << i+1 << "/" << nbFolds
+            std::cout << "\n* Fold " << i+1 << "/" << nbFolds
 				<< "\n- Training score=" << perf_t
 				<< "\n- Test score=" << perf_c
 				<< "\n";

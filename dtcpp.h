@@ -189,10 +189,12 @@ class DataPoint
 		ClassVal _class = ClassVal(-1);  ///< Class of the datapoint, -1 for undefined
 
 	public:
+#ifdef TESTMODE
 /// Constructor used in tests
-		DataPoint( const std::vector<float>& vec, ClassVal c ) :
-			_attrValue(vec), _class(c)
+		DataPoint( const std::vector<float>& vec, int c ) :
+			_attrValue(vec), _class(ClassVal(c))
 		{}
+#endif
 /// Constructor from a vector of strings (used by file reader)
 		DataPoint( const std::vector<std::string>& v_string, ClassVal c )
 		{
@@ -270,6 +272,7 @@ struct DatasetStats
 		f << "DatasetStats: " << st.v_stats.size() << " attributes";
 		for( uint i=0; i<st.v_stats.size(); i++ )
 			f << "\n -attribute " << i << ": " << st.v_stats[i];
+		f << '\n';
 		return f;
 	}
 };
@@ -830,8 +833,11 @@ computeClassVotes( const std::vector<uint>& v_Idx, const DataSet& data )
 
 //---------------------------------------------------------------------
 /// Computes the Gini coefficient for points listed in \c vdpidx
-double
-getGlobalGiniCoeff(
+/**
+Returns a pair holding as first:the Gini Impurity, second: the class votes
+*/
+std::pair<double,std::map<ClassVal,uint>>
+getGiniImpurity(
 	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
 	const DataSet&           data     ///< dataset
 )
@@ -845,10 +851,15 @@ getGlobalGiniCoeff(
 		auto v = 1. * elem.second / v_dpidx.size();
 		giniCoeff -= v*v;
 	}
-	COUT << "global Gini Coeff=" << giniCoeff << '\n';
-	return giniCoeff;
+//	COUT << "global Gini Coeff=" << giniCoeff << '\n';
+
+	return std::make_pair(
+		giniCoeff,
+		classVotes
+	);
 }
 //---------------------------------------------------------------------
+#if 0
 /// Returns the class that is in majority in the points defined in \c vIdx.
 /// The second value is the percentage of that majority, in the range \f$ [0,1]\f$  (well, \f$ ]0.5,1]\f$  actually !)
 //template<typename T>
@@ -874,8 +885,8 @@ getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
 		idx_maj,
 		1. * classVotes[idx_maj] / vIdx.size()
 	);
-
 }
+#endif
 
 //---------------------------------------------------------------------
 /// Describes how a node holds different classes
@@ -884,15 +895,17 @@ struct NodeContent
 	double   GiniImpurity = 0.;
 	ClassVal dominantClass;
 	size_t   datasize = 0u;
-	size_t   nbOtherClasses = 0u;
+	size_t   nbPtsOtherClasses = 0u;
+	size_t   nbClasses = 0u;
 
 	friend std::ostream& operator << ( std::ostream& f, const NodeContent& nc )
 	{
 		f << "NodeContent: "
-		<< " GiniImpurity="   << nc.GiniImpurity
-		<< " dominantClass="  << nc.dominantClass
-		<< " datasize="       << nc.datasize
-		<< " nbOtherClasses=" << nc.nbOtherClasses
+		<< " GiniImpurity="      << nc.GiniImpurity
+		<< " dominantClass="     << nc.dominantClass
+		<< " datasize="          << nc.datasize
+		<< " nbPtsOtherClasses=" << nc.nbPtsOtherClasses
+		<< " nbClasses="         << nc.nbClasses
 		<< '\n';
 		return f;
 	}
@@ -910,15 +923,11 @@ getNodeContent(
 )
 {
 	START;
-	auto classVotes = computeClassVotes( v_dpidx, data );
+	auto gImp = getGiniImpurity( v_dpidx, data );
 
-	double GiniImp = 1.;
-	for( auto elem: classVotes )
-	{
-		auto v = 1. * elem.second / v_dpidx.size();
-		GiniImp -= v*v;
-	}
-	COUT << "global Gini Impurity=" << GiniImp << '\n';
+	const auto& classVotes = gImp.second;
+
+//	COUT << "global Gini Impurity=" << gImp.first << '\n';
 
 	using Pair = std::pair<ClassVal,uint>;
 	auto it_max = std::max_element(  // search max value based on nb of votes
@@ -932,10 +941,11 @@ getNodeContent(
 	auto idx_maj = it_max->first;
 
 	return NodeContent{
-		GiniImp,
+		gImp.first,
 		idx_maj,
 		v_dpidx.size(),
-		v_dpidx.size() - classVotes[idx_maj]
+		v_dpidx.size() - classVotes.at(idx_maj),
+		classVotes.size()
 	};
 }
 
@@ -1132,13 +1142,13 @@ findBestAttribute(
 )
 {
 	START;
-	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
+	auto giniCoeff = getGiniImpurity( vIdx, data );
 
 
 // step 1 - compute best IG/threshold for each attribute, only for the considered points
 	std::vector<AttributeData> v_IG;
 	for( uint atIdx=0; atIdx<data.nbAttribs(); atIdx++ )
-		v_IG.push_back( computeIG( atIdx, vIdx, data, giniCoeff, params ) );
+		v_IG.push_back( computeIG( atIdx, vIdx, data, giniCoeff.first, params ) );
 
 //	priv::printVector( std::cout, v_IG, "v_IG" );
 /*	COUT << "vector v_IG, #=" << v_IG.size() << "\n";
@@ -1178,11 +1188,7 @@ splitNode(
 	static uint s_recDepth;
 	s_recDepth++;
 
-
-//	COUT << "RECDEPTH="<< s_recDepth << "\n";
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
-//	COUT << "set holds " << vIdx.size() << " points\n";
-//	data.print( std::cout, vIdx );
 
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done
@@ -1190,11 +1196,10 @@ splitNode(
 	auto nodeContent = getNodeContent( vIdx, data );
 	COUT << nodeContent;
 
-	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
-	auto majo = getMajorityClass( vIdx, data );
+	auto giniImpurity = nodeContent.GiniImpurity;
 
-	graph[v]._class = majo.first;
-	graph[v].giniImpurity = giniCoeff;
+	graph[v]._class = nodeContent.dominantClass;
+	graph[v].giniImpurity = giniImpurity;
 	graph[v]._type = NT_Final;
 
 	if( s_recDepth>params.maxTreeDepth )
@@ -1204,9 +1209,9 @@ splitNode(
 		return;
 	}
 
-	if( giniCoeff < params.minGiniCoeffForSplitting )
+	if( giniImpurity < params.minGiniCoeffForSplitting )
 	{
-		LOG << "dataset is (almost or completely) pure, gini coeff=" << giniCoeff << ", STOP\n";
+		LOG << "dataset is (almost or completely) pure, gini coeff=" << giniImpurity << ", STOP\n";
 		s_recDepth--;
 		return;
 	}

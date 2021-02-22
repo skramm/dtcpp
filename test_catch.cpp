@@ -6,6 +6,8 @@
 
 #define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
 #include "catch.hpp"
+
+#define TESTMODE
 #include "dtcpp.h"
 
 //-------------------------------------------------------------------------------------------
@@ -22,14 +24,14 @@ TEST_CASE( "maj vote", "[majv]" )
 	dataset.addDataPoint( DataPoint( std::vector<float>{ 7,8,5,9 }, 1 ) );
 
 	{
-		auto maj = getMajorityClass( std::vector<uint>{0,1,2,3,4}, dataset );
-		CHECK( maj.first  == 0 );
-		CHECK( maj.second == 0.6f );
+		auto nc = getNodeContent( std::vector<uint>{0,1,2,3,4}, dataset );
+		CHECK( nc.dominantClass.get() == 0 );
+		CHECK( nc.nbPtsOtherClasses   == 2 );
 	}
 	{
-		auto maj = getMajorityClass( std::vector<uint>{0,3,4}, dataset );
-		CHECK( maj.first  == 1 );
-		CHECK( maj.second == 0.66666666f );
+		auto nc = getNodeContent( std::vector<uint>{0,3,4}, dataset );
+		CHECK( nc.dominantClass.get() == 1 );
+		CHECK( nc.nbPtsOtherClasses   == 1 );
 	}
 }
 
@@ -50,12 +52,12 @@ TEST_CASE( "computeIG", "[cig]" )
 
 	auto v_dpidx = setAllDataPoints( dataset );    // all the points
 
-	auto giniCoeff = getGlobalGiniCoeff( v_dpidx, dataset );
+	auto giniCoeff = getGiniImpurity( v_dpidx, dataset );
 
 	Params params;
-	auto ig0 = computeIG( 0, v_dpidx, dataset, giniCoeff, params );
+	auto ig0 = computeIG( 0, v_dpidx, dataset, giniCoeff.first, params );
 	std::cout << "ig0: " << ig0 <<'\n';
-	auto ig1 = computeIG( 1, v_dpidx, dataset, giniCoeff, params );
+	auto ig1 = computeIG( 1, v_dpidx, dataset, giniCoeff.first, params );
 	std::cout << "ig1: " << ig1 <<'\n';
 
 	auto ba = findBestAttribute( v_dpidx, dataset, params );

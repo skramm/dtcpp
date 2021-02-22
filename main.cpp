@@ -53,6 +53,8 @@ int main( int argc, const char** argv )
         std::cerr << "Error, unable to load data file: " << fname << '\n';
         std::exit(1);
     }
+    dataset.printInfo( std::cout );
+
     if( noProcess )
     {
         std::exit(2);
@@ -61,9 +63,9 @@ int main( int argc, const char** argv )
 	auto stats = dataset.computeStats<float>();
 	std::cout << stats;
 
-    TrainingTree tt;
     if( !doFolding )
     {
+		TrainingTree tt;
         tt.train( dataset );
         auto perf = tt.classify( dataset );
         std::cout << "Score=" << perf << "\n";
@@ -77,6 +79,7 @@ int main( int argc, const char** argv )
         uint nbFolds = 5;
         for( uint i=0; i<nbFolds; i++ )
         {
+			TrainingTree tt;
             auto p_data_subsets = dataset.getFolds( i, nbFolds );
             auto data_train = p_data_subsets.first;
             auto data_test  = p_data_subsets.second;

@@ -270,7 +270,7 @@ struct DatasetStats
 	std::vector<AttribStats<T>> v_stats;
 	friend std::ostream& operator << ( std::ostream& f, const DatasetStats& st )
 	{
-		f << "DatasetStats: " << st.v_stats.size() << " attributes";
+		f << "DatasetStats: " << st.v_stats.size() << " attributes:"; // << st.nbClasses() << '\n';
 		for( uint i=0; i<st.v_stats.size(); i++ )
 			f << "\n -attribute " << i << ": " << st.v_stats[i];
 		f << '\n';
@@ -334,6 +334,7 @@ class DataSet
 		bool load( std::string fname, const Fparams=Fparams() );
 		void print( std::ostream& ) const;
 		void print( std::ostream&, const std::vector<uint>& ) const;
+		void printInfo( std::ostream& ) const;
 
 		void clear() { _data.clear(); }
 		std::pair<DataSet,DataSet> getFolds( uint i, uint nbFolds ) const;
@@ -345,14 +346,27 @@ class DataSet
 		}
 		template<typename T>
 		DatasetStats<T> computeStats() const;
+		uint nbClasses() const;
 
 	private:
 		size_t _nbAttribs = 0;
 		std::vector<DataPoint> _data;
+//		uint _nbClasses;
 //		std::vector<DataPoint<T>> _dataPoint;
 };
 //using DataSetf = DataSet<float>;
 //using DataSetd = DataSet<double>;
+
+//---------------------------------------------------------------------
+uint
+DataSet::nbClasses() const
+{
+	std::set<ClassVal> clset;
+	for( const auto& point: _data )
+		clset.insert( point.classVal() );
+
+	return clset.size();
+}
 
 //---------------------------------------------------------------------
 /// Compute statistics of the dataset, attributes by attribute.
@@ -529,6 +543,15 @@ DataSet::load( std::string fname, const Fparams params )
 	return true;
 }
 //---------------------------------------------------------------------
+void
+DataSet::printInfo( std::ostream& f ) const
+{
+	f << "Dataset:\n # points=" << size()
+		<< "\n # attributes="   << nbAttribs()
+		<< "\n # classes="      << nbClasses()
+		<< '\n';
+}
+//---------------------------------------------------------------------
 //template<typename T>
 void
 DataSet::print( std::ostream& f ) const
@@ -696,6 +719,54 @@ struct Perf
 
 };
 //---------------------------------------------------------------------
+/// Confusion Matrix TODO
+struct ConfusionMatrix
+{
+	ConfusionMatrix( size_t nb ) // : _nbClasses( nb )
+	{
+		assert( nb>1 );
+		_mat.resize( nb );
+		for( auto& li: _mat )
+		{
+			li.resize( nb );
+			std::fill( li.begin(), li.end(), 0u );
+		}
+	}
+	void clear()
+	{
+		for( auto& li: _mat )
+			std::fill( li.begin(), li.end(), 0u );
+	}
+	void add( ClassVal c1, ClassVal c2 )
+	{
+		auto li = c1.get();
+		auto col = c2.get();
+		assert( li >= 0 && col >= 0 );
+		assert( li < _mat.size() && col < _mat.size() );
+		_mat[li][col]++;
+	}
+	friend std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
+	{
+		f << "ConfusionMatrix:\n    ";
+		for( size_t i=0; i<cm._mat.size(); i++ )
+			f << i+1 << "  ";
+		f << "\n";
+
+		for( size_t i=0; i<cm._mat.size(); i++ )
+		{
+			f << i+1 << " | ";
+			for( const auto& elem: cm._mat[i] )
+				f << elem << " - ";
+			f << "|\n";
+		}
+		return f;
+	}
+
+//	size_t _nbClasses = 0;
+	std::vector<std::vector<uint>> _mat;
+
+};
+//---------------------------------------------------------------------
 /// This one holds edges that each have a vector holding the index of datapoints.
 /// This is memory costly, but useless for classifying, so once it is trained, we can use the \ref DecisionTree class
 /// \todo unify by templating the type of edges
@@ -707,6 +778,11 @@ class TrainingTree
 		vertexT_t _initialVertex;
 		size_t    _maxDepth = 1;  ///< defined by training
 	public:
+		void clear()
+		{
+			_graph.clear();
+		}
+
 		void train( const DataSet&, Params params=Params() );
 		Perf classify( const DataSet& ) const;
 		ClassVal classify( const DataPoint& ) const;
@@ -1049,7 +1125,7 @@ computeBestThreshold(
 )
 {
 	START;
-	COUT << "atIdx=" << atIdx << " nb pts=" << v_dpidx.size() << '\n';
+//	COUT << "atIdx=" << atIdx << " nb pts=" << v_dpidx.size() << '\n';
 
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
 
@@ -1116,8 +1192,8 @@ computeBestThreshold(
 // step 3 - find max value of the delta Gini
 	auto max_pos = std::max_element( std::begin( deltaGini ), std::end( deltaGini ) );
 
-	COUT << "max gini for thres idx=" << std::distance( std::begin( deltaGini ), max_pos ) << " val=" << *max_pos
-		<< " thresval=" << v_thresVal.at( std::distance( std::begin( deltaGini ), max_pos ) ) << "\n";
+//	COUT << "max gini for thres idx=" << std::distance( std::begin( deltaGini ), max_pos ) << " val=" << *max_pos
+//		<< " thresval=" << v_thresVal.at( std::distance( std::begin( deltaGini ), max_pos ) ) << "\n";
 
 	auto best_thres_idx = std::distance( std::begin( deltaGini ), max_pos );
 
@@ -1355,14 +1431,17 @@ Perf
 TrainingTree::classify( const DataSet& dataset ) const
 {
 	size_t nbErrors = 0;
+	ConfusionMatrix confmat( dataset.nbClasses() );
 	for( const auto& datapoint: dataset )
 	{
 		auto cla1 = datapoint.classVal();
 		auto cla2 = classify( datapoint );
 		if( cla1 != cla2 )
 			nbErrors++;
+		confmat.add( cla1, cla2 );
 	}
 	COUT << "Nb classification errors=" << nbErrors << " / " << dataset.size() << " datapoints\n";
+	std::cout << confmat;
 	return Perf( 1. * nbErrors/ dataset.size() );
 }
 

@@ -53,6 +53,19 @@ public:
     explicit NamedType(T&& value) : value_(std::move(value)) {}
     T&       get()       { return value_; }
     T const& get() const { return value_; }
+	bool operator == ( const NamedType& nt2 ) const
+	{
+		return get() == nt2.get();
+	}
+	bool operator < ( const NamedType& nt2 ) const
+	{
+		return get() < nt2.get();
+	}
+	bool operator != ( const NamedType& nt2 ) const
+	{
+		return !( *this == nt2 );
+	}
+
 	friend std::ostream& operator << ( std::ostream& f, const NamedType& nt )
 	{
 		f << nt.value_;
@@ -62,6 +75,7 @@ private:
     T value_;
 };
 using ThresholdVal = NamedType<float,struct ThresholdValTag>;
+using ClassVal     = NamedType<int,struct ThresholdValTag>;
 
 //---------------------------------------------------------------------
 
@@ -169,16 +183,16 @@ class DataPoint
 
 	private:
 //		std::vector<T> _attrValue;
-		std::vector<float> _attrValue;
-		int _class = -1;  ///< Class of the datapoint, -1 for undefined
+		std::vector<float> _attrValue;   ///< attributes
+		ClassVal _class = ClassVal(-1);  ///< Class of the datapoint, -1 for undefined
 
 	public:
 /// Constructor used in tests
-		DataPoint( const std::vector<float>& vec, int c ) :
+		DataPoint( const std::vector<float>& vec, ClassVal c ) :
 			_attrValue(vec), _class(c)
 		{}
 /// Constructor from a vector of strings (used by file reader)
-		DataPoint( const std::vector<std::string>& v_string, int c )
+		DataPoint( const std::vector<std::string>& v_string, ClassVal c )
 		{
 			assert( v_string.size() > 0 );              // at least one attribute and a class value
 
@@ -191,7 +205,7 @@ class DataPoint
 		{
 			return _attrValue.size();
 		}
-		int classVal() const { return _class; }
+		ClassVal classVal() const { return _class; }
 		void setSize( size_t n ) { _attrValue.resize(n); }
 		float attribVal( size_t idx ) const
 		{
@@ -205,20 +219,19 @@ class DataPoint
 			assert( vec.size() == nbAttribs() );
 			_attrValue = vec;
 		}
-		void setClass( int c )
+/*		void setClass( int c )
 		{
 			assert( c >=0 );  // -1 is illegal
 			_class = c;
-		}
+		}*/
 };
 
 //---------------------------------------------------------------------
-/// Parameters for data file
+/// Parameters for data files
 struct Fparams
 {
-	char sep = ' ';  ///< field separator
+	char sep = ' ';              ///< input field separator
 	bool classAsString = false;  ///< class values are given as strings
-	bool noProcess = false;      ///< no processing if true
 };
 
 //---------------------------------------------------------------------
@@ -484,7 +497,7 @@ DataSet::load( std::string fname, const Fparams params )
 				classValues[classIndex]++;
 //				v_tok.resize( v_tok.size()-1 );
 				v_tok.erase( v_tok.end()-1 );   // remove last element (class)
-				_data.push_back( DataPoint( v_tok, classIndex ) );
+				_data.push_back( DataPoint( v_tok, ClassVal(classIndex) ) );
 			}
 		}
 	}
@@ -581,7 +594,7 @@ struct NodeC
 	NodeType _type = NT_undef;
 	size_t   _attrIndex = 0;     ///< Attribute Index that this nodes classifies
 	float    _threshold = 0.f;   ///< Threshold on the attribute value (only for decision nodes)
-	int      _class = -1;        ///< (only for terminal nodes)
+	ClassVal _class = ClassVal(-1);        ///< (only for terminal nodes)
 	uint     depth = 0;         ///< depth of the node in the tree
 };
 
@@ -593,7 +606,7 @@ struct NodeT
 	static uint s_Counter;
 	uint TEMP_IDX = 0;
 	NodeType _type = NT_undef;
-	int      _class = -1;        ///< (only for terminal nodes)
+	ClassVal _class = ClassVal(-1);        ///< (only for terminal nodes)
 	size_t   _attrIndex = 0;     ///< Attribute Index that this nodes classifies
 	float    _threshold = 0.f;   ///< Threshold on the attribute value (only for decision nodes)
 	uint     depth = 0;         ///< depth of the node in the tree
@@ -618,16 +631,10 @@ struct NodeT
  uint NodeT::s_Counter = 0;
 
 //---------------------------------------------------------------------
-/// Edge of the tree. Single parameter is true/false of the above decision, depending on threshold
-struct EdgeC
+/// Edge of the tree. Value is true/false of the above decision, depending on threshold
+struct EdgeData
 {
-	bool side;
-};
-//---------------------------------------------------------------------
-/// Edge of the tree. Single parameter is true/false of the above decision, depending on threshold
-struct EdgeT
-{
-	bool side;
+	bool edgeSide;
 };
 
 //---------------------------------------------------------------------
@@ -637,7 +644,7 @@ using GraphC = boost::adjacency_list<
 		boost::vecS,
 		boost::directedS,
 		NodeC,
-		EdgeC
+		EdgeData
 	>;
 
 /// Used for training
@@ -652,7 +659,7 @@ using GraphT = boost::adjacency_list<
 		boost::listS,
 		boost::directedS,
 		NodeT,
-		EdgeT
+		EdgeData
 	>;
 
 using vertexT_t = boost::graph_traits<GraphT>::vertex_descriptor;
@@ -687,7 +694,7 @@ class TrainingTree
 	public:
 		void train( const DataSet&, Params params=Params() );
 		Perf classify( const DataSet& ) const;
-		int  classify( const DataPoint& ) const;
+		ClassVal classify( const DataPoint& ) const;
 		void printDot( std::ostream& ) const;
 		void printDot( std::string fname ) const;
 		void printInfo( std::ostream& ) const;
@@ -823,30 +830,14 @@ TrainingTree::printInfo( std::ostream& f ) const
 }
 
 //---------------------------------------------------------------------
-/// Utility functions, returns a vector of indexes holding all the points
-// % % % % % % % % % % % % % %
-namespace priv {
-// % % % % % % % % % % % % % %
-std::vector<uint>
-setAllDataPoints( const DataSet& dataset )
-{
-	std::vector<uint> v( dataset.size() );
-	std::iota( v.begin(), v.end(), 0 );
-	return v;
-}
-// % % % % % % % % % % % % % %
-} // namespace priv
-// % % % % % % % % % % % % % %
-
-//---------------------------------------------------------------------
 /// Computes the nb of votes for each class, for the points defined in \c v_Idx
-std::map<uint,uint>
+std::map<ClassVal,uint>
 computeClassVotes( const std::vector<uint>& v_Idx, const DataSet&  data )
 {
 	START;
 	assert( v_Idx.size()>0 );
 
-	std::map<uint,uint> classVotes; // key: class index, value: votes
+	std::map<ClassVal,uint> classVotes; // key: class index, value: votes
 	for( auto idx: v_Idx )
 	{
 		const auto& dp = data.getDataPoint( idx );
@@ -877,8 +868,6 @@ getGlobalGiniCoeff(
 //---------------------------------------------------------------------
 /// Utility function, sort vector and removes values whose difference is small
 /**
-\todo Check if not faster to use a set ?
-
 This compares all the values and removes those which are "too close".
 
 Say we have the values: <code>4 - 5 - 6 - 6.1 - 7 - 8</code> <br>
@@ -896,10 +885,10 @@ removeDuplicates( std::vector<float>& vec, const Params& params )
 	auto mm = std::minmax_element( std::begin(vec), std::end(vec) )	;
 	auto k = (*mm.second - *mm.first) * params.removalCoeff;
 
-	COUT << "min=" << *mm.first
+/*	COUT << "min=" << *mm.first
 		<< " max=" << *mm.second
 		<< " range=" << (*mm.second - *mm.first)
-		<< " k=" << k << "\n";
+		<< " k=" << k << "\n";*/
 	std::sort( vec.begin(), vec.end() );
 
 // remove all values that are equal
@@ -919,58 +908,13 @@ removeDuplicates( std::vector<float>& vec, const Params& params )
 	return nb_removal;
 }
 
-#if 0
-//---------------------------------------------------------------------
-/// Simple wrapper around a map holding a bool for each attribute index.
-/// Used to check if an attribute has been already used or not.
-/**
- * Benefit: has automatic initialization
-*/
-struct AttribMap
-{
-	private:
-		std::map<uint,bool> _attribMap;
-	public:
-		AttribMap( uint nbAttribs )
-		{
-			for( uint i=0; i<nbAttribs; i++ )
-				_attribMap[i] = false;
-		}
-		std::vector<uint> getUnusedAttribs() const
-		{
-			std::vector<uint> vout;
-			for( auto elem: _attribMap )
-				if( elem.second == false )
-					vout.push_back(elem.first);
-			return vout;
-		}
-
-/// Set attribute \c idx as used, so we will not use it again
-/// \todo maybe add some checking here...
-		void setAsUsed( uint idx )
-		{
-			_attribMap[idx] = true;
-		}
-
-/// Returns number of unused attributes
-		uint nbUnusedAttribs() const
-		{
-			uint c=0;
-			for( const auto& elem: _attribMap )
-				if( elem.second == false )
-					c++;
-			return c;
-		}
-};
-#endif // 0
-
 //---------------------------------------------------------------------
 /// Holds all the data relative to an attribute to be able to select it.
 struct AttributeData
 {
-	uint         _atIndex = 0u;         ///< (absolute) attribute index
-	float        _gain  = 0.f;          ///< information gain, will be used to select which attribute we use
-	ThresholdVal _threshold;            ///< threshold value, will be used to classify
+	uint         _atIndex = 0u;         ///< Absolute attribute index
+	float        _gain  = 0.f;          ///< Information gain, will be used to select which attribute we use
+	ThresholdVal _threshold;            ///< Threshold value, will be set by training and used to classify
 	uint         _nbPtsLessThan = 0u;   ///< Nb of points that are less than the threshold
 
 	AttributeData()
@@ -1047,7 +991,7 @@ computeIG(
 	for( uint i=0; i<v_thresVal.size(); i++ )              // for each threshold value
 	{
 //		COUT << "thres " << i << "=" << v_thresVal[i] << '\n';
-		std::map<uint,uint> m_LT, m_HT;
+		std::map<ClassVal,uint> m_LT, m_HT;
 
 		uint nb_HT = 0;
 		for( auto ptIdx: v_dpidx )                         // for each data point
@@ -1113,23 +1057,11 @@ findBestAttribute(
 )
 {
 	START;
-
 	auto giniCoeff = getGlobalGiniCoeff( vIdx, data );
 
-//	COUT << "nb of attributes left=" << aMap.nbUnusedAttribs() << '\n';
 
-// step 1 - fetch the indexes of the attributes we need to explore
-#if 0
-	std::vector<uint> v_attrIdx = aMap.getUnusedAttribs();
-	assert( v_attrIdx.size() );   // if not, well... shouldn't happen !
-
-	priv::printVector( std::cout, v_attrIdx, "attributes left" );
-#endif
-
-// step 2 - compute best IG/threshold for each of these attributes, only for the considered points
-
+// step 1 - compute best IG/threshold for each attribute, only for the considered points
 	std::vector<AttributeData> v_IG;
-//	for( auto atIdx: v_attrIdx )
 	for( uint atIdx=0; atIdx<data.nbAttribs(); atIdx++ )
 		v_IG.push_back( computeIG( atIdx, vIdx, data, giniCoeff, params ) );
 
@@ -1156,11 +1088,11 @@ findBestAttribute(
 /// Returns the class that is in majority in the points defined in \c vIdx.
 /// The second value is the percentage of that majority, in the range \f$ [0,1]\f$  (well, \f$ ]0.5,1]\f$  actually !)
 //template<typename T>
-std::pair<int,float>
+std::pair<ClassVal,float>
 getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
 {
 	START;
-	using Pair = std::pair<uint,uint>;
+	using Pair = std::pair<ClassVal,uint>;
 
 	auto classVotes = computeClassVotes( vIdx, data );
 
@@ -1263,8 +1195,8 @@ splitNode(
 
 	auto et = boost::add_edge( v, v1, graph );
 	auto ef = boost::add_edge( v, v2, graph );
-	graph[et.first].side = true;
-	graph[ef.first].side = false;
+	graph[et.first].edgeSide = true;
+	graph[ef.first].edgeSide = false;
 
 	COUT << "two nodes added, total nb=" << boost::num_vertices(graph) << "\n";
 
@@ -1319,11 +1251,11 @@ TrainingTree::train( const DataSet& data, const Params params )
 //---------------------------------------------------------------------
 /// Returns class of data point as classified by tree
 //template<typename T>
-int
+ClassVal
 TrainingTree::classify( const DataPoint& point ) const
 {
-	int retval = -1;
-	vertexT_t v = _initialVertex;   ///< initialize for first node
+	ClassVal retval{-1};
+	vertexT_t v = _initialVertex;   // initialize to first node
 	bool done = true;
 	do
 	{
@@ -1338,10 +1270,12 @@ TrainingTree::classify( const DataPoint& point ) const
 			auto attrIndex = _graph[v]._attrIndex;  // get attrib index that this node handles
 			auto atValue = point.attribVal( attrIndex );  // get data point value for this attribute
 
+			assert( boost::out_degree( v, _graph ) == 2 );
+
 			auto edges = boost::out_edges( v, _graph );    // get the two output edges of the node
 			auto et = *edges.first;
 			auto ef = *edges.second;
-			if( _graph[et].side )
+			if( _graph[ef].edgeSide )
 				std::swap( et, ef );
 
 			if( atValue < _graph[v]._threshold )  // depending on threshold, define the next node
@@ -1356,6 +1290,7 @@ TrainingTree::classify( const DataPoint& point ) const
 }
 
 //---------------------------------------------------------------------
+/// Classify \c dataset and returns performance score
 Perf
 TrainingTree::classify( const DataSet& dataset ) const
 {
@@ -1367,8 +1302,8 @@ TrainingTree::classify( const DataSet& dataset ) const
 		if( cla1 != cla2 )
 			nbErrors++;
 	}
-
-	return Perf( 1.f * nbErrors/ dataset.size() );
+	COUT << "Nb classification errors=" << nbErrors << " / " << dataset.size() << " datapoints\n";
+	return Perf( 1. * nbErrors/ dataset.size() );
 }
 
 //---------------------------------------------------------------------

@@ -33,6 +33,14 @@ TEST_CASE( "maj vote", "[majv]" )
 	}
 }
 
+std::vector<uint>
+setAllDataPoints( const DataSet& dataset )
+{
+	std::vector<uint> v( dataset.size() );
+	std::iota( v.begin(), v.end(), 0 );
+	return v;
+}
+
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "computeIG", "[cig]" )
 {
@@ -40,7 +48,7 @@ TEST_CASE( "computeIG", "[cig]" )
 	dataset.load( "sample_data/tds_2.csv" );
 	REQUIRE( dataset.size() == 8 );
 
-	auto v_dpidx = priv::setAllDataPoints( dataset );    // all the points
+	auto v_dpidx = setAllDataPoints( dataset );    // all the points
 
 	auto giniCoeff = getGlobalGiniCoeff( v_dpidx, dataset );
 

@@ -31,8 +31,9 @@ int main( int argc, const char** argv )
         fparams.classAsString = true;
 
 // optional arg: -i => only prints info about the data set and exit
+	bool noProcess = false;
     if( cmdl["-i"] )
-        fparams.noProcess = true;
+        noProcess = true;
 
 // optional arg: -f => evaluate performance on training dataset by doing folds on data
     bool doFolding = false;
@@ -49,7 +50,7 @@ int main( int argc, const char** argv )
         std::cerr << "Error, unable to load data file: " << fname << '\n';
         std::exit(1);
     }
-    if( fparams.noProcess )
+    if( noProcess )
     {
         std::exit(2);
     }

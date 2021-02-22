@@ -20,10 +20,6 @@ for continuous data values (aka real numbers)
 #include "boost/graph/graphviz.hpp"
 #include <boost/graph/graph_utility.hpp> // needed only for print_graph();
 
-
-#define DEBUG
-#define DEBUG_START
-
 #ifdef DEBUG
 	#define COUT if(1) std::cout << __FUNCTION__ << "(): "
 #else
@@ -173,6 +169,7 @@ struct Params
 	bool  verbose = true;        ///< to allow logging of some run-time details
 	bool  doFolding = false;
 	uint  maxTreeDepth = 10;
+//	uint  initialVertexId = 1u;
 };
 
 //---------------------------------------------------------------------
@@ -223,11 +220,15 @@ class DataPoint
 			assert( vec.size() == nbAttribs() );
 			_attrValue = vec;
 		}
-/*		void setClass( int c )
+
+		friend std::ostream& operator << ( std::ostream& f, const DataPoint& pt )
 		{
-			assert( c >=0 );  // -1 is illegal
-			_class = c;
-		}*/
+			f << "Datapoint: ";
+			for( const auto& v: pt._attrValue )
+				f << v << '-';
+			f << "C=" << pt._class.get() << ' ';
+			return f;
+		}
 };
 
 //---------------------------------------------------------------------
@@ -537,12 +538,15 @@ DataSet::print( std::ostream& f ) const
 	for( size_t i=0; i<nbAttribs(); i++ )
 		f << i << "; ";
 	f << " class\n";
+
 	for( const auto& pt: _data )
 	{
-		for( const auto& val: pt._attrValue )
+		f << pt;
+/*		for( const auto& val: pt._attrValue )
 			f << val << ";";
 
 		f << pt.classVal() << "\n";
+*/
 	}
 	f << "# -------------------------------------------\n";
 }
@@ -610,15 +614,15 @@ struct NodeC
 struct NodeT
 {
 	static uint s_Counter;
-	uint TEMP_IDX = 0;
-	NodeType _type = NT_undef;
-	ClassVal _class = ClassVal(-1);        ///< (only for terminal nodes)
-	size_t   _attrIndex = 0;     ///< Attribute Index that this nodes classifies
-	float    _threshold = 0.f;   ///< Threshold on the attribute value (only for decision nodes)
-	uint     depth = 0;         ///< depth of the node in the tree
+	uint     _nodeId = 0;            ///< Id of the node. Needed to print the dot file. \todo could be removed if graph switches to \c VecS
+	NodeType _type = NT_undef;       ///< Type of the node (Root, leaf, or decision)
+	ClassVal _class = ClassVal(-1);  ///< Class (only for terminal nodes)
+	size_t   _attrIndex = 0;         ///< Attribute Index that this nodes classifies
+	float    _threshold = 0.f;       ///< Threshold on the attribute value (only for decision nodes)
+	uint     depth = 0;              ///< Depth of the node in the tree
 	float    giniImpurity = 0.f;
+	std::vector<uint> v_Idx;         ///< Data point indexes
 
-	std::vector<uint> v_Idx; ///< data point indexes
 	friend std::ostream& operator << ( std::ostream& f, const NodeT& n )
 	{
 		f << "C=" << n._class
@@ -629,8 +633,12 @@ struct NodeT
 			;
 		return f;
 	}
-	NodeT() { TEMP_IDX = s_Counter; s_Counter++; }
-	NodeT( const NodeT& n ) {  TEMP_IDX = s_Counter; s_Counter++; }
+	static void resetNodeId()
+	{
+		s_Counter = 0;
+	}
+	NodeT() { _nodeId = s_Counter++; }
+	NodeT( const NodeT& n ) {  _nodeId = s_Counter++; }
 };
 
  /// Instanciation of static
@@ -730,7 +738,7 @@ namespace priv {
 // % % % % % % % % % % % % % %
 
 //---------------------------------------------------------------------
-/// Recursive function, prints the current node
+/// Recursive function used to print the Dot file, prints the current node
 inline
 void
 printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
@@ -742,8 +750,8 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 		auto target = boost::target( *pit.first, graph );
 		assert( graph[target]._type != NT_undef );
 
-		f << graph[target].TEMP_IDX
-			<< " [label=\"";
+		f << graph[target]._nodeId
+			<< " [label=\"" << graph[target]._nodeId << '-';
 		if( graph[target]._type == NT_Decision )
 			f << "attr=" << graph[target]._attrIndex
 				<< " thres=" << graph[target]._threshold;
@@ -761,7 +769,7 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 			default: assert(0);
 		}
 		f << "];\n";
-		f << graph[v].TEMP_IDX << "->" << graph[target].TEMP_IDX  << ";\n";
+		f << graph[v]._nodeId << "->" << graph[target]._nodeId  << ";\n";
 		printNodeChilds( f, target, graph );
 	}
 }
@@ -778,11 +786,11 @@ TrainingTree::printDot( std::ostream& f ) const
 {
 	START;
 	f << "digraph g {\nnode [shape=\"box\"];\n";
-	f << _graph[_initialVertex].TEMP_IDX
-		<< " [label=\""
-		<< "attr="   << _graph[_initialVertex]._attrIndex
-		<< " thres=" << _graph[_initialVertex]._threshold
-		<< "\n#="    << _graph[_initialVertex].v_Idx.size()
+	f << _graph[_initialVertex]._nodeId
+		<< " [label=\"" << _graph[_initialVertex]._nodeId
+		<< "-attr="     << _graph[_initialVertex]._attrIndex
+		<< " thres="    << _graph[_initialVertex]._threshold
+		<< "\\n#="      << _graph[_initialVertex].v_Idx.size()
 		<< "\",color = blue];\n";
 	priv::printNodeChilds( f, _initialVertex, _graph );
 	f << "}\n";
@@ -970,10 +978,6 @@ removeDuplicates( std::vector<float>& vec, const Params& params )
 	auto mm = std::minmax_element( std::begin(vec), std::end(vec) )	;
 	auto k = (*mm.second - *mm.first) * params.removalCoeff;
 
-/*	COUT << "min=" << *mm.first
-		<< " max=" << *mm.second
-		<< " range=" << (*mm.second - *mm.first)
-		<< " k=" << k << "\n";*/
 	std::sort( vec.begin(), vec.end() );
 
 // remove all values that are equal
@@ -1017,28 +1021,25 @@ struct AttributeData
 			<< " gain=" << ad._gain
 			<< " thres=" << ad._threshold
 			<< " nbPointsLessThan=" << ad._nbPtsLessThan
-			<< "\n";
+			<< ' ';
 		return f;
 	}
 };
 
 //---------------------------------------------------------------------
-/// Compute "Gini impurity" (Information Gain) of attribute \c atIdx of the subset of data given by \c v_dpidx.
+/// Compute best threshold for attribute \c atIdx, using the Gini Impurity, for the subset of data given by \c v_dpidx.
 /**
-\return Returns a pair holding the IG value AND the threshold value for which it was produced
+\return Returns an object of type AttributeData
 
 Details:
 - Uses the Gini impurity coeff: https://en.wikipedia.org/wiki/Decision_tree_learning#Gini_impurity
 - for details, see
  - https://en.wikipedia.org/wiki/Information_gain_in_decision_trees
  - https://towardsdatascience.com/under-the-hood-decision-tree-454f8581684e
-
-\todo Add the number of values less than threshold in return value
-(so we can decide to split or not to split local dataset without recounting them).
 */
 //template<typename T>
 AttributeData
-computeIG(
+computeBestThreshold(
 	uint                     atIdx,     ///< attribute index we want to process
 	const std::vector<uint>& v_dpidx,   ///< datapoint indexes to consider
 	const DataSet&           data,      ///< dataset
@@ -1056,7 +1057,7 @@ computeIG(
 		v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
 
 	auto nbRemoval = removeDuplicates( v_attribVal, params );
-	std::cout << "Removal of " << nbRemoval << " attribute values\n";
+//	std::cout << "Removal of " << nbRemoval << " attribute values\n";
 
 	if( v_attribVal.size() < 2 )         // if only one value, is pointless
 	{
@@ -1144,16 +1145,10 @@ findBestAttribute(
 	START;
 	auto giniCoeff = getGiniImpurity( vIdx, data );
 
-
 // step 1 - compute best IG/threshold for each attribute, only for the considered points
 	std::vector<AttributeData> v_IG;
 	for( uint atIdx=0; atIdx<data.nbAttribs(); atIdx++ )
-		v_IG.push_back( computeIG( atIdx, vIdx, data, giniCoeff.first, params ) );
-
-//	priv::printVector( std::cout, v_IG, "v_IG" );
-/*	COUT << "vector v_IG, #=" << v_IG.size() << "\n";
-	for( const auto& elem : v_IG )
-		std::cout << elem.first << "-" << elem.second << "\n"; */
+		v_IG.push_back( computeBestThreshold( atIdx, vIdx, data, giniCoeff.first, params ) );
 
 // step 3 - get the one with max gain value
 	auto it_mval = std::max_element(
@@ -1188,6 +1183,8 @@ splitNode(
 	static uint s_recDepth;
 	s_recDepth++;
 
+//	static uint s_nodeId = params.initialVertexId;   // starts at one because the initial node (id=0) is created elsewhere
+
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
 
 // step 1.1 - check if there are different output classes in the given data points
@@ -1217,13 +1214,11 @@ splitNode(
 	}
 
 // step 2 - find the best attribute to use to split the data, considering the data points of the current node
-//	auto bestAttrib = findBestAttribute( vIdx, data, aMap, params );
 	auto bestAttrib = findBestAttribute( vIdx, data, params );
 	auto attribIdx  = bestAttrib._atIndex;
 	auto threshold  = bestAttrib._threshold;
 	COUT << "best attrib:" << bestAttrib << "\n";
 
-//	aMap.setAsUsed(attribIdx); // so we will not use it again
 
 // before splitting, make sure that one of the childs will not have an insufficient number of points
 	auto n1= bestAttrib._nbPtsLessThan;
@@ -1287,13 +1282,16 @@ void
 TrainingTree::train( const DataSet& data, const Params params )
 {
 	START;
+	LOG << "Start training\n";
+
+	NodeT::resetNodeId();
 	auto nbAttribs = data.nbAttribs();
 	if( !nbAttribs )
 		throw std::runtime_error( "no attributes!" );
 	if( data.size()<2 )
 		throw std::runtime_error( "no enough data points!" );
 
-	_initialVertex  = boost::add_vertex(_graph);  // create initial vertex
+	_initialVertex = boost::add_vertex(_graph);  // create initial vertex
 
 	std::vector<uint> v_idx( data.size() );  // create vector holding indexes of all the data points
 	std::iota( v_idx.begin(), v_idx.end(), 0 );
@@ -1302,6 +1300,8 @@ TrainingTree::train( const DataSet& data, const Params params )
 	_graph[_initialVertex]._type = NT_Root;
 
 	splitNode( _initialVertex, _graph, data, params ); // Call the "split" function (recursive)
+	LOG << "Training done\n";
+	printInfo( std::cout );
 }
 
 //---------------------------------------------------------------------
@@ -1312,33 +1312,43 @@ TrainingTree::classify( const DataPoint& point ) const
 {
 	ClassVal retval{-1};
 	vertexT_t v = _initialVertex;   // initialize to first node
-	bool done = true;
+	COUT << point << '\n';
+	bool done = false;
+	uint iter = 0;
 	do
 	{
+		COUT << "\n*iter=" << iter++ << " NODE " << _graph[v]._nodeId << std::endl;
 		if( _graph[v]._type == NT_Final ) // then, we are done !
 		{
 			done = true;
 			retval = _graph[v]._class;
-//			COUT << "Final node: class = " << retval << "\n";
+			COUT << "Final node: class = " << retval << "\n";
 		}
 		else
 		{
 			auto attrIndex = _graph[v]._attrIndex;  // get attrib index that this node handles
 			auto atValue = point.attribVal( attrIndex );  // get data point value for this attribute
-
+			COUT << "Considering attribute " << attrIndex << " with value " << atValue << std::endl;
 			assert( boost::out_degree( v, _graph ) == 2 );
 
 			auto edges = boost::out_edges( v, _graph );    // get the two output edges of the node
 			auto et = *edges.first;
 			auto ef = *edges.second;
-			if( _graph[ef].edgeSide )
-				std::swap( et, ef );
+//			if( _graph[ef].edgeSide )
+//				std::swap( et, ef );
 
+			COUT << "node thres=" << _graph[v]._threshold << std::endl;
 			if( atValue < _graph[v]._threshold )  // depending on threshold, define the next node
-				v = boost::target( et, _graph );
+			{
+				auto v2 = boost::target( et, _graph );
+				v = v2;
+			}
 			else
-				v = boost::target( ef, _graph );
-//			COUT << "switching to node " << v << "\n";
+			{
+				auto v2 = boost::target( ef, _graph );
+				v = v2;
+			}
+			COUT << "switching to node " << _graph[v]._nodeId << std::endl;
 		}
 	}
 	while( !done );

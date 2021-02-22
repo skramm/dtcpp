@@ -7,6 +7,9 @@ for continuous data values (aka real numbers)
 - Does not handle missing values
 */
 
+#define DEBUG
+//#define DEBUG_START
+
 #include "dtcpp.h"
 #include "argh.h" //  https://github.com/adishavit/argh
 
@@ -79,6 +82,9 @@ int main( int argc, const char** argv )
             auto data_test  = p_data_subsets.second;
 
             tt.train( data_train );
+            std::ostringstream oss;
+            oss << "demo_" << i << ".dot";
+            tt.printDot( oss.str() );
             auto perf_t = tt.classify( data_train );
             auto perf_c = tt.classify( data_test );
             std::cout << "\n* Fold " << i+1 << "/" << nbFolds

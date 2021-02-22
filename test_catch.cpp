@@ -44,7 +44,7 @@ setAllDataPoints( const DataSet& dataset )
 }
 
 //-------------------------------------------------------------------------------------------
-TEST_CASE( "computeIG", "[cig]" )
+TEST_CASE( "computeBestThreshold", "[cbt]" )
 {
 	DataSet dataset;
 	dataset.load( "sample_data/tds_2.csv" );
@@ -55,9 +55,9 @@ TEST_CASE( "computeIG", "[cig]" )
 	auto giniCoeff = getGiniImpurity( v_dpidx, dataset );
 
 	Params params;
-	auto ig0 = computeIG( 0, v_dpidx, dataset, giniCoeff.first, params );
+	auto ig0 = computeBestThreshold( 0, v_dpidx, dataset, giniCoeff.first, params );
 	std::cout << "ig0: " << ig0 <<'\n';
-	auto ig1 = computeIG( 1, v_dpidx, dataset, giniCoeff.first, params );
+	auto ig1 = computeBestThreshold( 1, v_dpidx, dataset, giniCoeff.first, params );
 	std::cout << "ig1: " << ig1 <<'\n';
 
 	auto ba = findBestAttribute( v_dpidx, dataset, params );

@@ -735,6 +735,7 @@ struct Perf
 //---------------------------------------------------------------------
 // forward declaration, needed for the friend declaration below
 class ConfusionMatrix;
+
 // % % % % % % % % % % % % % %
 namespace priv {
 // % % % % % % % % % % % % % %
@@ -747,12 +748,9 @@ class CM_Counters
 	CM_Counters( double TP, double FP, double TN, double FN )
 		: tp(TP),fp(FP),tn(TN), fn(FN)
 	{
-//		nbValues = tp + fp + tn + fn;
-//		assert( nbValues > 0 );
 		assert( tp + fp + tn + fn > 0 );
 	}
 	double tp,fp,tn,fn;
-//	size_t nbValues;
 };
 // % % % % % % % % % % % % % %
 } // namespace priv
@@ -778,6 +776,7 @@ Layout:
 Definitions:
 - For 2- class problems, follows definitions from https://en.wikipedia.org/wiki/Confusion_matrix
 - For multiclass, see definitions here: https://stats.stackexchange.com/a/338240/23990
+and here: https://towardsdatascience.com/multi-class-classification-extracting-performance-metrics-from-the-confusion-matrix-b379b427a872
 
 Usage:
 

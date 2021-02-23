@@ -10,6 +10,8 @@
 #define TESTMODE
 #include "dtcpp.h"
 
+using namespace dtcpp;
+
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "confusion matrix", "[cmat]" )
 {

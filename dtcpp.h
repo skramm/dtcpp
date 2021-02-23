@@ -17,6 +17,9 @@ for continuous data values (aka real numbers)
 - using boost::graph to model the tree
 */
 
+#ifndef DTCPP_HG
+#define DTCPP_HG
+
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -27,6 +30,8 @@ for continuous data values (aka real numbers)
 #include <boost/graph/adjacency_list.hpp>
 #include "boost/graph/graphviz.hpp"
 #include <boost/graph/graph_utility.hpp> // needed only for print_graph();
+
+namespace dtcpp {
 
 #ifdef DEBUG
 	#define COUT if(1) std::cout << __FUNCTION__ << "(): "
@@ -737,7 +742,7 @@ namespace priv {
 /// see ConfusionMatrix::p_score()
 class CM_Counters
 {
-	friend class ::ConfusionMatrix;
+	friend class dtcpp::ConfusionMatrix;
 
 	CM_Counters( double TP, double FP, double TN, double FN )
 		: tp(TP),fp(FP),tn(TN), fn(FN)
@@ -1599,5 +1604,7 @@ TrainingTree::classify( const DataSet& dataset ) const
        return Perf( 1. * nbErrors/ dataset.size() );
 }
 
+} // namespace dtcpp
 //---------------------------------------------------------------------
+#endif // DTCPP_HG
 

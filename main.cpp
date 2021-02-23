@@ -13,7 +13,8 @@ for continuous data values (aka real numbers)
 #include "dtcpp.h"
 #include "argh.h" //  https://github.com/adishavit/argh
 
-using namespace std;
+//using namespace std;
+using namespace dtcpp;
 
 int main( int argc, const char** argv )
 {

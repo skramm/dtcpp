@@ -36,24 +36,24 @@
 			<Add option="-std=gnu++14" />
 			<Add option="-fexceptions" />
 		</Compiler>
-		<Unit filename="Doxyfile">
+		<Unit filename="../Makefile">
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
-		<Unit filename="Makefile">
+		<Unit filename="../README.md">
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
-		<Unit filename="README.md">
-			<Option target="&lt;{~None~}&gt;" />
-		</Unit>
-		<Unit filename="dtcpp.h" />
-		<Unit filename="main.cpp">
+		<Unit filename="../dtcpp.h" />
+		<Unit filename="../main.cpp">
 			<Option target="main" />
 		</Unit>
-		<Unit filename="test_catch.cpp">
+		<Unit filename="../test_catch.cpp">
 			<Option target="test" />
 		</Unit>
+		<Unit filename="Doxyfile" />
 		<Extensions>
 			<lib_finder disable_auto="1" />
+			<code_completion />
+			<debugger />
 		</Extensions>
 	</Project>
 </CodeBlocks_project_file>

@@ -29,7 +29,7 @@ for continuous data values (aka real numbers)
 #include <random>
 
 #include <boost/graph/adjacency_list.hpp>
-#include "boost/graph/graphviz.hpp"
+//#include "boost/graph/graphviz.hpp"
 #include <boost/graph/graph_utility.hpp> // needed only for print_graph();
 
 namespace dtcpp {

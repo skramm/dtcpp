@@ -19,7 +19,7 @@ using namespace dtcpp;
 int main( int argc, const char** argv )
 {
     Fparams fparams;
-    argh::parser cmdl({ "-sep"});
+    argh::parser cmdl; //({ "-sep"});
     cmdl.parse(argc, argv, argh::parser::PREFER_PARAM_FOR_UNREG_OPTION );
 
 // optional arg: -sep X => X used as datafile field separator

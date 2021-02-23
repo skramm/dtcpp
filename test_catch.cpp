@@ -11,6 +11,19 @@
 #include "dtcpp.h"
 
 //-------------------------------------------------------------------------------------------
+TEST_CASE( "confusion matrix", "[cmat]" )
+{
+// a sample confusion matrix (column: real class, lines, predicted class)
+	std::vector<std::vector<uint>> v{
+		{ 1, 2, 3, 4 },
+		{ 0, 1, 2, 3 },
+		{ 0, 1, 5, 1 },
+		{ 8, 1, 2, 1 },
+	};
+	ConfusionMatrix m( v );
+	CHECK( m.getScore( CM_TPR, ClassVal(0) ) == 0. );
+}
+//-------------------------------------------------------------------------------------------
 TEST_CASE( "maj vote", "[majv]" )
 {
 	std::cout << "Running tests with catch " << CATCH_VERSION_MAJOR << '.' << CATCH_VERSION_MINOR << '.' << CATCH_VERSION_PATCH << '\n';

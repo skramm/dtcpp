@@ -10,10 +10,16 @@ dependencies:
 * boost graph
 => `sudo apt install libboost-all-dev`
 
+For the demo classifier program:
 * argh: command-line parser, get it on https://github.com/adishavit/argh
-
+<br>
 tested with v1.3.1:
 https://github.com/adishavit/argh/releases/tag/v1.3.1
+
+For the test project:
+* catch2: https://github.com/catchorg/Catch2/
+(tested with catch 2.13.4)
+
 
 !!! WORK IN PROGRESS !!!
 

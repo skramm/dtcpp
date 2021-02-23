@@ -539,6 +539,7 @@ DataSet::load( std::string fname, const Fparams params )
 			<< "\n  - nb empty=" << nb_empty
 			<< "\n  - nb comment=" << nb_comment
 			<< "\n  - nb classes=" << classValues.size()
+			<< "\n  - nb classes 2=" << nbClasses()
 			<< "\nClasses frequency:\n";
 		for( const auto& cval: classValues )
 			std::cout << cval.first << ": "
@@ -724,22 +725,53 @@ struct Perf
 			<< "\n";
 		return f;
 	}
-
 };
 
 //---------------------------------------------------------------------
-/// Performance score of classification, see ConfusionMatrix
+class ConfusionMatrix;
+// % % % % % % % % % % % % % %
+namespace priv {
+// % % % % % % % % % % % % % %
+/// Private class, used to hold the counters extracted from the ConfusionMatrix,
+/// see ConfusionMatrix::p_score()
+class CM_Counters
+{
+	friend class ConfusionMatrix;
+
+	CM_Counters( double TP, double FP, double TN, double FN )
+		: tp(TP),fp(FP),tn(TN), fn(FN)
+	{
+//		nbValues = tp + fp + tn + fn;
+//		assert( nbValues > 0 );
+		assert( tp + fp + tn + fn > 0 );
+	}
+	double tp,fp,tn,fn;
+//	size_t nbValues;
+};
+// % % % % % % % % % % % % % %
+} // namespace priv
+// % % % % % % % % % % % % % %
+
+//---------------------------------------------------------------------
+/// Performance score of classification, see ConfusionMatrix for definitions
 enum CM_Score
 {
-    CM_TPR,     ///< True Positive Rate
-    CM_TNR,     ///< True Negative Rate
-    CM_ACC      ///< Accuracy
+    CM_TPR      ///< True Positive Rate
+    ,CM_TNR     ///< True Negative Rate
+    ,CM_ACC     ///< Accuracy
+    ,CM_BACC    ///< Balanced Accuracy
 };
 //---------------------------------------------------------------------
 /// Confusion Matrix,
-/// handles both 2 class and multiclass, but usage will be different
+/// handles both 2 class and multiclass problems, but usage will be different
 /**
-For 2- class problems, follows definitions from https://en.wikipedia.org/wiki/Confusion_matrix
+Layout:
+- columns: true class
+- lignes: predicted (classified) class
+
+Definitions:
+- For 2- class problems, follows definitions from https://en.wikipedia.org/wiki/Confusion_matrix
+- For multiclass, see definitions here: https://stats.stackexchange.com/a/338240/23990
 
 Usage:
 
@@ -755,7 +787,7 @@ For multiclass situations, you need to add for what class you are requesting thi
 */
 struct ConfusionMatrix
 {
-	ConfusionMatrix( size_t nbClasses ) // : _nbClasses( nb )
+	ConfusionMatrix( size_t nbClasses )
 	{
 		assert( nbClasses>1 );
 		_mat.resize( nbClasses );
@@ -765,6 +797,14 @@ struct ConfusionMatrix
 			std::fill( li.begin(), li.end(), 0u );
 		}
 	}
+
+#ifdef TESTMODE
+	ConfusionMatrix( const std::vector<std::vector<uint>>& m )
+	{
+		_mat = m;
+	}
+#endif //  TESTMODE
+
 	void clear()
 	{
 		for( auto& li: _mat )
@@ -774,24 +814,8 @@ struct ConfusionMatrix
 	{
         return _mat.size();
 	}
-    double getScore( CM_Score scoreId ) const
-    {
-        assert( nbValues() > 2 );
-        assert( nbClasses() == 2 );
-        double scoreVal = 0.;
-        const auto& TP = _mat[0][0];
-        const auto& FP = _mat[0][1];
-        const auto& FN = _mat[1][0];
-        const auto& TN = _mat[1][1];
-        switch( scoreId )
-        {
-            case CM_TPR: scoreVal = TP/(TP+FN); break;
-            case CM_TNR: scoreVal = TN/(TN+FP); break;
-            case CM_ACC: scoreVal = (TP+TN)/nbValues(); break;
-            default: assert(0);
-        }
-        return scoreVal;
-    }
+    double getScore( CM_Score, ClassVal ) const;
+    double getScore( CM_Score ) const;
 	size_t nbValues() const
 	{
         size_t sum = 0u;
@@ -801,9 +825,12 @@ struct ConfusionMatrix
 	}
 	void add( ClassVal trueVal, ClassVal predictedVal )
 	{
-		auto col = trueVal.get();
-		auto li  = predictedVal.get();
-		assert( li >= 0 && col >= 0 );
+		assert( trueVal.get() >= 0 );
+		assert( predictedVal.get() >=0 );
+
+		auto col = static_cast<size_t>( trueVal.get() );
+		auto li  = static_cast<size_t>( predictedVal.get() );
+
 		assert( li < _mat.size() && col < _mat.size() );
 		_mat[li][col]++;
 	}
@@ -823,9 +850,69 @@ struct ConfusionMatrix
 		}
 		return f;
 	}
-
-	std::vector<std::vector<uint>> _mat;
+	private:
+		double p_score( CM_Score scoreId, priv::CM_Counters ) const;
+	private:
+		std::vector<std::vector<uint>> _mat;
 };
+
+//---------------------------------------------------------------------
+/// Private, compute scores for both 2-class and multi-class confusion matrices
+double
+ConfusionMatrix::p_score( CM_Score scoreId, priv::CM_Counters cmc ) const
+{
+	auto TPR = cmc.tp / ( cmc.tp + cmc.fn );
+	auto TNR = cmc.tn / ( cmc.tn + cmc.fp );
+    switch( scoreId )
+    {
+        case CM_TPR:  scoreVal =  TPR; break;
+        case CM__TNR: scoreVal =  TNR; break;
+        case CM_ACC:  scoreVal = (cmc.tp + cmc.tn)/nbValues(); break;
+        case CM_BACC: scoreVal = (TPR + TNR ) / 2.; break;
+        default: assert(0);
+    }
+    return scoreVal;
+}
+//---------------------------------------------------------------------
+/// Used for 2-class situations
+double
+ConfusionMatrix::getScore( CM_Score scoreId ) const
+{
+    assert( nbValues() > 2 );
+    assert( nbClasses() == 2 );
+
+    const auto& TP = _mat[0][0];
+    const auto& FP = _mat[0][1];
+    const auto& FN = _mat[1][0];
+    const auto& TN = _mat[1][1];
+
+    return p_score( scoreId, priv::CM_Counters(TP,FP,TN,FN) );
+}
+//---------------------------------------------------------------------
+/// Used for multi-class situations
+double
+ConfusionMatrix::getScore( CM_Score scoreId, ClassVal cval ) const
+{
+    assert( nbValues() > 2 );
+    assert( nbClasses() > 2 );
+
+	assert( cval.get() >= 0 );
+	assert( cval.get() < nbClasses() );
+	size_t c = static_cast<size_t>( cval.get() );
+
+    const auto& TP = _mat[c][c];
+
+    const auto FP = std::accumulate( std::begin(_mat[c]), std::end(_mat[c]), 0. ) - TP;
+
+    auto FN = 0u;
+    for( size_t li=0; li<_mat.size(); li++ )
+		if( li != c )
+			FN += _mat[li][c];
+
+    const auto TN = nbValues() - TP - FN - FP;
+
+    return p_score( scoreId, priv::CM_Counters(TP,FP,TN,FN) );
+}
 //---------------------------------------------------------------------
 /// This one holds edges that each have a vector holding the index of datapoints.
 /// This is memory costly, but useless for classifying, so once it is trained, we can use the \ref DecisionTree class
@@ -1034,7 +1121,7 @@ getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
 #endif
 
 //---------------------------------------------------------------------
-/// Describes how a node holds different classes
+/// Describes how a node holds different classes, see getNodeContent()
 struct NodeContent
 {
 	double   GiniImpurity = 0.;
@@ -1451,7 +1538,7 @@ TrainingTree::classify( const DataPoint& point ) const
 	vertexT_t v = _initialVertex;   // initialize to first node
 //	COUT << point << '\n';
 	bool done = false;
-	uint iter = 0;
+//	uint iter = 0;
 	do
 	{
 //		COUT << "\n*iter=" << iter++ << " NODE " << _graph[v]._nodeId << std::endl;
@@ -1464,7 +1551,7 @@ TrainingTree::classify( const DataPoint& point ) const
 		else
 		{
 			auto attrIndex = _graph[v]._attrIndex;  // get attrib index that this node handles
-			auto atValue = point.attribVal( attrIndex );  // get data point value for this attribute
+			auto atValue   = point.attribVal( attrIndex );  // get data point value for this attribute
 //			COUT << "Considering attribute " << attrIndex << " with value " << atValue << std::endl;
 			assert( boost::out_degree( v, _graph ) == 2 );
 
@@ -1491,18 +1578,23 @@ Perf
 TrainingTree::classify( const DataSet& dataset ) const
 {
 	size_t nbErrors = 0;
-	ConfusionMatrix confmat( dataset.nbClasses() );
-	for( const auto& datapoint: dataset )
+	COUT << "dataset.nbClasses()=" << dataset.nbClasses()  << "\n";
+	auto nbClasses = dataset.nbClasses();
+	if( nbClasses>1 )
 	{
-		auto cla1 = datapoint.classVal();
-		auto cla2 = classify( datapoint );
-		if( cla1 != cla2 )
-			nbErrors++;
-		confmat.add( cla1, cla2 );
-	}
-	COUT << "Nb classification errors=" << nbErrors << " / " << dataset.size() << " datapoints\n";
-	std::cout << confmat;
-	return Perf( 1. * nbErrors/ dataset.size() );
+        ConfusionMatrix confmat( nbClasses );
+        for( const auto& datapoint: dataset )
+        {
+            auto cla1 = datapoint.classVal();
+            auto cla2 = classify( datapoint );
+            if( cla1 != cla2 )
+                nbErrors++;
+            confmat.add( cla1, cla2 );
+        }
+        COUT << "Nb classification errors=" << nbErrors << " / " << dataset.size() << " datapoints\n";
+        std::cout << confmat;
+    }
+       return Perf( 1. * nbErrors/ dataset.size() );
 }
 
 //---------------------------------------------------------------------

@@ -728,6 +728,7 @@ struct Perf
 };
 
 //---------------------------------------------------------------------
+// forward declaration, needed for the friend declaration below
 class ConfusionMatrix;
 // % % % % % % % % % % % % % %
 namespace priv {
@@ -736,7 +737,7 @@ namespace priv {
 /// see ConfusionMatrix::p_score()
 class CM_Counters
 {
-	friend class ConfusionMatrix;
+	friend class ::ConfusionMatrix;
 
 	CM_Counters( double TP, double FP, double TN, double FN )
 		: tp(TP),fp(FP),tn(TN), fn(FN)
@@ -863,10 +864,11 @@ ConfusionMatrix::p_score( CM_Score scoreId, priv::CM_Counters cmc ) const
 {
 	auto TPR = cmc.tp / ( cmc.tp + cmc.fn );
 	auto TNR = cmc.tn / ( cmc.tn + cmc.fp );
+	double scoreVal = 0.;
     switch( scoreId )
     {
         case CM_TPR:  scoreVal =  TPR; break;
-        case CM__TNR: scoreVal =  TNR; break;
+        case CM_TNR: scoreVal =  TNR; break;
         case CM_ACC:  scoreVal = (cmc.tp + cmc.tn)/nbValues(); break;
         case CM_BACC: scoreVal = (TPR + TNR ) / 2.; break;
         default: assert(0);
@@ -897,8 +899,8 @@ ConfusionMatrix::getScore( CM_Score scoreId, ClassVal cval ) const
     assert( nbClasses() > 2 );
 
 	assert( cval.get() >= 0 );
-	assert( cval.get() < nbClasses() );
 	size_t c = static_cast<size_t>( cval.get() );
+	assert( c < nbClasses() );
 
     const auto& TP = _mat[c][c];
 

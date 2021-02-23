@@ -14,14 +14,24 @@
 TEST_CASE( "confusion matrix", "[cmat]" )
 {
 // a sample confusion matrix (column: real class, lines, predicted class)
-	std::vector<std::vector<uint>> v{
+	std::vector<std::vector<uint>> v2{
+		{ 1 /* TP */, 2 /* FP */ },
+		{ 3 /* FN */, 4 /* TN */ }
+	};
+	ConfusionMatrix m2( v2 );
+	CHECK( m2.getScore( CM_TPR ) == 0.25 );
+	CHECK( m2.getScore( CM_TNR ) == 2./3 );
+	CHECK( m2.getScore( CM_ACC ) == 0.5 );
+
+// a sample confusion matrix (column: real class, lines, predicted class)
+	std::vector<std::vector<uint>> v4{
 		{ 1, 2, 3, 4 },
 		{ 0, 1, 2, 3 },
 		{ 0, 1, 5, 1 },
 		{ 8, 1, 2, 1 },
 	};
-	ConfusionMatrix m( v );
-	CHECK( m.getScore( CM_TPR, ClassVal(0) ) == 0. );
+	ConfusionMatrix m4( v4 );
+	CHECK( m4.getScore( CM_TPR, ClassVal(0) ) == 0. );
 }
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "maj vote", "[majv]" )

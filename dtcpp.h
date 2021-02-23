@@ -4,7 +4,15 @@
 for continuous data values (aka real numbers)
 \author S. Kramm - 2021
 
-- Limited to binary classification (a tree node has only two childs) but goal is to expand this to multiclass
+- home: https://github.com/skramm/dtcpp
+- multiclass
+- Limited to binary classification (a tree node has only two childs)
+- input datasets:
+    - csv style
+    - field separator can be defined, see Fparams
+    - class field MUST be the last one
+    - number of attributes set automatically
+    - classes may be integer values or string values, see Fparams
 - Does not handle missing values
 - using boost::graph to model the tree
 */
@@ -718,17 +726,42 @@ struct Perf
 	}
 
 };
+
 //---------------------------------------------------------------------
-/// Confusion Matrix TODO
+/// Performance score of classification, see ConfusionMatrix
+enum CM_Score
+{
+    CM_TPR,     ///< True Positive Rate
+    CM_TNR,     ///< True Negative Rate
+    CM_ACC      ///< Accuracy
+};
+//---------------------------------------------------------------------
+/// Confusion Matrix,
+/// handles both 2 class and multiclass, but usage will be different
+/**
+For 2- class problems, follows definitions from https://en.wikipedia.org/wiki/Confusion_matrix
+
+Usage:
+
+For 2-class problem, you get (for example) the "True Positive Rate" metric like this:
+\code
+    auto score = cmat.getScore( CM_TPR );
+\endcode
+
+For multiclass situations, you need to add for what class you are requesting this.
+\code
+    auto score = cmat.getScore( CM_TPR, ClassValue );
+\endcode
+*/
 struct ConfusionMatrix
 {
-	ConfusionMatrix( size_t nb ) // : _nbClasses( nb )
+	ConfusionMatrix( size_t nbClasses ) // : _nbClasses( nb )
 	{
-		assert( nb>1 );
-		_mat.resize( nb );
+		assert( nbClasses>1 );
+		_mat.resize( nbClasses );
 		for( auto& li: _mat )
 		{
-			li.resize( nb );
+			li.resize( nbClasses );
 			std::fill( li.begin(), li.end(), 0u );
 		}
 	}
@@ -737,10 +770,39 @@ struct ConfusionMatrix
 		for( auto& li: _mat )
 			std::fill( li.begin(), li.end(), 0u );
 	}
-	void add( ClassVal c1, ClassVal c2 )
+	size_t nbClasses() const
 	{
-		auto li = c1.get();
-		auto col = c2.get();
+        return _mat.size();
+	}
+    double getScore( CM_Score scoreId ) const
+    {
+        assert( nbValues() > 2 );
+        assert( nbClasses() == 2 );
+        double scoreVal = 0.;
+        const auto& TP = _mat[0][0];
+        const auto& FP = _mat[0][1];
+        const auto& FN = _mat[1][0];
+        const auto& TN = _mat[1][1];
+        switch( scoreId )
+        {
+            case CM_TPR: scoreVal = TP/(TP+FN); break;
+            case CM_TNR: scoreVal = TN/(TN+FP); break;
+            case CM_ACC: scoreVal = (TP+TN)/nbValues(); break;
+            default: assert(0);
+        }
+        return scoreVal;
+    }
+	size_t nbValues() const
+	{
+        size_t sum = 0u;
+		for( const auto& li: _mat )
+            sum += std::accumulate( li.begin(), li.end(), 0u );
+        return sum;
+	}
+	void add( ClassVal trueVal, ClassVal predictedVal )
+	{
+		auto col = trueVal.get();
+		auto li  = predictedVal.get();
 		assert( li >= 0 && col >= 0 );
 		assert( li < _mat.size() && col < _mat.size() );
 		_mat[li][col]++;
@@ -762,9 +824,7 @@ struct ConfusionMatrix
 		return f;
 	}
 
-//	size_t _nbClasses = 0;
 	std::vector<std::vector<uint>> _mat;
-
 };
 //---------------------------------------------------------------------
 /// This one holds edges that each have a vector holding the index of datapoints.

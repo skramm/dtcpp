@@ -3,6 +3,7 @@
 \brief Naive implementation attempt of a classifier using a Decision Tree
 for continuous data values (aka real numbers)
 \author S. Kramm - 2021
+\copyright GPLv3
 
 - home: https://github.com/skramm/dtcpp
 - multiclass
@@ -346,7 +347,7 @@ class DataSet
 //		template<typename U>
 		void addPoint( const DataPoint& dp )
 		{
-#ifdef ERRORS_ASSERT			
+#ifdef DTCPP_ERRORS_ASSERT
 			assert( dp.nbAttribs() == _nbAttribs );
 #else
 			if( dp.nbAttribs() != _nbAttribs )
@@ -354,14 +355,24 @@ class DataSet
 					"nb attrib: point=" + std::to_string( dp.nbAttribs() )
 					+ " dataset=" + std::to_string( _nbAttribs )
 				);
-#endif // ERRORS_ASSERT			
-			
+#endif // DTCPP_ERRORS_ASSERT
+
 			_data.push_back( dp );
 		}
 //		template<typename U>
 		DataPoint& getDataPoint( uint idx )
 		{
+#ifdef DTCPP_ERRORS_ASSERT
 			assert( idx < _data.size() );
+#else
+			if( idx >= _data.size() )
+				throw std::runtime_error(
+					"idx=" + std::to_string( idx )
+					+ " dataset size=" + std::to_string( _data.size() )
+				);
+
+#endif // DTCPP_ERRORS_ASSERT
+
 			return _data[idx];
 		}
 //		template<typename U>

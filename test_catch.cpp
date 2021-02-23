@@ -1,6 +1,7 @@
 /**
 \file
 \brief test program, needs Catch2: https://github.com/catchorg/Catch2
+\copyright GPLv3
 */
 
 
@@ -21,6 +22,10 @@ TEST_CASE( "dataset", "[dataset]" )
 	CHECK_THROWS( dataset.addPoint( DataPoint( std::vector<float>{ 1., 2. } ) ) );
 // this is ok
 	CHECK_NOTHROW( dataset.addPoint( DataPoint( std::vector<float>{ 1., 2., 3. } ) ) );
+	CHECK( dataset.nbClasses() == 0 );
+
+	CHECK_NOTHROW( dataset.addPoint( DataPoint( std::vector<float>{ 4., 2., 3. }, ClassVal(1) ) ) );
+	CHECK( dataset.nbClasses() == 1 );
 }
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "confusion matrix", "[cmat]" )
@@ -116,6 +121,5 @@ TEST_CASE( "removeDuplicates", "[RD]" )
 		CHECK( values.size() == 5 );
 		CHECK( values == std::vector<float>{1., 2., 2.1, 3., 4. } );
 	}
-
 }
 //-------------------------------------------------------------------------------------------

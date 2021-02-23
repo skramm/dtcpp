@@ -407,6 +407,7 @@ class DataSet
 //using DataSetd = DataSet<double>;
 
 //---------------------------------------------------------------------
+/// Returns nb of classes in the dataset, not considering the points without any class assigned
 uint
 DataSet::nbClasses() const
 {
@@ -671,6 +672,7 @@ getString( NodeType nt )
 	return std::string(s);
 }
 //---------------------------------------------------------------------
+# if 0
 /// A node of the tree
 /// \todo do some inheritance here.
 struct NodeC
@@ -681,7 +683,7 @@ struct NodeC
 	ClassVal _class = ClassVal(-1);        ///< (only for terminal nodes)
 	uint     depth = 0;         ///< depth of the node in the tree
 };
-
+#endif
 
 //---------------------------------------------------------------------
 /// A node of the training tree
@@ -801,12 +803,30 @@ class CM_Counters
 /// Performance score of classification, see ConfusionMatrix for definitions
 enum CM_Score
 {
-    CM_TPR      ///< True Positive Rate
+    CM_TPR=0    ///< True Positive Rate
     ,CM_TNR     ///< True Negative Rate
     ,CM_ACC     ///< Accuracy
     ,CM_BACC    ///< Balanced Accuracy
     ,CM_F1      ///< F1-score, see https://en.wikipedia.org/wiki/F-score
+
+    ,CM_SCORE_END
 };
+
+//---------------------------------------------------------------------
+std::string
+getString( CM_Score n )
+{
+	const char* s = nullptr;
+	switch( n )
+	{
+		case CM_TPR:  s="TPR";  break;
+		case CM_TNR:  s="TNR";  break;
+		case CM_ACC:  s="ACC";  break;
+		case CM_BACC: s="BACC"; break;
+		default: assert(0);
+	}
+	return std::string(s);
+}
 //---------------------------------------------------------------------
 /// Confusion Matrix,
 /// handles both 2 class and multiclass problems, but usage will be different

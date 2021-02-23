@@ -35,7 +35,7 @@ $(BIN_DIR)/%:$(OBJ_DIR)/%.o
 	$(CXX) -o $@ $< -s
 
 doc:
-	@doxygen Doxyfile
+	@doxygen Doxyfile 1>build/doxygen_stdout 2>build/doxygen_stderr
 	@xdg-open html/index.html
 
 test: build/bin/test_catch

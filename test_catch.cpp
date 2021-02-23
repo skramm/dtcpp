@@ -13,6 +13,16 @@
 using namespace dtcpp;
 
 //-------------------------------------------------------------------------------------------
+TEST_CASE( "dataset", "[dataset]" )
+{
+	DataSet dataset(3); // 3 attributes
+
+// cannot add a datapoint holding 2 values
+	CHECK_THROWS( dataset.addPoint( DataPoint( std::vector<float>{ 1., 2. } ) ) );
+// this is ok
+	CHECK_NOTHROW( dataset.addPoint( DataPoint( std::vector<float>{ 1., 2., 3. } ) ) );
+}
+//-------------------------------------------------------------------------------------------
 TEST_CASE( "confusion matrix", "[cmat]" )
 {
 // a sample confusion matrix (column: real class, lines, predicted class)
@@ -42,11 +52,11 @@ TEST_CASE( "maj vote", "[majv]" )
 
 	DataSet dataset(4); //  4 attributes
 
-	dataset.addDataPoint( DataPoint( std::vector<float>{ 1,4,9,2 }, 0 ) );
-	dataset.addDataPoint( DataPoint( std::vector<float>{ 7,8,9,1 }, 0 ) );
-	dataset.addDataPoint( DataPoint( std::vector<float>{ 4,6,5,1 }, 0 ) );
-	dataset.addDataPoint( DataPoint( std::vector<float>{ 8,8,5,2 }, 1 ) );
-	dataset.addDataPoint( DataPoint( std::vector<float>{ 7,8,5,9 }, 1 ) );
+	dataset.addPoint( DataPoint( std::vector<float>{ 1,4,9,2 }, 0 ) );
+	dataset.addPoint( DataPoint( std::vector<float>{ 7,8,9,1 }, 0 ) );
+	dataset.addPoint( DataPoint( std::vector<float>{ 4,6,5,1 }, 0 ) );
+	dataset.addPoint( DataPoint( std::vector<float>{ 8,8,5,2 }, 1 ) );
+	dataset.addPoint( DataPoint( std::vector<float>{ 7,8,5,9 }, 1 ) );
 
 	{
 		auto nc = getNodeContent( std::vector<uint>{0,1,2,3,4}, dataset );

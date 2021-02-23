@@ -208,11 +208,28 @@ class DataPoint
 /// Constructor from a vector of strings (used by file reader)
 		DataPoint( const std::vector<std::string>& v_string, ClassVal c )
 		{
-			assert( v_string.size() > 0 );              // at least one attribute and a class value
+			assert( v_string.size() > 0 );              // at least one attribute
 
 			for( size_t i=0; i<v_string.size(); i++ )
 				_attrValue.push_back( std::stof( v_string[i] ) );
 			_class = c;
+		}
+/// Constructor from a vector of floats and a class value
+		DataPoint( const std::vector<float>& v_val, ClassVal c )
+		{
+			assert( v_val.size() > 0 );              // at least one attribute
+
+			for( size_t i=0; i<v_val.size(); i++ )
+				_attrValue.push_back( v_val[i] );
+			_class = c;
+		}
+/// Constructor from a vector of floats and no class value
+		DataPoint( const std::vector<float>& v_val )
+		{
+			assert( v_val.size() > 0 );              // at least one attribute
+
+			for( size_t i=0; i<v_val.size(); i++ )
+				_attrValue.push_back( v_val[i] );
 		}
 
 		size_t nbAttribs() const
@@ -327,9 +344,18 @@ class DataSet
 		}
 
 //		template<typename U>
-		void addDataPoint( const DataPoint& dp )
+		void addPoint( const DataPoint& dp )
 		{
+#ifdef ERRORS_ASSERT			
 			assert( dp.nbAttribs() == _nbAttribs );
+#else
+			if( dp.nbAttribs() != _nbAttribs )
+				throw std::runtime_error(
+					"nb attrib: point=" + std::to_string( dp.nbAttribs() )
+					+ " dataset=" + std::to_string( _nbAttribs )
+				);
+#endif // ERRORS_ASSERT			
+			
 			_data.push_back( dp );
 		}
 //		template<typename U>
@@ -364,7 +390,6 @@ class DataSet
 	private:
 		size_t _nbAttribs = 0;
 		std::vector<DataPoint> _data;
-//		uint _nbClasses;
 //		std::vector<DataPoint<T>> _dataPoint;
 };
 //using DataSetf = DataSet<float>;
@@ -376,7 +401,8 @@ DataSet::nbClasses() const
 {
 	std::set<ClassVal> clset;
 	for( const auto& point: _data )
-		clset.insert( point.classVal() );
+		if( point.classVal().get() != -1 )
+			clset.insert( point.classVal() );
 
 	return clset.size();
 }
@@ -456,12 +482,12 @@ DataSet::getFolds( uint index, uint nbFolds ) const
 		if( i / nb == index )
 		{
 //			COUT << "adding pt " << i << " to test\n";
-			ds_test.addDataPoint( getDataPoint(i) );
+			ds_test.addPoint( getDataPoint(i) );
 		}
 		else
 		{
 //			COUT << "adding pt " << i << " to train\n";
-			ds_train.addDataPoint( getDataPoint(i) );
+			ds_train.addPoint( getDataPoint(i) );
 		}
 	}
 
@@ -705,6 +731,8 @@ using GraphC = boost::adjacency_list<
 we use the current node's vector as a reference (to avoid copying the whole vector).
 BUT: if we where using \c vectS, adding new nodes may invalidate the current vertex descriptor.
 Thus, we use \c listS
+\todo: actually, maybe we need to use ListS only for ONE of the two containers. Check BGL doc
+to see what these two template parameters are used for.
 */
 using GraphT = boost::adjacency_list<
 		boost::listS,  // boost::vecS,
@@ -715,10 +743,11 @@ using GraphT = boost::adjacency_list<
 	>;
 
 using vertexT_t = boost::graph_traits<GraphT>::vertex_descriptor;
-//using vertexC_t = boost::graph_traits<GraphC>::vertex_descriptor;
 
 //---------------------------------------------------------------------
 /// Classification performance (to be expanded)
+/// \deprecated
+/// \todo deprecate, useless !
 struct Perf
 {
 	Perf( float err ): errorRate(err) {}
@@ -739,6 +768,7 @@ class ConfusionMatrix;
 // % % % % % % % % % % % % % %
 namespace priv {
 // % % % % % % % % % % % % % %
+
 /// Private class, used to hold the counters extracted from the ConfusionMatrix,
 /// see ConfusionMatrix::p_score()
 class CM_Counters
@@ -764,6 +794,7 @@ enum CM_Score
     ,CM_TNR     ///< True Negative Rate
     ,CM_ACC     ///< Accuracy
     ,CM_BACC    ///< Balanced Accuracy
+    ,CM_F1      ///< F1-score, see https://en.wikipedia.org/wiki/F-score
 };
 //---------------------------------------------------------------------
 /// Confusion Matrix,
@@ -872,9 +903,10 @@ ConfusionMatrix::p_score( CM_Score scoreId, priv::CM_Counters cmc ) const
     switch( scoreId )
     {
         case CM_TPR:  scoreVal =  TPR; break;
-        case CM_TNR: scoreVal =  TNR; break;
+        case CM_TNR:  scoreVal =  TNR; break;
         case CM_ACC:  scoreVal = (cmc.tp + cmc.tn)/nbValues(); break;
         case CM_BACC: scoreVal = (TPR + TNR ) / 2.; break;
+        case CM_F1:   scoreVal = 2.* cmc.tp / ( 2.* cmc.tp + cmc.fp + cmc.fn ); break;
         default: assert(0);
     }
     return scoreVal;
@@ -1586,7 +1618,7 @@ TrainingTree::classify( const DataSet& dataset ) const
 	size_t nbErrors = 0;
 	COUT << "dataset.nbClasses()=" << dataset.nbClasses()  << "\n";
 	auto nbClasses = dataset.nbClasses();
-	if( nbClasses>1 )
+	if( nbClasses>1 )  // if 0 or 1 class, thent nothing to classify
 	{
         ConfusionMatrix confmat( nbClasses );
         for( const auto& datapoint: dataset )

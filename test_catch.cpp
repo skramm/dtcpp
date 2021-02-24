@@ -13,6 +13,7 @@
 
 using namespace dtcpp;
 
+
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "dataset", "[dataset]" )
 {
@@ -26,6 +27,15 @@ TEST_CASE( "dataset", "[dataset]" )
 
 	CHECK_NOTHROW( dataset.addPoint( DataPoint( std::vector<float>{ 4., 2., 3. }, ClassVal(1) ) ) );
 	CHECK( dataset.nbClasses() == 1 );
+
+	CHECK( dataset.size() == 2 );
+
+	CHECK( dataset.getClassCount( ClassVal(1) ) == 1 );
+	CHECK( dataset.getClassCount( ClassVal(-1) ) == 1 );
+
+	dataset.clear();
+	CHECK( dataset.size() == 0 );
+
 }
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "confusion matrix", "[cmat]" )

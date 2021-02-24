@@ -94,7 +94,8 @@ int main( int argc, const char** argv )
             auto p_data_subsets = dataset.getFolds( i, nbFolds );
             auto data_train = p_data_subsets.first;
             auto data_test  = p_data_subsets.second;
-
+			data_train.printInfo( std::cout );
+			data_test.printInfo( std::cout );
             tt.train( data_train );
             std::ostringstream oss;
             oss << "demo_" << i << ".dot";

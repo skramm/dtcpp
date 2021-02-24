@@ -183,6 +183,7 @@ struct Params
 	float removalCoeff = 0.05f;  ///< used to remove close attribute values when searching the best threshold. See removeDuplicates()
 	bool  verbose = true;        ///< to allow logging of some run-time details
 	bool  doFolding = false;
+	uint  nbFolds = 5;
 	uint  maxTreeDepth = 10;
 //	uint  initialVertexId = 1u;
 };
@@ -360,6 +361,11 @@ class DataSet
 #endif // DTCPP_ERRORS_ASSERT
 
 			_data.push_back( dp );
+
+			if( dp.classVal().get() >= 0 )
+				_classCount[dp.classVal()]++;
+			else
+				_nbNoClassPoints++;
 		}
 //		template<typename U>
 		DataPoint& getDataPoint( uint idx )
@@ -388,7 +394,12 @@ class DataSet
 		void print( std::ostream&, const std::vector<uint>& ) const;
 		void printInfo( std::ostream& ) const;
 
-		void clear() { _data.clear(); }
+		void clear()
+		{
+			_data.clear();
+			_classCount.clear();
+			_nbNoClassPoints = 0u;
+		}
 		std::pair<DataSet,DataSet> getFolds( uint i, uint nbFolds ) const;
 
 /// Shuffle the data (taken from https://stackoverflow.com/a/6926473/193789)
@@ -400,9 +411,22 @@ class DataSet
 		DatasetStats<T> computeStats() const;
 		uint nbClasses() const;
 
+		uint getClassCount( ClassVal v )
+		{
+			if( v.get() == -1 )
+				return _nbNoClassPoints;
+			return _classCount[v];
+		}
+
+//	private:
+//		void p_countClasses();
+
 	private:
-		size_t _nbAttribs = 0;
-		std::vector<DataPoint> _data;
+		size_t                  _nbAttribs = 0;
+		std::vector<DataPoint>  _data;
+		std::map<ClassVal,uint> _classCount;
+		uint                    _nbNoClassPoints = 0u;
+
 //		std::vector<DataPoint<T>> _dataPoint;
 };
 //using DataSetf = DataSet<float>;
@@ -413,12 +437,14 @@ class DataSet
 uint
 DataSet::nbClasses() const
 {
-	std::set<ClassVal> clset;
+/*	std::set<ClassVal> clset;
 	for( const auto& point: _data )
 		if( point.classVal().get() != -1 )
 			clset.insert( point.classVal() );
 
 	return clset.size();
+*/
+		return _classCount.size();
 }
 
 //---------------------------------------------------------------------
@@ -481,9 +507,10 @@ DataSet::computeStats() const
 	return dstats;
 }
 //---------------------------------------------------------------------
-/// Returns sub-datasets
+/// Returns subset of data
 /**
 If 100 pts and nbFolds=5, this will return 20 pts in \c ds_test and 80 pts in \c ds_train
+\todo FIX _classCount here !!!
 */
 std::pair<DataSet,DataSet>
 DataSet::getFolds( uint index, uint nbFolds ) const
@@ -505,12 +532,27 @@ DataSet::getFolds( uint index, uint nbFolds ) const
 		}
 	}
 
+//	ds_test.p_countClasses();
+//	ds_train.p_countClasses();
+
 	COUT << "ds_test #=" << ds_test.size()
 		<< " ds_train #=" << ds_train.size() << "\n";
 
 	return std::make_pair( ds_train, ds_test );
 }
 
+//---------------------------------------------------------------------
+#if 0
+void
+DataSet::p_countClasses()
+{
+	_classCount.clear();
+	for( const auto& pt: _data )
+	{
+		_classCount[pt.classVal()]++;
+	}
+}
+#endif
 //---------------------------------------------------------------------
 //template<typename T>
 bool
@@ -524,10 +566,9 @@ DataSet::load( std::string fname, const Fparams params )
 	}
 	clear();
 
-	std::map<std::string,uint> classMap;  // used only if classes are given as strings
+	std::map<std::string,uint> classStringMap;  // maps string to class Idx used only if classes are given as strings
 	uint classIndexCounter = 0;
 
-	std::map<uint,uint> classValues;
 	size_t nb_lines     = 0;
 	size_t nb_empty     = 0;
 	size_t nb_comment   = 0;
@@ -561,16 +602,23 @@ DataSet::load( std::string fname, const Fparams params )
 					int classIndex = 0;
 					auto cla = v_tok.back();
 					if( !params.classAsString )
+					{
 						classIndex = std::stoi( cla );
+						if( classIndex < 0 )
+							throw std::runtime_error( "line " + temp + ": invalid value for class, can't be <0" );
+					}
 					else
 					{
-						auto it = classMap.find( cla );
-						if( it == classMap.end() )  // not there
-							classMap[ cla ] = classIndexCounter++; // new class
+						if( classStringMap.find( cla ) == classStringMap.end() )  // if not there, then
+						{
+							classIndex            = classIndexCounter;
+							classStringMap[ cla ] = classIndexCounter;             // new class, add it
+							classIndexCounter++;
+						}
 						else
-							classIndex = classMap[ cla ];
+							classIndex = classStringMap[ cla ];
 					}
-					classValues[classIndex]++;
+					_classCount[ ClassVal(classIndex) ]++;
 	//				v_tok.resize( v_tok.size()-1 );
 					v_tok.erase( v_tok.end()-1 );   // remove last element (class)
 					_data.push_back( DataPoint( v_tok, ClassVal(classIndex) ) );
@@ -590,25 +638,20 @@ DataSet::load( std::string fname, const Fparams params )
 		<< "\n  - nb lines=" << nb_lines
 		<< "\n  - nb empty=" << nb_empty
 		<< "\n  - nb comment=" << nb_comment
-		<< "\n  - nb classes=" << classValues.size()
-		<< "\n  - nb classes 2=" << nbClasses()
-		<< "\nClasses frequency:\n";
-	for( const auto& cval: classValues )
-		std::cout << cval.first << ": "
-			<< cval.second
-			<< " (" << 100. * cval.second/size()
-			<< " %)\n";
+//		<< "\n  - nb classes=" << classValues.size()
+		<< "\n  - nb classes=" << nbClasses()
+		<< '\n';
 #endif
 
 	if( params.dataFilesHoldsClass )
 	{
-		std::ofstream f( "histogram.dat" );
-		if( f.is_open() )
+		std::ofstream fhisto( "histogram.dat" );
+		if( fhisto.is_open() )
 		{
-			f << "# data class histogram file for input file '" <<  fname
+			fhisto << "# data class histogram file for input file '" <<  fname
 				<< "'\n# class_index occurence_count percentage\n";
-			for( const auto& cval: classValues )
-				std::cout << cval.first << " "
+			for( const auto& cval: _classCount )
+				fhisto << cval.first << " "
 					<< cval.second << " " << 100. * cval.second/size()
 					<< '\n';
 		}
@@ -621,10 +664,19 @@ DataSet::load( std::string fname, const Fparams params )
 void
 DataSet::printInfo( std::ostream& f ) const
 {
-	f << "Dataset:\n # points=" << size()
-		<< "\n # attributes="   << nbAttribs()
-		<< "\n # classes="      << nbClasses()
-		<< '\n';
+
+	f << "Dataset:\n # points="    << size()
+		<< "\n # attributes="      << nbAttribs()
+		<< "\n # classes="         << nbClasses()
+		<< "\n # no class points=" << _nbNoClassPoints
+		<< "\nClasses frequency:\n";
+	for( const auto& cval: _classCount )
+		std::cout << cval.first << ": "
+			<< cval.second
+			<< " (" << std::setw(4) << 100. * cval.second/size()
+			<< " %)\n";
+
+	f << '\n';
 }
 //---------------------------------------------------------------------
 //template<typename T>
@@ -931,30 +983,31 @@ namespace priv {
 void printLine( std::ostream& f, uint w, uint n )
 {
 	n++;
+	f << '|';
 	for( uint i=0; i<w*n; i++ )
 		f << '-';
-	f << '\n';
+	f <<"|\n";
 }
 }
 //---------------------------------------------------------------------
 std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
 {
 	int w = 5;
-	f << "ConfusionMatrix:\n     True class\n     ";
+	f << "ConfusionMatrix:\nPredicted \\  True class =>\n ||    ";
 //		<< std::setfill('X') << std::setw(5);
 	for( size_t i=0; i<cm._mat.size(); i++ )
 		f << std::setw(w) << i << " ";
-	f << "\n     ";
+	f << "\n \\/ ";
 	priv::printLine( f, w, cm._mat.size() );
 
 	for( size_t i=0; i<cm._mat.size(); i++ )
 	{
-		f << i << " | ";
+		f << std::setw(3) << i << " | ";
 		for( const auto& elem: cm._mat[i] )
 			f << std::setw(w) << elem << ' ';
 		f << "|\n";
 	}
-	f << "   ";
+	f << "    ";
 	priv::printLine( f, w, cm._mat.size() );
 	return f;
 }

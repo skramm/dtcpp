@@ -421,7 +421,7 @@ class DataSet
 		{
 			if( val == ClassVal(-1) )
 				return _nbNoClassPoints;
-			if( _classCount.find( val ) != _classCount.end() )
+			if( _classCount.count( val ) )
 				return _classCount.at(val);
 			return 0u;
 		}
@@ -796,23 +796,6 @@ using GraphT = boost::adjacency_list<
 using vertexT_t = boost::graph_traits<GraphT>::vertex_descriptor;
 
 //---------------------------------------------------------------------
-/// Classification performance (to be expanded)
-/// \deprecated
-/// \todo deprecate, useless !
-struct Perf
-{
-	Perf( float err ): errorRate(err) {}
-
-	float errorRate = 0.f;
-	friend std::ostream& operator << ( std::ostream& f, const Perf& p )
-	{
-		f << "Perf: errorRate=" << p.errorRate
-			<< "\n";
-		return f;
-	}
-};
-
-//---------------------------------------------------------------------
 // forward declaration, needed for the friend declaration below
 class ConfusionMatrix;
 
@@ -861,6 +844,7 @@ getString( CM_Score n )
 		case CM_TNR:  s="TNR";  break;
 		case CM_ACC:  s="ACC";  break;
 		case CM_BACC: s="BACC"; break;
+		case CM_F1:   s="F1";   break;
 		default: assert(0);
 	}
 	return std::string(s);
@@ -943,6 +927,7 @@ struct ConfusionMatrix
 		_mat[li][col]++;
 	}
 	friend std::ostream& operator << ( std::ostream&, const ConfusionMatrix& );
+	void printAllScores( std::ostream&, const char* msg=0 ) const;
 
 	private:
 		double p_score( CM_Score scoreId, priv::CM_Counters ) const;
@@ -965,7 +950,7 @@ void printLine( std::ostream& f, uint w, uint n )
 std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
 {
 	int w = 5;
-	f << "ConfusionMatrix:\nPredicted \\  True class =>\n ||    ";
+	f << "ConfusionMatrix:\nPredicted \\ True class =>\n ||   ";
 //		<< std::setfill('X') << std::setw(5);
 	for( size_t i=0; i<cm._mat.size(); i++ )
 		f << std::setw(w) << i << " ";
@@ -1008,7 +993,7 @@ ConfusionMatrix::p_score( CM_Score scoreId, priv::CM_Counters cmc ) const
 double
 ConfusionMatrix::getScore( CM_Score scoreId ) const
 {
-    assert( nbValues() > 2 );
+    assert( nbValues() > 1 );
     assert( nbClasses() == 2 );
 
     const auto& TP = _mat[0][0];
@@ -1044,6 +1029,36 @@ ConfusionMatrix::getScore( CM_Score scoreId, ClassVal cval ) const
     return p_score( scoreId, priv::CM_Counters(TP,FP,TN,FN) );
 }
 //---------------------------------------------------------------------
+void
+ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
+{
+	f << "Performance scores";
+	if( msg )
+		f << " - " << msg;
+	f << '\n';
+	if( nbClasses() > 2 )
+	{
+		for( auto c=0; c<nbClasses(); c++ )
+		{
+			f << " * class " << c << ":\n";
+			for( auto i=0; i<CM_SCORE_END; i++ )
+			{
+				auto eni = static_cast<CM_Score>(i);
+				f << "   - " << getString( eni ) << " = " << getScore( eni, ClassVal(c) ) << '\n';
+			}
+		}
+	}
+	else
+	{
+
+		for( auto i=0; i<CM_SCORE_END; i++ )
+		{
+			auto eni = static_cast<CM_Score>(i);
+			f << " - " << getString( eni ) << " = " << getScore( eni ) << '\n';
+		}
+	}
+}
+//---------------------------------------------------------------------
 /// This one holds edges that each have a vector holding the index of datapoints.
 /// This is memory costly, but useless for classifying, so once it is trained, we can use the \ref DecisionTree class
 /// \todo unify by templating the type of edges
@@ -1066,8 +1081,8 @@ class TrainingTree
 		}
 
 		void     train( const DataSet&, Params params=Params() );
-		Perf     classify( const DataSet& ) const;
-		ClassVal classify( const DataPoint& ) const;
+		ConfusionMatrix classify( const DataSet& ) const;
+		ClassVal        classify( const DataPoint& ) const;
 		void     printDot( std::ostream& ) const;
 		void     printDot( std::string fname ) const;
 		void     printInfo( std::ostream& ) const;
@@ -1709,26 +1724,26 @@ TrainingTree::classify( const DataPoint& point ) const
 
 //---------------------------------------------------------------------
 /// Classify \c dataset and returns performance score
-Perf
+ConfusionMatrix
 TrainingTree::classify( const DataSet& dataset ) const
 {
 	size_t nbErrors = 0;
 
-	if( _nbClasses>1 )  // if 0 or 1 class, thent nothing to classify
+	if( _nbClasses>1 )  // if 0 or 1 class, then nothing to classify
 	{
         ConfusionMatrix confmat( _nbClasses );
         for( const auto& datapoint: dataset )
         {
             auto cla1 = datapoint.classVal();
             auto cla2 = classify( datapoint );
-            if( cla1 != cla2 )
-                nbErrors++;
-            confmat.add( cla1, cla2 );
+            if( cla1 != ClassVal(-1) )
+				confmat.add( cla1, cla2 );
         }
-        COUT << "Nb classification errors=" << nbErrors << " / " << dataset.size() << " datapoints\n";
-        std::cout << confmat;
+//        std::cout << confmat;
+        return confmat;
     }
-       return Perf( 1. * nbErrors/ dataset.size() );
+
+	return ConfusionMatrix(2); // empty matrix
 }
 
 } // namespace dtcpp

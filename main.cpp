@@ -78,10 +78,11 @@ int main( int argc, const char** argv )
     {
 		TrainingTree tt( nbClasses );
         tt.train( dataset );
-        auto perf = tt.classify( dataset );
-        std::cout << "Score=" << perf << "\n";
+        auto cm = tt.classify( dataset );
+        std::cout << "Confusion Matrix:" << cm << "\n";
         tt.printInfo( std::cout );
         tt.printDot( "demo.dot" );
+        cm.printAllScores( std::cout );
     }
     else
     {
@@ -100,12 +101,13 @@ int main( int argc, const char** argv )
             std::ostringstream oss;
             oss << "demo_" << i << ".dot";
             tt.printDot( oss.str() );
-            auto perf_t = tt.classify( data_train );
-            auto perf_c = tt.classify( data_test );
-            std::cout << "\n* Fold " << i+1 << "/" << nbFolds
-				<< "\n- Training score=" << perf_t
-				<< "\n- Test score=" << perf_c
-				<< "\n";
+            auto cm_train = tt.classify( data_train );
+            auto cm_test  = tt.classify( data_test );
+            std::cout << "\n* Fold " << i+1 << "/" << nbFolds << '\n';
+			std::cout << "Confusion Matrix (train):" << cm_train << "\n";
+			cm_train.printAllScores( std::cout, "train" );
+			std::cout << "Confusion Matrix (test):"  << cm_test << "\n";
+			cm_test.printAllScores( std::cout, "test" );
         }
     }
 }

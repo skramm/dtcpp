@@ -32,7 +32,7 @@ TEST_CASE( "dataset", "[dataset]" )
 	CHECK( dataset.size() == 2 );
 
 	CHECK( dataset.getClassCount( ClassVal(1) ) == 1 );
-	CHECK( dataset.getClassCount( ClassVal(-1) ) == 1 );
+	CHECK( dataset.getClassCount( ClassVal(-1) ) == 1 );  // 1 point with no class
 
 	for( int i=0; i<11; i++ )
 		dataset.addPoint( DataPoint( std::vector<float>{ 4., 2., 3. }, ClassVal(4) ) );
@@ -40,7 +40,7 @@ TEST_CASE( "dataset", "[dataset]" )
 	CHECK( dataset.size() == 13 );
 	CHECK( dataset.getClassCount( ClassVal(4)  ) == 11 );
 	CHECK( dataset.getClassCount( ClassVal(1)  ) ==  1 );
-	CHECK( dataset.getClassCount( ClassVal(-1) ) ==  1 );
+	CHECK( dataset.getClassCount( ClassVal(-1) ) ==  1 );  // still 1 point with no class
 
 	{
 		auto subsets= dataset.getFolds( 0, 2 );
@@ -51,6 +51,14 @@ TEST_CASE( "dataset", "[dataset]" )
 		CHECK( ds_train.size() == 7 );  // the remaining points
 		CHECK( ds_test.nbClasses() == 2 ); // hold 2 classes: 1 and 4
 		CHECK( ds_train.nbClasses() == 1 ); // holds only class 4
+
+		CHECK( ds_test.getClassCount(  ClassVal(-1) ) == 1 );
+		CHECK( ds_test.getClassCount(  ClassVal( 1) ) == 1 );
+		CHECK( ds_test.getClassCount(  ClassVal( 4) ) == 4 );
+
+		CHECK( ds_train.getClassCount( ClassVal( -1) ) == 0 );
+		CHECK( ds_train.getClassCount( ClassVal(  1) ) == 0 );
+		CHECK( ds_train.getClassCount( ClassVal(  4) ) == 7 );
 	}
 	{
 		auto subsets= dataset.getFolds( 0, 3 );

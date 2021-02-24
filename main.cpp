@@ -25,15 +25,8 @@ int main( int argc, const char** argv )
 // optional arg: -sep X => X used as datafile field separator
     auto sepcl = cmdl("sep").str();
     if( !sepcl.empty() )
-    {
-        std::cout << " - using '" << sepcl << "' as datafile field separator\n";
-        std::cout << " - size '" << sepcl.size() << "\n";
-//        if( sepcl.size() != 3 )
-//			throw std::runtime_error( "invalid string given, character needs to be quoted" );
         fparams.sep = sepcl[0];
-    }
-    else
-        std::cout << "NO sep !!!\n";
+	std::cout << " - using '" << fparams.sep << "' as datafile field separator\n";
 
 
 // optional arg: -cs => the class value in the datafile is given as a string value

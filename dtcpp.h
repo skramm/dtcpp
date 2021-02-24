@@ -1119,6 +1119,7 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 {
 //	START;
 //	COUT << "nb out edges=" << boost::out_degree( v, graph ) << "\n";
+	std::cout.precision(4);
 	for( auto pit=boost::out_edges(v, graph); pit.first != pit.second; pit.first++ )
 	{
 		auto target = boost::target( *pit.first, graph );
@@ -1130,11 +1131,11 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 			f << "attr=" << graph[target]._attrIndex
 				<< " thres=" << graph[target]._threshold;
 		else
-			f << "class=" << graph[target]._class
+			f << "C" << graph[target]._class
 				<< " GI=" << graph[target].giniImpurity;
 
-		f << "\\ndepth=" << graph[target].depth
-			<< " #=" << graph[target].v_Idx.size()
+		f //<< "\\ndepth=" << graph[target].depth
+			<< "\n#=" << graph[target].v_Idx.size()
 			<< "\"";
 		switch( graph[target]._type )
 		{
@@ -1422,7 +1423,7 @@ computeBestThreshold(
 )
 {
 	START;
-//	COUT << "atIdx=" << atIdx << " nb pts=" << v_dpidx.size() << '\n';
+	COUT << "Searching for atIdx=" << atIdx << " nb pts=" << v_dpidx.size() << '\n';
 
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
 
@@ -1502,6 +1503,58 @@ computeBestThreshold(
 	);
 }
 //---------------------------------------------------------------------
+/// Wrapper around a map holding a bool for each attribute index.
+/// Used to check if an attribute has been already used or not.
+/**
+ * Benefit: has automatic initialization
+*/
+struct AttribMap
+{
+	private:
+		std::map<uint,bool> _attribMap;
+	public:
+		AttribMap( uint nbAttribs )
+		{
+			for( uint i=0; i<nbAttribs; i++ )
+				_attribMap[i] = false;
+		}
+/*		std::vector<uint> getUnusedAttribs() const
+		{
+			std::vector<uint> vout;
+			for( auto elem: _attribMap )
+				if( elem.second == false )
+					vout.push_back(elem.first);
+			return vout;
+		}*/
+		const std::map<uint,bool>& getMap() const
+		{
+			return _attribMap;
+		}
+/// Set attribute \c idx as used, so we will not use it again
+/// \todo maybe add some checking here...
+		void setAsUsed( uint idx )
+		{
+			_attribMap[idx] = true;
+		}
+		const std::map<uint,bool>::const_iterator begin() const
+		{
+			return std::begin( _attribMap );
+		}
+		const std::map<uint,bool>::const_iterator end() const
+		{
+			return std::end( _attribMap );
+		}
+/// Returns number of unused attributes
+		uint nbUnusedAttribs() const
+		{
+			uint c=0;
+			for( const auto& elem: _attribMap )
+				if( elem.second == false )
+					c++;
+			return c;
+		}
+};
+//---------------------------------------------------------------------
 /// Finds the best attributes to use, considering the data points of the current node
 /// and compute threshold on that attribute so that the two classes are separated at best.
 /**
@@ -1513,16 +1566,20 @@ AttributeData
 findBestAttribute(
 	const std::vector<uint>& vIdx,   ///< indexes of data points we need to consider
 	const DataSet&           data,   ///< whole dataset
-	const Params&            params  ///< parameters
+	const Params&            params, ///< parameters
+	const AttribMap&         atMap   ///< Search will be limited to the attributes defined here
 )
 {
 	START;
+	assert( atMap.nbUnusedAttribs() != 0 );
+
 	auto giniCoeff = getGiniImpurity( vIdx, data );
 
 // step 1 - compute best IG/threshold for each attribute, only for the considered points
 	std::vector<AttributeData> v_IG;
-	for( uint atIdx=0; atIdx<data.nbAttribs(); atIdx++ )
-		v_IG.push_back( computeBestThreshold( atIdx, vIdx, data, giniCoeff.first, params ) );
+	for( const auto atIdx: atMap.getMap() )
+		if( atIdx.second == false )
+			v_IG.push_back( computeBestThreshold( atIdx.first, vIdx, data, giniCoeff.first, params ) );
 
 // step 3 - get the one with max gain value
 	auto it_mval = std::max_element(
@@ -1587,22 +1644,39 @@ splitNode(
 		return;
 	}
 
-// step 2 - find the best attribute to use to split the data, considering the data points of the current node
-	auto bestAttrib = findBestAttribute( vIdx, data, params );
-	auto attribIdx  = bestAttrib._atIndex;
-	auto threshold  = bestAttrib._threshold;
-	COUT << "best attrib:" << bestAttrib << "\n";
-
-
-// before splitting, make sure that one of the childs will not have an insufficient number of points
-	auto n1= bestAttrib._nbPtsLessThan;
-	auto n2 = vIdx.size() - n1;
-	if( n1 < params.minNbPoints || n2 < params.minNbPoints )
+	AttribMap aMap( data.nbAttribs() );
+	AttributeData bestAttrib;
+	bool done = false;
+	do
 	{
-		LOG << "not enough points if splitting: n1=" << n1 << " n2=" << n2 << ", STOP\n";
-		s_recDepth--;
-		return;
+
+	// step 2 - find the best attribute to use to split the data, considering the data points of the current node
+		bestAttrib = findBestAttribute( vIdx, data, params, aMap );
+		COUT << "best attrib:" << bestAttrib << "\n";
+
+		aMap.setAsUsed( bestAttrib._atIndex );
+	// before splitting, make sure that one of the childs will not have an insufficient number of points
+		auto n1= bestAttrib._nbPtsLessThan;
+		auto n2 = vIdx.size() - n1;
+		if( n1 < params.minNbPoints || n2 < params.minNbPoints )
+		{
+			LOG << "not enough points if splitting: n1=" << n1 << " n2=" << n2 << ", trying next attribute\n";
+
+			if( aMap.nbUnusedAttribs() == 0 )
+			{
+				LOG << "no more attributes to try, STOP\n";
+				s_recDepth--;
+				return;
+			}
+		}
+		else
+			done = true;
 	}
+	while( !done );
+
+	auto attribIdx = bestAttrib._atIndex;
+	auto threshold = bestAttrib._threshold;
+
 //
 // !!! from here, a split will occur !!!
 //
@@ -1727,8 +1801,6 @@ TrainingTree::classify( const DataPoint& point ) const
 ConfusionMatrix
 TrainingTree::classify( const DataSet& dataset ) const
 {
-	size_t nbErrors = 0;
-
 	if( _nbClasses>1 )  // if 0 or 1 class, then nothing to classify
 	{
         ConfusionMatrix confmat( _nbClasses );

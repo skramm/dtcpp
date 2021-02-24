@@ -34,9 +34,12 @@ TEST_CASE( "dataset", "[dataset]" )
 	CHECK( dataset.getClassCount( ClassVal(1) ) == 1 );
 	CHECK( dataset.getClassCount( ClassVal(-1) ) == 1 );  // 1 point with no class
 
+	CHECK( dataset.nbClasses() == 1 );
+
 	for( int i=0; i<11; i++ )
 		dataset.addPoint( DataPoint( std::vector<float>{ 4., 2., 3. }, ClassVal(4) ) );
 
+	CHECK( dataset.nbClasses() == 2 );
 	CHECK( dataset.size() == 13 );
 	CHECK( dataset.getClassCount( ClassVal(4)  ) == 11 );
 	CHECK( dataset.getClassCount( ClassVal(1)  ) ==  1 );
@@ -56,9 +59,9 @@ TEST_CASE( "dataset", "[dataset]" )
 		CHECK( ds_test.getClassCount(  ClassVal( 1) ) == 1 );
 		CHECK( ds_test.getClassCount(  ClassVal( 4) ) == 4 );
 
-		CHECK( ds_train.getClassCount( ClassVal( -1) ) == 0 );
-		CHECK( ds_train.getClassCount( ClassVal(  1) ) == 0 );
-		CHECK( ds_train.getClassCount( ClassVal(  4) ) == 7 );
+		CHECK( ds_train.getClassCount( ClassVal(-1) ) == 0 );
+		CHECK( ds_train.getClassCount( ClassVal( 1) ) == 0 );
+		CHECK( ds_train.getClassCount( ClassVal( 4) ) == 7 );
 	}
 	{
 		auto subsets= dataset.getFolds( 0, 3 );
@@ -69,6 +72,14 @@ TEST_CASE( "dataset", "[dataset]" )
 		CHECK( ds_train.size() == 9 );  // the remaining points
 		CHECK( ds_test.nbClasses() == 2 ); // hold 2 classes: 1 and 4
 		CHECK( ds_train.nbClasses() == 1 ); // holds only class 4
+
+		CHECK( ds_test.getClassCount(  ClassVal(-1) ) == 1 );
+		CHECK( ds_test.getClassCount(  ClassVal( 1) ) == 1 );
+		CHECK( ds_test.getClassCount(  ClassVal( 4) ) == 2 );
+
+		CHECK( ds_train.getClassCount( ClassVal(-1) ) == 0 );
+		CHECK( ds_train.getClassCount( ClassVal( 1) ) == 0 );
+		CHECK( ds_train.getClassCount( ClassVal( 4) ) == 9 );
 	}
 	{
 		auto subsets= dataset.getFolds( 0, 4 );
@@ -79,6 +90,14 @@ TEST_CASE( "dataset", "[dataset]" )
 		CHECK( ds_train.size() == 10 );  // the remaining points
 		CHECK( ds_test.nbClasses() == 2 ); // hold 2 classes: 1 and 4
 		CHECK( ds_train.nbClasses() == 1 ); // holds only class 4
+
+		CHECK( ds_test.getClassCount(  ClassVal(-1) ) == 1 );
+		CHECK( ds_test.getClassCount(  ClassVal( 1) ) == 1 );
+		CHECK( ds_test.getClassCount(  ClassVal( 4) ) == 1 );
+
+		CHECK( ds_train.getClassCount( ClassVal(-1) ) == 0 );
+		CHECK( ds_train.getClassCount( ClassVal( 1) ) == 0 );
+		CHECK( ds_train.getClassCount( ClassVal( 4) ) == 10 );
 	}
 
 	dataset.clear();

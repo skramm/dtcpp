@@ -410,17 +410,20 @@ class DataSet
 		template<typename T>
 		DatasetStats<T> computeStats() const;
 
-/// Returns nb of classes in the dataset, not considering the points without any class assigned
+/// Returns nb of classes in the dataset, \b NOT considering the points without any class assigned
 		uint nbClasses() const
 		{
 			return _classCount.size();
 		}
 
-		uint getClassCount( ClassVal v ) const
+/// Returns the number of points with class \c val (or number of non-assigned points if \c val=-1)
+		uint getClassCount( ClassVal val ) const
 		{
-			if( v.get() == -1 )
+			if( val == ClassVal(-1) )
 				return _nbNoClassPoints;
-			return _classCount.at(v);
+			if( _classCount.find( val ) != _classCount.end() )
+				return _classCount.at(val);
+			return 0u;
 		}
 
 	private:

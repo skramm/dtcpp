@@ -11,6 +11,7 @@
 #define TESTMODE
 #include "dtcpp.h"
 
+#define DEBUG
 using namespace dtcpp;
 
 
@@ -32,6 +33,45 @@ TEST_CASE( "dataset", "[dataset]" )
 
 	CHECK( dataset.getClassCount( ClassVal(1) ) == 1 );
 	CHECK( dataset.getClassCount( ClassVal(-1) ) == 1 );
+
+	for( int i=0; i<11; i++ )
+		dataset.addPoint( DataPoint( std::vector<float>{ 4., 2., 3. }, ClassVal(4) ) );
+
+	CHECK( dataset.size() == 13 );
+	CHECK( dataset.getClassCount( ClassVal(4)  ) == 11 );
+	CHECK( dataset.getClassCount( ClassVal(1)  ) ==  1 );
+	CHECK( dataset.getClassCount( ClassVal(-1) ) ==  1 );
+
+	{
+		auto subsets= dataset.getFolds( 0, 2 );
+		const auto& ds_train = subsets.first;
+		const auto& ds_test  = subsets.second;
+
+		CHECK( ds_test.size() == 6 );  // because 13 pts / 2 folds = 6
+		CHECK( ds_train.size() == 7 );  // the remaining points
+		CHECK( ds_test.nbClasses() == 2 ); // hold 2 classes: 1 and 4
+		CHECK( ds_train.nbClasses() == 1 ); // holds only class 4
+	}
+	{
+		auto subsets= dataset.getFolds( 0, 3 );
+		const auto& ds_train = subsets.first;
+		const auto& ds_test  = subsets.second;
+
+		CHECK( ds_test.size() == 4 );  // because 13 pts / 3 folds = 4
+		CHECK( ds_train.size() == 9 );  // the remaining points
+		CHECK( ds_test.nbClasses() == 2 ); // hold 2 classes: 1 and 4
+		CHECK( ds_train.nbClasses() == 1 ); // holds only class 4
+	}
+	{
+		auto subsets= dataset.getFolds( 0, 4 );
+		const auto& ds_train = subsets.first;
+		const auto& ds_test  = subsets.second;
+
+		CHECK( ds_test.size() == 3 );  // because 13 pts / 4 folds = 3
+		CHECK( ds_train.size() == 10 );  // the remaining points
+		CHECK( ds_test.nbClasses() == 2 ); // hold 2 classes: 1 and 4
+		CHECK( ds_train.nbClasses() == 1 ); // holds only class 4
+	}
 
 	dataset.clear();
 	CHECK( dataset.size() == 0 );

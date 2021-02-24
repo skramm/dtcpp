@@ -409,43 +409,29 @@ class DataSet
 		}
 		template<typename T>
 		DatasetStats<T> computeStats() const;
-		uint nbClasses() const;
 
-		uint getClassCount( ClassVal v )
+/// Returns nb of classes in the dataset, not considering the points without any class assigned
+		uint nbClasses() const
+		{
+			return _classCount.size();
+		}
+
+		uint getClassCount( ClassVal v ) const
 		{
 			if( v.get() == -1 )
 				return _nbNoClassPoints;
-			return _classCount[v];
+			return _classCount.at(v);
 		}
-
-//	private:
-//		void p_countClasses();
 
 	private:
 		size_t                  _nbAttribs = 0;
 		std::vector<DataPoint>  _data;
 		std::map<ClassVal,uint> _classCount;
 		uint                    _nbNoClassPoints = 0u;
-
-//		std::vector<DataPoint<T>> _dataPoint;
 };
 //using DataSetf = DataSet<float>;
 //using DataSetd = DataSet<double>;
 
-//---------------------------------------------------------------------
-/// Returns nb of classes in the dataset, not considering the points without any class assigned
-uint
-DataSet::nbClasses() const
-{
-/*	std::set<ClassVal> clset;
-	for( const auto& point: _data )
-		if( point.classVal().get() != -1 )
-			clset.insert( point.classVal() );
-
-	return clset.size();
-*/
-		return _classCount.size();
-}
 
 //---------------------------------------------------------------------
 /// Compute statistics of the dataset, attributes by attribute.
@@ -507,10 +493,14 @@ DataSet::computeStats() const
 	return dstats;
 }
 //---------------------------------------------------------------------
-/// Returns subset of data
+/// Returns a pair of two subsets of the data, first is the training data, second is the test data
 /**
 If 100 pts and nbFolds=5, this will return 20 pts in \c ds_test and 80 pts in \c ds_train
-\todo FIX _classCount here !!!
+
+If the \f$ nbPts/nbFolds \f$  is not an integer value, then the test set will hold \f$ nbPts/nbFolds \f$ points
+and the training set will hold the rest of the points.
+
+The \c index defines which fraction of the points are returned in the test set
 */
 std::pair<DataSet,DataSet>
 DataSet::getFolds( uint index, uint nbFolds ) const
@@ -521,19 +511,10 @@ DataSet::getFolds( uint index, uint nbFolds ) const
 	for( uint i=0; i<size(); i++ )
 	{
 		if( i / nb == index )
-		{
-//			COUT << "adding pt " << i << " to test\n";
 			ds_test.addPoint( getDataPoint(i) );
-		}
 		else
-		{
-//			COUT << "adding pt " << i << " to train\n";
 			ds_train.addPoint( getDataPoint(i) );
-		}
 	}
-
-//	ds_test.p_countClasses();
-//	ds_train.p_countClasses();
 
 	COUT << "ds_test #=" << ds_test.size()
 		<< " ds_train #=" << ds_train.size() << "\n";
@@ -541,18 +522,6 @@ DataSet::getFolds( uint index, uint nbFolds ) const
 	return std::make_pair( ds_train, ds_test );
 }
 
-//---------------------------------------------------------------------
-#if 0
-void
-DataSet::p_countClasses()
-{
-	_classCount.clear();
-	for( const auto& pt: _data )
-	{
-		_classCount[pt.classVal()]++;
-	}
-}
-#endif
 //---------------------------------------------------------------------
 //template<typename T>
 bool

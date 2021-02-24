@@ -27,8 +27,14 @@ int main( int argc, const char** argv )
     if( !sepcl.empty() )
     {
         std::cout << " - using '" << sepcl << "' as datafile field separator\n";
+        std::cout << " - size '" << sepcl.size() << "\n";
+//        if( sepcl.size() != 3 )
+//			throw std::runtime_error( "invalid string given, character needs to be quoted" );
         fparams.sep = sepcl[0];
     }
+    else
+        std::cout << "NO sep !!!\n";
+
 
 // optional arg: -cs => the class value in the datafile is given as a string value
     if( cmdl["-cs"] )
@@ -55,6 +61,7 @@ int main( int argc, const char** argv )
         std::exit(1);
     }
     dataset.printInfo( std::cout );
+
 
     if( noProcess )
     {

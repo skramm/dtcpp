@@ -195,7 +195,6 @@ class DataPoint
 	friend class DataSet;
 
 	private:
-//		std::vector<T> _attrValue;
 		std::vector<float> _attrValue;   ///< attributes
 		ClassVal _class = ClassVal(-1);  ///< Class of the datapoint, -1 for undefined
 
@@ -207,21 +206,22 @@ class DataPoint
 		{}
 #endif
 /// Constructor from a vector of strings (used by file reader)
-		DataPoint( const std::vector<std::string>& v_string, ClassVal c )
+		DataPoint( const std::vector<std::string>& v_string, ClassVal c ) : DataPoint( v_string )
+		{
+			_class = c;
+		}
+/// Constructor from a vector of strings (used by file reader when no class is given)
+		DataPoint( const std::vector<std::string>& v_string )
 		{
 			assert( v_string.size() > 0 );              // at least one attribute
 
 			for( size_t i=0; i<v_string.size(); i++ )
 				_attrValue.push_back( std::stof( v_string[i] ) );
-			_class = c;
 		}
-/// Constructor from a vector of floats and a class value
-		DataPoint( const std::vector<float>& v_val, ClassVal c )
-		{
-			assert( v_val.size() > 0 );              // at least one attribute
 
-			for( size_t i=0; i<v_val.size(); i++ )
-				_attrValue.push_back( v_val[i] );
+/// Constructor from a vector of floats and a class value
+		DataPoint( const std::vector<float>& v_val, ClassVal c ) : DataPoint( v_val )
+		{
 			_class = c;
 		}
 /// Constructor from a vector of floats and no class value
@@ -268,10 +268,11 @@ struct Fparams
 {
 	char sep = ' ';              ///< input field separator
 	bool classAsString = false;  ///< class values are given as strings
+	bool dataFilesHoldsClass = true; ///< set to false to read files holding only attribute values (for classification task)
 };
 
 //---------------------------------------------------------------------
-/// Stats for a single attribute
+/// Stats for a single attribute, see DataSet::computeStats()
 template<typename T>
 struct AttribStats
 {
@@ -441,7 +442,7 @@ DataSet::computeStats() const
 			vat.push_back( point.attribVal(i) );
 
 		auto it_mm = std::minmax_element( vat.begin(), vat.end() );
-		AttribStats<T> pt_stat { *it_mm.first, *it_mm.second };
+		AttribStats<T> pt_stat { *it_mm.first, *it_mm.second };     // sets min and max values
 
 		auto sum = std::accumulate( vat.begin(), vat.end(), 0. );
 		auto mean = sum / size();
@@ -551,47 +552,68 @@ DataSet::load( std::string fname, const Fparams params )
 					return false;
 				}
 
-				if( size() == 0 )                     // if this is the first datapoint, then set the nb of attributes
-					setNbAttribs( v_tok.size()-1 );
+				if( size() == 0 )                    // if this is the first datapoint, then set the nb of attributes
+					setNbAttribs( params.dataFilesHoldsClass ? v_tok.size()-1 : v_tok.size() );
 
-				int classIndex = 0;
-				auto cla = v_tok.back();
-				if( !params.classAsString )
-					classIndex = std::stoi( cla );
+				if( params.dataFilesHoldsClass )
+				{
+					int classIndex = 0;
+					auto cla = v_tok.back();
+					if( !params.classAsString )
+						classIndex = std::stoi( cla );
+					else
+					{
+						auto it = classMap.find( cla );
+						if( it == classMap.end() )  // not there
+							classMap[ cla ] = classIndexCounter++; // new class
+						else
+							classIndex = classMap[ cla ];
+					}
+					classValues[classIndex]++;
+	//				v_tok.resize( v_tok.size()-1 );
+					v_tok.erase( v_tok.end()-1 );   // remove last element (class)
+					_data.push_back( DataPoint( v_tok, ClassVal(classIndex) ) );
+				}
 				else
 				{
-					auto it = classMap.find( cla );
-					if( it == classMap.end() )  // not there
-						classMap[ cla ] = classIndexCounter++; // new class
-					else
-						classIndex = classMap[ cla ];
+					_data.push_back( DataPoint( v_tok ) );
 				}
-				classValues[classIndex]++;
-//				v_tok.resize( v_tok.size()-1 );
-				v_tok.erase( v_tok.end()-1 );   // remove last element (class)
-				_data.push_back( DataPoint( v_tok, ClassVal(classIndex) ) );
 			}
 		}
 	}
 	while( !f.eof() );
 
-	#if 1
-		std::cout << " - Read " << size() << " points in file " << fname;
-		std::cout << "\n - file info:"
-			<< "\n  - nb lines=" << nb_lines
-			<< "\n  - nb empty=" << nb_empty
-			<< "\n  - nb comment=" << nb_comment
-			<< "\n  - nb classes=" << classValues.size()
-			<< "\n  - nb classes 2=" << nbClasses()
-			<< "\nClasses frequency:\n";
-		for( const auto& cval: classValues )
-			std::cout << cval.first << ": "
-				<< cval.second
-				<< " (" << 1. * cval.second/size()
-				<< " %)\n";
-	#endif
+#if 1
+	std::cout << " - Read " << size() << " points in file " << fname;
+	std::cout << "\n - file info:"
+		<< "\n  - nb lines=" << nb_lines
+		<< "\n  - nb empty=" << nb_empty
+		<< "\n  - nb comment=" << nb_comment
+		<< "\n  - nb classes=" << classValues.size()
+		<< "\n  - nb classes 2=" << nbClasses()
+		<< "\nClasses frequency:\n";
+	for( const auto& cval: classValues )
+		std::cout << cval.first << ": "
+			<< cval.second
+			<< " (" << 100. * cval.second/size()
+			<< " %)\n";
+#endif
 
-
+	if( params.dataFilesHoldsClass )
+	{
+		std::ofstream f( "histogram.dat" );
+		if( f.is_open() )
+		{
+			f << "# data class histogram file for input file '" <<  fname
+				<< "'\n# class_index occurence_count percentage\n";
+			for( const auto& cval: classValues )
+				std::cout << cval.first << " "
+					<< cval.second << " " << 100. * cval.second/size()
+					<< '\n';
+		}
+		else
+			std::cerr << "Warning, unable to save histogram file\n";
+	}
 	return true;
 }
 //---------------------------------------------------------------------

@@ -410,14 +410,15 @@ class DataSet
 		template<typename T>
 		DatasetStats<T> computeStats() const;
 
+		size_t nbClasses( const std::vector<uint>& ) const;
 /// Returns nb of classes in the dataset, \b NOT considering the points without any class assigned
-		uint nbClasses() const
+		size_t nbClasses() const
 		{
 			return _classCount.size();
 		}
 
 /// Returns the number of points with class \c val (or number of non-assigned points if \c val=-1)
-		uint getClassCount( ClassVal val ) const
+		size_t getClassCount( ClassVal val ) const
 		{
 			if( val == ClassVal(-1) )
 				return _nbNoClassPoints;
@@ -494,6 +495,20 @@ DataSet::computeStats() const
 		dstats.v_stats.push_back( pt_stat );
 	}
 	return dstats;
+}
+//---------------------------------------------------------------------
+/// Returns nb of classes in the subset given by the indexes in \c vIdx
+size_t
+DataSet::nbClasses( const std::vector<uint>& vIdx ) const
+{
+	std::set<ClassVal> classSet;
+	for( const auto idx: vIdx )
+	{
+		const auto& pt = getDataPoint( idx );
+		if( pt.classVal() != ClassVal(-1) )
+			classSet.insert( pt.classVal() );
+	}
+	return classSet.size();
 }
 //---------------------------------------------------------------------
 /// Returns a pair of two subsets of the data, first is the training data, second is the test data
@@ -700,7 +715,12 @@ DataSet::print( std::ostream& f, const std::vector<uint>& vIdx ) const
 /// Holds the node type
 enum NodeType
 {
-	 NT_undef, NT_Root, NT_Decision, NT_Final
+	 NT_undef
+	 ,NT_Root
+	 ,NT_Decision
+	 ,NT_Final_MD
+	 ,NT_Final_GI_Small
+	 ,NT_Final_SplitTooSmall
 };
 
 inline
@@ -713,7 +733,10 @@ getString( NodeType nt )
 		case NT_undef:    s="UNDEF";    break;
 		case NT_Root:     s="Root";     break;
 		case NT_Decision: s="Decision"; break;
-		case NT_Final:    s="Final";    break;
+//		case NT_Final:    s="Final";    break;
+		case NT_Final_MD:            s="MaxDepth"; break;
+		case NT_Final_GI_Small:      s="minGI";    break;
+		case NT_Final_SplitTooSmall: s="STS";      break;
 		default: assert(0);
 	}
 	return std::string(s);
@@ -1101,8 +1124,12 @@ TrainingTree::nbLeaves() const
 		pit.first != pit.second;
 		pit.first++
 	)
-		if( _graph[*pit.first]._type == NT_Final )
+	{
+		auto type = _graph[*pit.first]._type;
+		assert( type != NT_undef );
+		if( type != NT_Root && type != NT_Decision )
 			c++;
+	}
 	return c;
 }
 
@@ -1126,22 +1153,23 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 		assert( graph[target]._type != NT_undef );
 
 		f << graph[target]._nodeId
-			<< " [label=\"" << graph[target]._nodeId << '-';
+			<< " [label=\"n" << graph[target]._nodeId << ' ';
 		if( graph[target]._type == NT_Decision )
 			f << "attr=" << graph[target]._attrIndex
-				<< " thres=" << graph[target]._threshold;
+				<< " thres=" << graph[target]._threshold << '\n';
 		else
 			f << "C" << graph[target]._class
-				<< " GI=" << graph[target].giniImpurity;
+				<< " GI=" << graph[target].giniImpurity
+				<< "\nSR=" << getString( graph[target]._type );
 
 		f //<< "\\ndepth=" << graph[target].depth
-			<< "\n#=" << graph[target].v_Idx.size()
+			<< "#=" << graph[target].v_Idx.size()
 			<< "\"";
 		switch( graph[target]._type )
 		{
-			case NT_Final:    f << ",color=red"; break;
 			case NT_Decision: f << ",color=green"; break;
-			default: assert(0);
+			default:          f << ",color=red"; break;
+//			default: assert(0);
 		}
 		f << "];\n";
 		f << graph[v]._nodeId << "->" << graph[target]._nodeId  << ";\n";
@@ -1162,8 +1190,8 @@ TrainingTree::printDot( std::ostream& f ) const
 	START;
 	f << "digraph g {\nnode [shape=\"box\"];\n";
 	f << _graph[_initialVertex]._nodeId
-		<< " [label=\"" << _graph[_initialVertex]._nodeId
-		<< "-attr="     << _graph[_initialVertex]._attrIndex
+		<< " [label=\"n" << _graph[_initialVertex]._nodeId
+		<< " attr="     << _graph[_initialVertex]._attrIndex
 		<< " thres="    << _graph[_initialVertex]._threshold
 		<< "\\n#="      << _graph[_initialVertex].v_Idx.size()
 		<< "\",color = blue];\n";
@@ -1628,12 +1656,13 @@ splitNode(
 
 	graph[v]._class = nodeContent.dominantClass;
 	graph[v].giniImpurity = giniImpurity;
-	graph[v]._type = NT_Final;
+//	graph[v]._type = NT_Final;
 
 	if( s_recDepth>params.maxTreeDepth )
 	{
 		LOG << "tree reached max depth (=" << params.maxTreeDepth << "), STOP\n";
 		s_recDepth--;
+		graph[v]._type = NT_Final_MD;
 		return;
 	}
 
@@ -1641,6 +1670,7 @@ splitNode(
 	{
 		LOG << "dataset is (almost or completely) pure, gini coeff=" << giniImpurity << ", STOP\n";
 		s_recDepth--;
+		graph[v]._type = NT_Final_GI_Small;
 		return;
 	}
 
@@ -1666,6 +1696,7 @@ splitNode(
 			{
 				LOG << "no more attributes to try, STOP\n";
 				s_recDepth--;
+				graph[v]._type = NT_Final_SplitTooSmall;
 				return;
 			}
 		}
@@ -1765,8 +1796,9 @@ TrainingTree::classify( const DataPoint& point ) const
 //	uint iter = 0;
 	do
 	{
+		assert( _graph[v]._type != NT_undef );
 //		COUT << "\n*iter=" << iter++ << " NODE " << _graph[v]._nodeId << std::endl;
-		if( _graph[v]._type == NT_Final ) // then, we are done !
+		if( _graph[v]._type != NT_Root && _graph[v]._type != NT_Decision ) // then, we are done !
 		{
 			done = true;
 			retval = _graph[v]._class;

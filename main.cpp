@@ -26,6 +26,7 @@ int main( int argc, const char** argv )
     auto sepcl = cmdl("sep").str();
     if( !sepcl.empty() )
         fparams.sep = sepcl[0];
+
 	std::cout << " - using '" << fparams.sep << "' as datafile field separator\n";
 
 

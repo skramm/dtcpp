@@ -1,4 +1,6 @@
+# makefile for tdcpp
 
+SHELL=bash
 
 BIN_DIR=build/bin
 OBJ_DIR=build/obj
@@ -19,7 +21,10 @@ run: all
 
 # iris dataset
 run2: all
-	$(BIN_DIR)/main ~/data/iris.data -sep , -cs -f
+	$(BIN_DIR)/main sample_data/iris.data -sep "," -cs -f
+
+run3: all
+	$(BIN_DIR)/main sample_data/winequality-white.csv -sep ";" -cs -f
 
 
 show:
@@ -29,7 +34,7 @@ show:
 	@echo "PNG_FILES=$(PNG_FILES)"
 
 $(OBJ_DIR)/%.o: %.cpp dtcpp.h $(SRC_FILES)
-	$(CXX) -Wall -std=gnu++14 -fexceptions -O2 -c $< -o $@
+	$(CXX) -Wall -std=gnu++14 -fexceptions -O2 -Iother/ -c $< -o $@
 
 $(BIN_DIR)/%:$(OBJ_DIR)/%.o
 	$(CXX) -o $@ $< -s

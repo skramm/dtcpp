@@ -65,15 +65,18 @@ int main( int argc, const char** argv )
 
     if( noProcess )
     {
+    	std::cout << "No processing required, exiting\n";
         std::exit(2);
     }
 
 	auto stats = dataset.computeStats<float>();
 	std::cout << stats;
 
+	auto nbClasses = dataset.nbClasses();
+
     if( !doFolding )
     {
-		TrainingTree tt;
+		TrainingTree tt( nbClasses );
         tt.train( dataset );
         auto perf = tt.classify( dataset );
         std::cout << "Score=" << perf << "\n";
@@ -87,7 +90,7 @@ int main( int argc, const char** argv )
         uint nbFolds = 5;
         for( uint i=0; i<nbFolds; i++ )
         {
-			TrainingTree tt;
+			TrainingTree tt( nbClasses );
             auto p_data_subsets = dataset.getFolds( i, nbFolds );
             auto data_train = p_data_subsets.first;
             auto data_test  = p_data_subsets.second;

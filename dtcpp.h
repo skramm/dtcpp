@@ -27,6 +27,7 @@ for continuous data values (aka real numbers)
 #include <numeric>
 #include <algorithm>
 #include <random>
+#include <iomanip>
 
 #include <boost/graph/adjacency_list.hpp>
 //#include "boost/graph/graphviz.hpp"
@@ -711,7 +712,7 @@ struct NodeC
 /// A node of the training tree
 struct NodeT
 {
-	static uint s_Counter;
+	static uint s_Counter;           ///< Node counter, incremented at each node creation, reset with resetNodeId()
 	uint     _nodeId = 0;            ///< Id of the node. Needed to print the dot file. \todo could be removed if graph switches to \c VecS
 	NodeType _type = NT_undef;       ///< Type of the node (Root, leaf, or decision)
 	ClassVal _class = ClassVal(-1);  ///< Class (only for terminal nodes)
@@ -731,6 +732,7 @@ struct NodeT
 			;
 		return f;
 	}
+/// Reset of node counter \ref s_Counter
 	static void resetNodeId()
 	{
 		s_Counter = 0;
@@ -750,16 +752,6 @@ struct EdgeData
 };
 
 //---------------------------------------------------------------------
-#if 0
-/// used for classifying
-using GraphC = boost::adjacency_list<
-		boost::vecS,
-		boost::vecS,
-		boost::directedS,
-		NodeC,
-		EdgeData
-	>;
-#endif
 /// Used for training
 /**
 \note IMPORTANT: we use list because when splitting the vector of indexes of points of a node,
@@ -853,6 +845,9 @@ getString( CM_Score n )
 /// Confusion Matrix,
 /// handles both 2 class and multiclass problems, but usage will be different
 /**
+
+Instanciated in TrainingTree::classify()
+
 Layout:
 - columns: true class
 - lignes: predicted (classified) class
@@ -923,27 +918,46 @@ struct ConfusionMatrix
 		assert( li < _mat.size() && col < _mat.size() );
 		_mat[li][col]++;
 	}
-	friend std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
-	{
-		f << "ConfusionMatrix:\n    ";
-		for( size_t i=0; i<cm._mat.size(); i++ )
-			f << i+1 << "  ";
-		f << "\n";
+	friend std::ostream& operator << ( std::ostream&, const ConfusionMatrix& );
 
-		for( size_t i=0; i<cm._mat.size(); i++ )
-		{
-			f << i+1 << " | ";
-			for( const auto& elem: cm._mat[i] )
-				f << elem << " - ";
-			f << "|\n";
-		}
-		return f;
-	}
 	private:
 		double p_score( CM_Score scoreId, priv::CM_Counters ) const;
 	private:
 		std::vector<std::vector<uint>> _mat;
 };
+
+//---------------------------------------------------------------------
+namespace priv {
+void printLine( std::ostream& f, uint w, uint n )
+{
+	n++;
+	for( uint i=0; i<w*n; i++ )
+		f << '-';
+	f << '\n';
+}
+}
+//---------------------------------------------------------------------
+std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
+{
+	int w = 5;
+	f << "ConfusionMatrix:\n     True class\n     ";
+//		<< std::setfill('X') << std::setw(5);
+	for( size_t i=0; i<cm._mat.size(); i++ )
+		f << std::setw(w) << i << " ";
+	f << "\n     ";
+	priv::printLine( f, w, cm._mat.size() );
+
+	for( size_t i=0; i<cm._mat.size(); i++ )
+	{
+		f << i << " | ";
+		for( const auto& elem: cm._mat[i] )
+			f << std::setw(w) << elem << ' ';
+		f << "|\n";
+	}
+	f << "   ";
+	priv::printLine( f, w, cm._mat.size() );
+	return f;
+}
 
 //---------------------------------------------------------------------
 /// Private, compute scores for both 2-class and multi-class confusion matrices
@@ -1015,20 +1029,25 @@ class TrainingTree
 		GraphT    _graph;
 		vertexT_t _initialVertex;
 		size_t    _maxDepth = 1;  ///< defined by training
+		uint      _nbClasses;
+
 	public:
+/// Constructor. Needs to known the number of classes (so it can define ConfusionMatrix)
+		TrainingTree( uint nbClasses ) : _nbClasses(nbClasses)
+		{}
 		void clear()
 		{
 			_graph.clear();
 		}
 
-		void train( const DataSet&, Params params=Params() );
-		Perf classify( const DataSet& ) const;
+		void     train( const DataSet&, Params params=Params() );
+		Perf     classify( const DataSet& ) const;
 		ClassVal classify( const DataPoint& ) const;
-		void printDot( std::ostream& ) const;
-		void printDot( std::string fname ) const;
-		void printInfo( std::ostream& ) const;
-		size_t maxDepth() const { return _maxDepth; }
-		size_t nbLeaves() const;
+		void     printDot( std::ostream& ) const;
+		void     printDot( std::string fname ) const;
+		void     printInfo( std::ostream& ) const;
+		size_t   maxDepth() const { return _maxDepth; }
+		size_t   nbLeaves() const;
 };
 
 //---------------------------------------------------------------------
@@ -1669,11 +1688,10 @@ Perf
 TrainingTree::classify( const DataSet& dataset ) const
 {
 	size_t nbErrors = 0;
-	COUT << "dataset.nbClasses()=" << dataset.nbClasses()  << "\n";
-	auto nbClasses = dataset.nbClasses();
-	if( nbClasses>1 )  // if 0 or 1 class, thent nothing to classify
+
+	if( _nbClasses>1 )  // if 0 or 1 class, thent nothing to classify
 	{
-        ConfusionMatrix confmat( nbClasses );
+        ConfusionMatrix confmat( _nbClasses );
         for( const auto& datapoint: dataset )
         {
             auto cla1 = datapoint.classVal();

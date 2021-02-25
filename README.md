@@ -18,6 +18,21 @@ This software can be used
  * field separator character adjustable
 
 
+## Command-line
+
+`$ dtcpp <switches> input_datafile`
+
+### Swiches
+
+* `-cs` : means class value is a string
+* `-sep "x"` : use 'x' as field separator in the input file
+* `-cf` : means class value is the **First** value of line
+* `-cl` : means class value is the **Last** value of line (default)
+* `-ll X` : sets log level to 'X'. Available levels: 0,1,2,3
+* `-i` : load the datafile and prints Info on its contents, then exit (no processing)
+* `-f` : do Folding on the provided data
+
+
 ## Build information
 
 ### Dependencies:

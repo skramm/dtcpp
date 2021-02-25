@@ -60,6 +60,9 @@ dot: $(PNG_FILES)
 clean:
 	@-rm html/*
 	@-rm $(OBJ_DIR)/*
+	@-rm *.dat
+	@-rm *.dot
+	@-rm *.png
 
 cleanall: clean
 	@-rm $(BIN_DIR)/*

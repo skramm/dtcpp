@@ -53,7 +53,7 @@ int main( int argc, const char** argv )
 
 // optional arg: -f => evaluate performance on training dataset by doing folds on data
 	bool doFolding = false;
-	if( cmdl["-f"] )
+	if( cmdl["f"] )
 		doFolding = true;
 
 	DataSet dataset;
@@ -100,6 +100,10 @@ int main( int argc, const char** argv )
 			auto p_data_subsets = dataset.getFolds( i, nbFolds );
 			auto data_train = p_data_subsets.first;
 			auto data_test  = p_data_subsets.second;
+
+			data_train.printClassHisto( "histo_tr_" + std::to_string(i) );
+			data_test.printClassHisto(  "histo_te_" + std::to_string(i) );
+
 			data_train.printInfo( std::cout, "train" );
 			data_test.printInfo(  std::cout, "test" );
 			tt.train( data_train, params );

@@ -60,6 +60,7 @@ uint& logCount()
 	static uint s_logCount;
 	return s_logCount;
 }
+/// Used in logging macro, see \ref LOG
 void spaceLog( int n )
 {
 	for( int i=0; i<n; i++ )
@@ -409,6 +410,7 @@ class DataSet
 		void print( std::ostream& ) const;
 		void print( std::ostream&, const std::vector<uint>& ) const;
 		void printInfo( std::ostream&, const char* name=0 ) const;
+		void printClassHisto( std::string fname ) const;
 
 		void clear()
 		{
@@ -561,6 +563,7 @@ DataSet::getFolds( uint index, uint nbFolds ) const
 bool
 DataSet::load( std::string fname, const Fparams params )
 {
+	std::cout << "sep=*" << params.sep << "*\n";
 	std::ifstream f( fname );
 	if( !f.is_open() )
 	{
@@ -651,7 +654,7 @@ DataSet::load( std::string fname, const Fparams params )
 		<< "\n  - nb classes=" << nbClasses()
 		<< '\n';
 #endif
-
+#if 0
 	if( params.dataFilesHoldsClass )
 	{
 		std::ofstream fhisto( "histogram.dat" );
@@ -668,7 +671,26 @@ DataSet::load( std::string fname, const Fparams params )
 			std::cerr << "Warning, unable to save histogram file\n";
 	}
 	return true;
+#endif
 }
+//---------------------------------------------------------------------
+void
+DataSet::printClassHisto( std::string fname ) const
+{
+	std::ofstream fhisto( fname + ".dat" );
+	if( !fhisto.is_open() )
+		throw std::runtime_error( "unable to open file '" + fname + ".dat' in write mode" );
+
+	fhisto << "# data class histogram file for input file '" <<  fname
+		<< "'\n# class_index occurence_count percentage\n";
+	fhisto << "-1 " << getClassCount( ClassVal(-1) ) << ' '
+		<< 100. * getClassCount( ClassVal(-1) ) / size() << '\n';
+	for( const auto& cval: _classCount )
+		fhisto << cval.first << " "
+			<< cval.second << " " << 100. * cval.second/size()
+			<< '\n';
+}
+
 //---------------------------------------------------------------------
 void
 DataSet::printInfo( std::ostream& f, const char* name ) const
@@ -677,10 +699,10 @@ DataSet::printInfo( std::ostream& f, const char* name ) const
 	f << "Dataset: ";
 	if( name )
 		f << name;
-	f << "\n # points="           << size()
-		<< "\n # attributes="      << nbAttribs()
-		<< "\n # classes="         << nbClasses()
-		<< "\n # no class points=" << _nbNoClassPoints
+	f << "\n # points="             << size()
+		<< "\n # attributes="       << nbAttribs()
+		<< "\n # classes="          << nbClasses()
+		<< "\n # classless points=" << _nbNoClassPoints
 		<< "\nClasses frequency:\n";
 	for( const auto& cval: _classCount )
 		std::cout << cval.first << ": "

@@ -11,20 +11,25 @@ This software can be used
 * either as a classification program
 * either as a library, by including the file dtcpp.h in your user code
 
+## Features
+* input dataset format: csv style
+ * class values: string or numerical (integer values)
+ * class value position: either first or last element of the line
+ * field separator character adjustable
+
 
 ## Build information
 
-### dependencies:
+### Dependencies:
 * for the library, the only dependency is [Boost Graph](https://www.boost.org/doc/libs/1_75_0/libs/graph/doc/index.html)<br>
 Isn't provided, if not installed => `sudo apt install libboost-all-dev`
 
 * For the demo classifier program:
-`argh`: command-line parser, from https://github.com/adishavit/argh
-<br>
+ * `argh`: command-line parser, from https://github.com/adishavit/argh<br>
 (version 1.3.1 included for conveniency)
 
-* For the test project:
-catch2: https://github.com/catchorg/Catch2/
+* For the test build:
+ * Catch2: https://github.com/catchorg/Catch2/
 (tested with catch 2.13.4)
 
 

@@ -1,7 +1,8 @@
 /**
 \file
 \brief Naive implementation attempt of a classifier using a Decision Tree
-for continuous data values (aka real numbers)
+for continuous data values (aka real numbers).
+See doc on https://github.com/skramm/dtcpp
 \author S. Kramm - 2021
 \copyright GPLv3
 
@@ -9,11 +10,11 @@ for continuous data values (aka real numbers)
 - multiclass
 - Limited to binary classification (a tree node has only two childs)
 - input datasets:
-    - csv style
-    - field separator can be defined, see Fparams
-    - class field MUST be the last one
-    - number of attributes set automatically
-    - classes may be integer values or string values, see Fparams
+	- csv style
+	- field separator can be defined, see Fparams
+	- class field MUST be the last one
+	- number of attributes set automatically
+	- classes may be integer values or string values, see Fparams
 - Does not handle missing values
 - using boost::graph to model the tree
 */
@@ -30,7 +31,6 @@ for continuous data values (aka real numbers)
 #include <iomanip>
 
 #include <boost/graph/adjacency_list.hpp>
-//#include "boost/graph/graphviz.hpp"
 #include <boost/graph/graph_utility.hpp> // needed only for print_graph();
 
 namespace dtcpp {
@@ -44,13 +44,27 @@ namespace dtcpp {
 #ifdef DEBUG_START
 	#define START if(1) std::cout << "* Start: " << __FUNCTION__ << "()\n"
 #else
-	#define START ;
+	#define START
 #endif // DEBUG
 
-#define LOG \
-	if( params.verbose ) \
-		std::cout
+#define LOG( level, msg ) \
+	if( params.verbose && level<=params.verboseLevel ) \
+	{ \
+		priv::spaceLog( level ); \
+		std::cout << 'E' << std::setfill('0') << std::setw(4) << priv::logCount()++ << '-' << __FUNCTION__ << "(): " << msg << '\n'; \
+	}
 
+namespace priv {
+uint& logCount()
+{
+	static uint s_logCount;
+	return s_logCount;
+}
+void spaceLog( int n )
+{
+	for( int i=0; i<n; i++ )
+		std::cout << "  ";
+}
 //---------------------------------------------------------------------
 /// A template to have strong types, taken from J. Boccara
 /**
@@ -61,10 +75,10 @@ class NamedType
 {
 public:
 	NamedType() {}
-    explicit NamedType(T const& value) : value_(value) {}
-    explicit NamedType(T&& value) : value_(std::move(value)) {}
-    T&       get()       { return value_; }
-    T const& get() const { return value_; }
+	explicit NamedType(T const& value) : value_(value) {}
+	explicit NamedType(T&& value) : value_(std::move(value)) {}
+	T&       get()       { return value_; }
+	T const& get() const { return value_; }
 	bool operator == ( const NamedType& nt2 ) const
 	{
 		return get() == nt2.get();
@@ -84,11 +98,12 @@ public:
 		return f;
 	}
 private:
-    T value_;
+	T value_;
 };
+} // namespace priv
 
-using ThresholdVal = NamedType<float,struct ThresholdValTag>;
-using ClassVal     = NamedType<int,  struct ClassValTag>;
+using ThresholdVal = priv::NamedType<float,struct ThresholdValTag>;
+using ClassVal     = priv::NamedType<int,  struct ClassValTag>;
 
 //---------------------------------------------------------------------
 
@@ -162,12 +177,12 @@ std::vector<std::string>
 splitString( const std::string &s, char delim )
 {
 	std::vector<std::string> velems;
-    std::stringstream ss( trimSpaces(s) );
-    std::string item;
-    while( std::getline( ss, item, delim ) )
-        velems.push_back(item);
+	std::stringstream ss( trimSpaces(s) );
+	std::string item;
+	while( std::getline( ss, item, delim ) )
+		velems.push_back(item);
 
-    return velems;
+	return velems;
 }
 
 // % % % % % % % % % % % % % %
@@ -179,9 +194,10 @@ splitString( const std::string &s, char delim )
 struct Params
 {
 	float minGiniCoeffForSplitting = 0.05f;
-	uint  minNbPoints = 3;                   ///< minumum nb of points to create a node
+	uint  minNbPoints = 3;                   ///< minimum nb of points to create a node
 	float removalCoeff = 0.05f;  ///< used to remove close attribute values when searching the best threshold. See removeDuplicates()
 	bool  verbose = true;        ///< to allow logging of some run-time details
+	int   verboseLevel = 0;      ///< verbose Level, related to \ref verbose
 	bool  doFolding = false;
 	uint  nbFolds = 5;
 	uint  maxTreeDepth = 10;
@@ -360,7 +376,6 @@ class DataSet
 					+ " dataset=" + std::to_string( _nbAttribs )
 				);
 #endif // DTCPP_ERRORS_ASSERT
-
 			_data.push_back( dp );
 
 			if( dp.classVal().get() >= 0 )
@@ -393,7 +408,7 @@ class DataSet
 		bool load( std::string fname, const Fparams=Fparams() );
 		void print( std::ostream& ) const;
 		void print( std::ostream&, const std::vector<uint>& ) const;
-		void printInfo( std::ostream& ) const;
+		void printInfo( std::ostream&, const char* name=0 ) const;
 
 		void clear()
 		{
@@ -656,10 +671,13 @@ DataSet::load( std::string fname, const Fparams params )
 }
 //---------------------------------------------------------------------
 void
-DataSet::printInfo( std::ostream& f ) const
+DataSet::printInfo( std::ostream& f, const char* name ) const
 {
 
-	f << "Dataset:\n # points="    << size()
+	f << "Dataset: ";
+	if( name )
+		f << name;
+	f << "\n # points="           << size()
 		<< "\n # attributes="      << nbAttribs()
 		<< "\n # classes="         << nbClasses()
 		<< "\n # no class points=" << _nbNoClassPoints
@@ -741,9 +759,9 @@ getString( NodeType nt )
 		case NT_Root:     s="Root";     break;
 		case NT_Decision: s="Decision"; break;
 //		case NT_Final:    s="Final";    break;
-		case NT_Final_MD:            s="MaxDepth"; break;
-		case NT_Final_GI_Small:      s="minGI";    break;
-		case NT_Final_SplitTooSmall: s="STS";      break;
+		case NT_Final_MD:            s="MD";  break;
+		case NT_Final_GI_Small:      s="MGI"; break;
+		case NT_Final_SplitTooSmall: s="STS"; break;
 		default: assert(0);
 	}
 	return std::string(s);
@@ -854,13 +872,13 @@ class CM_Counters
 /// Performance score of classification, see ConfusionMatrix for definitions
 enum CM_Score
 {
-    CM_TPR=0    ///< True Positive Rate
-    ,CM_TNR     ///< True Negative Rate
-    ,CM_ACC     ///< Accuracy
-    ,CM_BACC    ///< Balanced Accuracy
-    ,CM_F1      ///< F1-score, see https://en.wikipedia.org/wiki/F-score
+	CM_TPR=0    ///< True Positive Rate
+	,CM_TNR     ///< True Negative Rate
+	,CM_ACC     ///< Accuracy
+	,CM_BACC    ///< Balanced Accuracy
+	,CM_F1      ///< F1-score, see https://en.wikipedia.org/wiki/F-score
 
-    ,CM_SCORE_END
+	,CM_SCORE_END  ///< only used to iterate
 };
 
 //---------------------------------------------------------------------
@@ -899,12 +917,12 @@ Usage:
 
 For 2-class problem, you get (for example) the "True Positive Rate" metric like this:
 \code
-    auto score = cmat.getScore( CM_TPR );
+	auto score = cmat.getScore( CM_TPR );
 \endcode
 
 For multiclass situations, you need to add for what class you are requesting this.
 \code
-    auto score = cmat.getScore( CM_TPR, ClassValue );
+	auto score = cmat.getScore( CM_TPR, ClassValue );
 \endcode
 */
 struct ConfusionMatrix
@@ -940,10 +958,10 @@ struct ConfusionMatrix
     double getScore( CM_Score ) const;
 	size_t nbValues() const
 	{
-        size_t sum = 0u;
+		size_t sum = 0u;
 		for( const auto& li: _mat )
-            sum += std::accumulate( li.begin(), li.end(), 0u );
-        return sum;
+			sum += std::accumulate( li.begin(), li.end(), 0u );
+		return sum;
 	}
 	size_t nbValues( ClassVal cval ) const
 	{
@@ -989,6 +1007,7 @@ std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
 {
 	int w = 5;
 	auto nb = cm.nbValues();
+	f << std::setfill(' ');
 	f << "ConfusionMatrix:\nPredicted \\ True class =>\n ||   ";
 //		<< std::setfill('X') << std::setw(5);
 	for( size_t i=0; i<cm._mat.size(); i++ )
@@ -1018,56 +1037,56 @@ ConfusionMatrix::p_score( CM_Score scoreId, priv::CM_Counters cmc ) const
 	auto TPR = cmc.tp / ( cmc.tp + cmc.fn );
 	auto TNR = cmc.tn / ( cmc.tn + cmc.fp );
 	double scoreVal = 0.;
-    switch( scoreId )
-    {
-        case CM_TPR:  scoreVal =  TPR; break;
-        case CM_TNR:  scoreVal =  TNR; break;
-        case CM_ACC:  scoreVal = (cmc.tp + cmc.tn)/nbValues(); break;
-        case CM_BACC: scoreVal = (TPR + TNR ) / 2.; break;
-        case CM_F1:   scoreVal = 2.* cmc.tp / ( 2.* cmc.tp + cmc.fp + cmc.fn ); break;
-        default: assert(0);
-    }
-    return scoreVal;
+	switch( scoreId )
+	{
+		case CM_TPR:  scoreVal =  TPR; break;
+		case CM_TNR:  scoreVal =  TNR; break;
+		case CM_ACC:  scoreVal = (cmc.tp + cmc.tn)/nbValues(); break;
+		case CM_BACC: scoreVal = (TPR + TNR ) / 2.; break;
+		case CM_F1:   scoreVal = 2.* cmc.tp / ( 2.* cmc.tp + cmc.fp + cmc.fn ); break;
+		default: assert(0);
+	}
+	return scoreVal;
 }
 //---------------------------------------------------------------------
-/// Used for 2-class situations
+/// Computes performance scores. Used for 2-class situations
 double
 ConfusionMatrix::getScore( CM_Score scoreId ) const
 {
-    assert( nbValues() > 1 );
-    assert( nbClasses() == 2 );
+	assert( nbValues() > 1 );
+	assert( nbClasses() == 2 );
 
-    const auto& TP = _mat[0][0];
-    const auto& FP = _mat[0][1];
-    const auto& FN = _mat[1][0];
-    const auto& TN = _mat[1][1];
+	const auto& TP = _mat[0][0];
+	const auto& FP = _mat[0][1];
+	const auto& FN = _mat[1][0];
+	const auto& TN = _mat[1][1];
 
-    return p_score( scoreId, priv::CM_Counters(TP,FP,TN,FN) );
+	return p_score( scoreId, priv::CM_Counters(TP,FP,TN,FN) );
 }
 //---------------------------------------------------------------------
-/// Used for multi-class situations
+/// Computes performance scores. Used for multi-class situations
 double
 ConfusionMatrix::getScore( CM_Score scoreId, ClassVal cval ) const
 {
-    assert( nbValues() > 2 );
-    assert( nbClasses() > 2 );
+	assert( nbValues() > 2 );
+	assert( nbClasses() > 2 );
 
 	assert( cval.get() >= 0 );
 	size_t c = static_cast<size_t>( cval.get() );
 	assert( c < nbClasses() );
 
-    const auto& TP = _mat[c][c];
+	const auto& TP = _mat[c][c];
 
-    const auto FP = std::accumulate( std::begin(_mat[c]), std::end(_mat[c]), 0. ) - TP;
+	const auto FP = std::accumulate( std::begin(_mat[c]), std::end(_mat[c]), 0. ) - TP;
 
-    auto FN = 0u;
-    for( size_t li=0; li<_mat.size(); li++ )
+	auto FN = 0u;
+	for( size_t li=0; li<_mat.size(); li++ )
 		if( li != c )
 			FN += _mat[li][c];
 
-    const auto TN = nbValues() - TP - FN - FP;
+	const auto TN = nbValues() - TP - FN - FP;
 
-    return p_score( scoreId, priv::CM_Counters(TP,FP,TN,FN) );
+	return p_score( scoreId, priv::CM_Counters(TP,FP,TN,FN) );
 }
 //---------------------------------------------------------------------
 void
@@ -1079,7 +1098,7 @@ ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 	f << '\n';
 	if( nbClasses() > 2 )
 	{
-		for( auto c=0; c<nbClasses(); c++ )
+		for( size_t c=0; c<nbClasses(); c++ )
 		{
 			f << " * class " << c << ":\n";
 			for( auto i=0; i<CM_SCORE_END; i++ )
@@ -1091,7 +1110,6 @@ ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 	}
 	else
 	{
-
 		for( auto i=0; i<CM_SCORE_END; i++ )
 		{
 			auto eni = static_cast<CM_Score>(i);
@@ -1164,7 +1182,8 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 {
 //	START;
 //	COUT << "nb out edges=" << boost::out_degree( v, graph ) << "\n";
-	std::cout.precision(4);
+//	std::cout.precision(4);
+	f.precision(3);
 	for( auto pit=boost::out_edges(v, graph); pit.first != pit.second; pit.first++ )
 	{
 		auto target = boost::target( *pit.first, graph );
@@ -1181,7 +1200,7 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 				<< "\nSR=" << getString( graph[target]._type );
 
 		f //<< "\\ndepth=" << graph[target].depth
-			<< "#=" << graph[target].v_Idx.size()
+			<< " #" << graph[target].v_Idx.size()
 			<< "\"";
 		switch( graph[target]._type )
 		{
@@ -1211,7 +1230,7 @@ TrainingTree::printDot( std::ostream& f ) const
 		<< " [label=\"n" << _graph[_initialVertex]._nodeId
 		<< " attr="     << _graph[_initialVertex]._attrIndex
 		<< " thres="    << _graph[_initialVertex]._threshold
-		<< "\\n#="      << _graph[_initialVertex].v_Idx.size()
+		<< "\\n#"      << _graph[_initialVertex].v_Idx.size()
 		<< "\",color = blue];\n";
 	priv::printNodeChilds( f, _initialVertex, _graph );
 	f << "}\n";
@@ -1469,7 +1488,7 @@ computeBestThreshold(
 )
 {
 	START;
-	COUT << "Searching for atIdx=" << atIdx << " nb pts=" << v_dpidx.size() << '\n';
+	LOG(3, "Searching best for attrib=" << atIdx );
 
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
 
@@ -1493,9 +1512,9 @@ computeBestThreshold(
 
 // step 2: compute IG for each threshold value
 
-	std::vector<float> deltaGini( v_thresVal.size() );
-	std::vector<uint> nb_LT( v_thresVal.size(), 0u );
-	for( uint i=0; i<v_thresVal.size(); i++ )              // for each threshold value
+	std::vector<float> deltaGini( v_thresVal.size() );   // one value per threshold
+	std::vector<uint> nb_LT( v_thresVal.size(), 0u );    // will hold the nb of points lying below the threshol
+	for( size_t i=0; i<v_thresVal.size(); i++ )          // for each threshold value
 	{
 //		COUT << "thres " << i << "=" << v_thresVal[i] << '\n';
 		std::map<ClassVal,uint> m_LT, m_HT;
@@ -1621,6 +1640,8 @@ findBestAttribute(
 
 	auto giniCoeff = getGiniImpurity( vIdx, data );
 
+	LOG( 2, "Searching best attribute among " << atMap.nbUnusedAttribs() );
+
 // step 1 - compute best IG/threshold for each attribute, only for the considered points
 	std::vector<AttributeData> v_IG;
 	for( const auto atIdx: atMap.getMap() )
@@ -1637,7 +1658,8 @@ findBestAttribute(
 			return p1._gain < p2._gain;
 		}
 	);
-	COUT << "highest Gain:" << *it_mval << "\n";
+
+	LOG( 2, "highest GI with attribute " << it_mval->_atIndex << ", GI=" << it_mval->_gain );
 
 	return *it_mval;
 }
@@ -1663,12 +1685,13 @@ splitNode(
 //	static uint s_nodeId = params.initialVertexId;   // starts at one because the initial node (id=0) is created elsewhere
 
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
+	LOG( 1, "splitting node " << graph[v]._nodeId << " holding " << vIdx.size() << " points" );
 
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done
 
 	auto nodeContent = getNodeContent( vIdx, data );
-	COUT << nodeContent;
+//	COUT << nodeContent;
 
 	auto giniImpurity = nodeContent.GiniImpurity;
 
@@ -1678,7 +1701,7 @@ splitNode(
 
 	if( s_recDepth>params.maxTreeDepth )
 	{
-		LOG << "tree reached max depth (=" << params.maxTreeDepth << "), STOP\n";
+		LOG( 1, "tree reached max depth (=" << params.maxTreeDepth << "), STOP" );
 		s_recDepth--;
 		graph[v]._type = NT_Final_MD;
 		return;
@@ -1686,7 +1709,7 @@ splitNode(
 
 	if( giniImpurity < params.minGiniCoeffForSplitting )
 	{
-		LOG << "dataset is (almost or completely) pure, gini coeff=" << giniImpurity << ", STOP\n";
+		LOG( 1, "dataset is (almost or completely) pure, gini coeff=" << giniImpurity << ", STOP" );
 		s_recDepth--;
 		graph[v]._type = NT_Final_GI_Small;
 		return;
@@ -1700,7 +1723,7 @@ splitNode(
 
 	// step 2 - find the best attribute to use to split the data, considering the data points of the current node
 		bestAttrib = findBestAttribute( vIdx, data, params, aMap );
-		COUT << "best attrib:" << bestAttrib << "\n";
+//		COUT << "best attrib:" << bestAttrib << "\n";
 
 		aMap.setAsUsed( bestAttrib._atIndex );
 	// before splitting, make sure that one of the childs will not have an insufficient number of points
@@ -1708,11 +1731,11 @@ splitNode(
 		auto n2 = vIdx.size() - n1;
 		if( n1 < params.minNbPoints || n2 < params.minNbPoints )
 		{
-			LOG << "not enough points if splitting: n1=" << n1 << " n2=" << n2 << ", trying next attribute\n";
+			LOG( 1, "not enough points if splitting on attribute " << bestAttrib._atIndex << ": n1=" << n1 << " n2=" << n2 << ", trying next attribute" );
 
 			if( aMap.nbUnusedAttribs() == 0 )
 			{
-				LOG << "no more attributes to try, STOP\n";
+				LOG( 1, "no more attributes to try, STOP" );
 				s_recDepth--;
 				graph[v]._type = NT_Final_SplitTooSmall;
 				return;
@@ -1722,15 +1745,11 @@ splitNode(
 			done = true;
 	}
 	while( !done );
-
-	auto attribIdx = bestAttrib._atIndex;
-	auto threshold = bestAttrib._threshold;
-
 //
 // !!! from here, a split will occur !!!
 //
-	graph[v]._attrIndex = attribIdx;
-	graph[v]._threshold = threshold.get();
+	graph[v]._attrIndex = bestAttrib._atIndex;
+	graph[v]._threshold = bestAttrib._threshold.get();
 	graph[v].giniImpurity = -1.f;
 	graph[v]._type = NT_Decision;
 
@@ -1752,8 +1771,8 @@ splitNode(
 	graph[v2].v_Idx.reserve( vIdx.size() );
 	for( auto idx: vIdx )           // separate the data points into two sets
 	{
-		auto attrVal = data.getDataPoint( idx ).attribVal( attribIdx );
-		if( attrVal < threshold.get() )
+		auto attrVal = data.getDataPoint( idx ).attribVal( bestAttrib._atIndex );
+		if( attrVal < bestAttrib._threshold.get() )
 			graph[v1].v_Idx.push_back( idx );
 		else
 			graph[v2].v_Idx.push_back( idx );
@@ -1779,7 +1798,7 @@ void
 TrainingTree::train( const DataSet& data, const Params params )
 {
 	START;
-	LOG << "Start training\n";
+	LOG( 0, "Start training" );
 
 	NodeT::resetNodeId();
 	auto nbAttribs = data.nbAttribs();
@@ -1797,7 +1816,7 @@ TrainingTree::train( const DataSet& data, const Params params )
 	_graph[_initialVertex]._type = NT_Root;
 
 	splitNode( _initialVertex, _graph, data, params ); // Call the "split" function (recursive)
-	LOG << "Training done\n";
+	LOG( 0, "Training done" );
 	printInfo( std::cout );
 }
 
@@ -1853,17 +1872,17 @@ TrainingTree::classify( const DataSet& dataset ) const
 {
 	if( _nbClasses>1 )  // if 0 or 1 class, then nothing to classify
 	{
-        ConfusionMatrix confmat( _nbClasses );
-        for( const auto& datapoint: dataset )
-        {
-            auto cla1 = datapoint.classVal();
-            auto cla2 = classify( datapoint );
-            if( cla1 != ClassVal(-1) )
+		ConfusionMatrix confmat( _nbClasses );
+		for( const auto& datapoint: dataset )
+		{
+			auto cla1 = datapoint.classVal();
+			auto cla2 = classify( datapoint );
+			if( cla1 != ClassVal(-1) )
 				confmat.add( cla1, cla2 );
-        }
-//        std::cout << confmat;
-        return confmat;
-    }
+		}
+		//        std::cout << confmat;
+		return confmat;
+		}
 
 	return ConfusionMatrix(2); // empty matrix
 }
@@ -1871,4 +1890,3 @@ TrainingTree::classify( const DataSet& dataset ) const
 } // namespace dtcpp
 //---------------------------------------------------------------------
 #endif // DTCPP_HG
-

@@ -24,7 +24,7 @@ run2: all
 	$(BIN_DIR)/main sample_data/iris.data -sep "," -cs -f
 
 run3: all
-	$(BIN_DIR)/main sample_data/winequality-white.csv -sep ";" -cs -f
+	$(BIN_DIR)/main sample_data/winequality-white.csv -sep ";" -cs -ll 2
 
 
 show:
@@ -41,7 +41,7 @@ $(BIN_DIR)/%:$(OBJ_DIR)/%.o
 
 doc:
 	@doxygen misc/Doxyfile 1>build/doxygen_stdout 2>build/doxygen_stderr
-	@xdg-open html/index.html
+	@xdg-open build/html/index.html
 
 test: build/bin/test_catch
 	$(BIN_DIR)/test_catch

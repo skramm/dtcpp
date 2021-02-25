@@ -271,6 +271,7 @@ struct Fparams
 	char sep = ' ';              ///< input field separator
 	bool classAsString = false;  ///< class values are given as strings
 	bool dataFilesHoldsClass = true; ///< set to false to read files holding only attribute values (for classification task)
+	bool classIsfirst = false;     ///< default: class is last element of line, if first, then set this to true
 };
 
 //---------------------------------------------------------------------
@@ -588,6 +589,9 @@ DataSet::load( std::string fname, const Fparams params )
 				{
 					int classIndex = 0;
 					auto cla = v_tok.back();
+					if( params.classIsfirst )
+						cla = v_tok.front();
+
 					if( !params.classAsString )
 					{
 						classIndex = std::stoi( cla );
@@ -607,6 +611,9 @@ DataSet::load( std::string fname, const Fparams params )
 					}
 					_classCount[ ClassVal(classIndex) ]++;
 	//				v_tok.resize( v_tok.size()-1 );
+
+					if( params.classIsfirst )
+						std::rotate( v_tok.begin(), v_tok.begin()+1, v_tok.end() );
 					v_tok.erase( v_tok.end()-1 );   // remove last element (class)
 					_data.push_back( DataPoint( v_tok, ClassVal(classIndex) ) );
 				}
@@ -938,6 +945,14 @@ struct ConfusionMatrix
             sum += std::accumulate( li.begin(), li.end(), 0u );
         return sum;
 	}
+	size_t nbValues( ClassVal cval ) const
+	{
+		assert( cval.get() >= 0 );
+		auto li  = static_cast<size_t>( cval.get() );
+		assert( li < _mat.size() );
+		return std::accumulate( _mat[li].begin(), _mat[li].end(), 0u );
+	}
+
 	void add( ClassVal trueVal, ClassVal predictedVal )
 	{
 		assert( trueVal.get() >= 0 );
@@ -966,26 +981,29 @@ void printLine( std::ostream& f, uint w, uint n )
 	f << '|';
 	for( uint i=0; i<w*n; i++ )
 		f << '-';
-	f <<"|\n";
+	f <<"|";
 }
 }
 //---------------------------------------------------------------------
 std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
 {
 	int w = 5;
+	auto nb = cm.nbValues();
 	f << "ConfusionMatrix:\nPredicted \\ True class =>\n ||   ";
 //		<< std::setfill('X') << std::setw(5);
 	for( size_t i=0; i<cm._mat.size(); i++ )
 		f << std::setw(w) << i << " ";
-	f << "\n \\/ ";
+	f << "  class\n \\/ ";
 	priv::printLine( f, w, cm._mat.size() );
-
+	f << " rate\n";
 	for( size_t i=0; i<cm._mat.size(); i++ )
 	{
 		f << std::setw(3) << i << " | ";
 		for( const auto& elem: cm._mat[i] )
 			f << std::setw(w) << elem << ' ';
-		f << "|\n";
+		f << "| "
+			<< 100.0 * cm.nbValues( ClassVal(i) ) / nb
+			<< '\n';
 	}
 	f << "    ";
 	priv::printLine( f, w, cm._mat.size() );

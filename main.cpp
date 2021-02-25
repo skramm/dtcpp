@@ -26,8 +26,13 @@ int main( int argc, const char** argv )
     auto sepcl = cmdl("sep").str();
     if( !sepcl.empty() )
         fparams.sep = sepcl[0];
-
 	std::cout << " - using '" << fparams.sep << "' as datafile field separator\n";
+
+	if( cmdl["cf"] )
+		fparams.classIsfirst = true;
+	if( cmdl["cl"] )
+		fparams.classIsfirst = false;
+	std::cout << " - using " << (fparams.classIsfirst ? "first": "last") << " element as class value\n";
 
 
 // optional arg: -cs => the class value in the datafile is given as a string value

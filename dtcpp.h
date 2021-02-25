@@ -29,6 +29,7 @@ See doc on https://github.com/skramm/dtcpp
 #include <algorithm>
 #include <random>
 #include <iomanip>
+#include <chrono>
 
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/graph_utility.hpp> // needed only for print_graph();
@@ -51,8 +52,12 @@ namespace dtcpp {
 	if( params.verbose && level<=params.verboseLevel ) \
 	{ \
 		priv::spaceLog( level ); \
-		std::cout << 'E' << std::setfill('0') << std::setw(4) << priv::logCount()++ << '-' << __FUNCTION__ << "(): " << msg << '\n'; \
+		std::cout << priv::g_Timer.getDuration(); \
+		std::cout << " E" << std::setfill('0') << std::setw(4) << priv::logCount()++ << '-' << __FUNCTION__ << "(): " << msg << '\n'; \
 	}
+
+#define TIMER_START priv::g_Timer.start()
+
 
 namespace priv {
 uint& logCount()
@@ -60,12 +65,34 @@ uint& logCount()
 	static uint s_logCount;
 	return s_logCount;
 }
+
 /// Used in logging macro, see \ref LOG
 void spaceLog( int n )
 {
 	for( int i=0; i<n; i++ )
 		std::cout << "  ";
 }
+
+/// Holds timing
+struct Timer
+{
+//auto t1 = std::chrono::high_resolution_clock::now();
+	std::string getDuration()
+	{
+		auto t2 = std::chrono::high_resolution_clock::now();
+		auto tdiff = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - ck ).count();
+		ck = t2;
+		return std::to_string( tdiff );
+	}
+	void start()
+	{
+		ck = std::chrono::high_resolution_clock::now();
+	}
+	std::chrono::high_resolution_clock::time_point ck;
+};
+
+Timer g_Timer;
+
 //---------------------------------------------------------------------
 /// A template to have strong types, taken from J. Boccara
 /**
@@ -131,6 +158,19 @@ printVector( std::ostream& f, const std::vector<T>& vec, const char* msg=0 )
 	f << " #=" << vec.size() << ":\n";
 	for( const auto& elem : vec )
 		f << elem << "-";
+	f << "\n";
+}
+/// General utility function
+template<typename K, typename V>
+void
+printMap( std::ostream& f, const std::map<K,V>& m, const char* msg=0 )
+{
+	f << "Map: ";
+	if( msg )
+		f << msg;
+	f << " #=" << m.size() << ":\n";
+	for( const auto& elem : m )
+		f << " -" << elem.first << "-" << elem.second << '\n';
 	f << "\n";
 }
 
@@ -204,6 +244,21 @@ struct Params
 	uint  maxTreeDepth = 10;
 //	uint  initialVertexId = 1u;
 };
+
+//---------------------------------------------------------------------
+namespace prelim {
+
+enum DataType
+{
+	DT_real, DT_integer, DT_string, DT_bool
+};
+
+class DataSetDescription
+{
+
+};
+
+} // namespace prelim {
 
 //---------------------------------------------------------------------
 /// A datapoint, holds a set of attributes value and a corresponding (binary) class
@@ -330,6 +385,8 @@ struct DatasetStats
 	}
 };
 //---------------------------------------------------------------------
+using ClassIndexMap = std::map<ClassVal,size_t>;
+//---------------------------------------------------------------------
 /// A dataset, holds a set of \ref DataPoint
 //template<typename T>
 class DataSet
@@ -433,6 +490,15 @@ class DataSet
 		size_t nbClasses() const
 		{
 			return _classCount.size();
+		}
+
+		ClassIndexMap getClassIndexMap() const
+		{
+			ClassIndexMap cim;
+			size_t i = 0;
+			for( const auto& cc: _classCount )
+				cim[cc.first] = i++;
+			return cim;
 		}
 
 /// Returns the number of points with class \c val (or number of non-assigned points if \c val=-1)
@@ -563,7 +629,6 @@ DataSet::getFolds( uint index, uint nbFolds ) const
 bool
 DataSet::load( std::string fname, const Fparams params )
 {
-	std::cout << "sep=*" << params.sep << "*\n";
 	std::ifstream f( fname );
 	if( !f.is_open() )
 	{
@@ -605,7 +670,7 @@ DataSet::load( std::string fname, const Fparams params )
 
 				if( params.dataFilesHoldsClass )
 				{
-					int classIndex = 0;
+					int classIndex = -1;
 					auto cla = v_tok.back();
 					if( params.classIsfirst )
 						cla = v_tok.front();
@@ -613,8 +678,8 @@ DataSet::load( std::string fname, const Fparams params )
 					if( !params.classAsString )
 					{
 						classIndex = std::stoi( cla );
-						if( classIndex < 0 )
-							throw std::runtime_error( "line " + temp + ": invalid value for class, can't be <0" );
+//						if( classIndex < 0 )
+//							throw std::runtime_error( "line " + temp + ": invalid value for class, can't be <0" );
 					}
 					else
 					{
@@ -670,8 +735,8 @@ DataSet::load( std::string fname, const Fparams params )
 		else
 			std::cerr << "Warning, unable to save histogram file\n";
 	}
-	return true;
 #endif
+	return true;
 }
 //---------------------------------------------------------------------
 void
@@ -976,8 +1041,15 @@ struct ConfusionMatrix
 	{
         return _mat.size();
 	}
+	void assignIndexMap( const ClassIndexMap& cim )
+	{
+		assert( cim.size() == nbClasses() );
+		_cmClassIndexMap = cim;
+	}
     double getScore( CM_Score, ClassVal ) const;
     double getScore( CM_Score ) const;
+
+/// Returns total number of values in matrix
 	size_t nbValues() const
 	{
 		size_t sum = 0u;
@@ -985,6 +1057,8 @@ struct ConfusionMatrix
 			sum += std::accumulate( li.begin(), li.end(), 0u );
 		return sum;
 	}
+
+/// Returns number of predicted values for class \c cval
 	size_t nbValues( ClassVal cval ) const
 	{
 		assert( cval.get() >= 0 );
@@ -995,11 +1069,17 @@ struct ConfusionMatrix
 
 	void add( ClassVal trueVal, ClassVal predictedVal )
 	{
+
 		assert( trueVal.get() >= 0 );
 		assert( predictedVal.get() >=0 );
 
 		auto col = static_cast<size_t>( trueVal.get() );
 		auto li  = static_cast<size_t>( predictedVal.get() );
+		if( _cmClassIndexMap.size() )
+		{
+			col = _cmClassIndexMap.at( trueVal );
+			li  = _cmClassIndexMap.at( predictedVal );
+		}
 
 		assert( li < _mat.size() && col < _mat.size() );
 		_mat[li][col]++;
@@ -1009,8 +1089,11 @@ struct ConfusionMatrix
 
 	private:
 		double p_score( CM_Score scoreId, priv::CM_Counters ) const;
+
 	private:
 		std::vector<std::vector<uint>> _mat;
+		ClassIndexMap                  _cmClassIndexMap;
+//		bool                           _hasCIM = false;
 };
 
 //---------------------------------------------------------------------
@@ -1143,19 +1226,40 @@ ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 /// This one holds edges that each have a vector holding the index of datapoints.
 /// This is memory costly, but useless for classifying, so once it is trained, we can use the \ref DecisionTree class
 /// \todo unify by templating the type of edges
+/**
+Two constructors available, depending on the situation
+- the first one requires only the number of classes. However, the assumes the classes will be identified
+by their value, i.e. if we have 3 classes, then the \b MUST have the values 0, 1, 2.
+If not, then this will cause an error, because access to the \ref ConfusionMatrix will be made using the class
+values as indexes. And if the class values are "3", "4", "5", this will trigger an error.
+- the second constructor need a \ref ClassIndexMap object, that will enable using the true values of the class to
+access the Confusion Matrix. It can be generated from a source dataset with:
+\code
+	auto classIndexMap = dataset.getClassIndexMap();
+\endcode
+*/
 //template<typename T>
 class TrainingTree
 {
 	private:
-		GraphT    _graph;
-		vertexT_t _initialVertex;
-		size_t    _maxDepth = 1;  ///< defined by training
-		uint      _nbClasses;
+		GraphT        _graph;
+		vertexT_t     _initialVertex;
+		size_t        _maxDepth = 1;  ///< defined by training
+		uint          _nbClasses;
+		ClassIndexMap _classIndexMap;
 
 	public:
-/// Constructor. Needs to known the number of classes (so it can define ConfusionMatrix)
-		TrainingTree( uint nbClasses ) : _nbClasses(nbClasses)
+/// Constructor 1. Needs to known (at least) the number of classes (so it can define ConfusionMatrix)
+		TrainingTree( uint nbClasses )
+			: _nbClasses( nbClasses )
 		{}
+
+/// Constructor 2, to be used if class values can not be used as indexes.
+		TrainingTree( const ClassIndexMap& cim )
+			: _nbClasses( cim.size() )
+			, _classIndexMap( cim )
+		{}
+
 		void clear()
 		{
 			_graph.clear();
@@ -1219,7 +1323,7 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 		else
 			f << "C" << graph[target]._class
 				<< " GI=" << graph[target].giniImpurity
-				<< "\nSR=" << getString( graph[target]._type );
+				<< "\\nSR=" << getString( graph[target]._type );
 
 		f //<< "\\ndepth=" << graph[target].depth
 			<< " #" << graph[target].v_Idx.size()
@@ -1396,7 +1500,7 @@ getNodeContent(
 	auto gImp = getGiniImpurity( v_dpidx, data );
 
 	const auto& classVotes = gImp.second;
-
+//	priv::printMap( std::cout, classVotes, "classvotes" );
 //	COUT << "global Gini Impurity=" << gImp.first << '\n';
 
 	using Pair = std::pair<ClassVal,uint>;
@@ -1409,6 +1513,7 @@ getNodeContent(
 	);
 
 	auto idx_maj = it_max->first;
+	COUT << "idx_maj=" << idx_maj << "\n";
 
 	return NodeContent{
 		gImp.first,
@@ -1660,9 +1765,9 @@ findBestAttribute(
 	START;
 	assert( atMap.nbUnusedAttribs() != 0 );
 
-	auto giniCoeff = getGiniImpurity( vIdx, data );
-
 	LOG( 2, "Searching best attribute among " << atMap.nbUnusedAttribs() );
+
+	auto giniCoeff = getGiniImpurity( vIdx, data );
 
 // step 1 - compute best IG/threshold for each attribute, only for the considered points
 	std::vector<AttributeData> v_IG;
@@ -1719,7 +1824,6 @@ splitNode(
 
 	graph[v]._class = nodeContent.dominantClass;
 	graph[v].giniImpurity = giniImpurity;
-//	graph[v]._type = NT_Final;
 
 	if( s_recDepth>params.maxTreeDepth )
 	{
@@ -1820,6 +1924,7 @@ void
 TrainingTree::train( const DataSet& data, const Params params )
 {
 	START;
+	TIMER_START;
 	LOG( 0, "Start training" );
 
 	NodeT::resetNodeId();
@@ -1895,6 +2000,10 @@ TrainingTree::classify( const DataSet& dataset ) const
 	if( _nbClasses>1 )  // if 0 or 1 class, then nothing to classify
 	{
 		ConfusionMatrix confmat( _nbClasses );
+
+		if( _classIndexMap.size() )
+			confmat.assignIndexMap( _classIndexMap );
+
 		for( const auto& datapoint: dataset )
 		{
 			auto cla1 = datapoint.classVal();

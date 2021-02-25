@@ -67,6 +67,7 @@ int main( int argc, const char** argv )
 		std::exit(1);
 	}
 	dataset.printInfo( std::cout );
+	dataset.printClassHisto( "histo" );
 
 	if( noProcess )
 	{
@@ -81,10 +82,11 @@ int main( int argc, const char** argv )
 
 	if( !doFolding )
 	{
-		TrainingTree tt( nbClasses );
+//		TrainingTree tt( nbClasses );
+		TrainingTree tt( dataset.getClassIndexMap() );
 		tt.train( dataset, params );
 		auto cm = tt.classify( dataset );
-		std::cout << "Confusion Matrix:" << cm << "\n";
+		std::cout << cm << "\n";
 		tt.printInfo( std::cout );
 		tt.printDot( "demo.dot" );
 		cm.printAllScores( std::cout );
@@ -96,7 +98,7 @@ int main( int argc, const char** argv )
 		uint nbFolds = 5;
 		for( uint i=0; i<nbFolds; i++ )
 		{
-			TrainingTree tt( nbClasses );
+			TrainingTree tt( dataset.getClassIndexMap() );
 			auto p_data_subsets = dataset.getFolds( i, nbFolds );
 			auto data_train = p_data_subsets.first;
 			auto data_test  = p_data_subsets.second;

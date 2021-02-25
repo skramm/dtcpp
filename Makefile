@@ -9,8 +9,18 @@ SRC_FILES = $(wildcard *.cpp)
 DOT_FILES = $(wildcard *.dot)
 
 PNG_FILES = $(patsubst %.dot,%.png,$(DOT_FILES))
-
 OBJ_FILES = $(patsubst %.cpp,$(OBJ_DIR)/%,$(SRC_FILES))
+
+#----------------------------------------------
+ifeq "$(NDEBUG)" ""
+	NDEBUG=N
+endif
+
+ifeq ($(NDEBUG),Y)
+	CFLAGS += -DNDEBUG
+endif
+
+
 
 all: $(BIN_DIR)/main
 	@echo "done"
@@ -34,7 +44,7 @@ show:
 	@echo "PNG_FILES=$(PNG_FILES)"
 
 $(OBJ_DIR)/%.o: %.cpp dtcpp.h $(SRC_FILES)
-	$(CXX) -Wall -std=gnu++14 -fexceptions -O2 -Iother/ -c $< -o $@
+	$(CXX) -Wall -std=gnu++14 $(CFLAGS) -fexceptions -O2 -Iother/ -c $< -o $@
 
 $(BIN_DIR)/%:$(OBJ_DIR)/%.o
 	$(CXX) -o $@ $< -s

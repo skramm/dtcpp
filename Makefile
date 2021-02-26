@@ -2,6 +2,8 @@
 
 SHELL=bash
 
+.PHONY: cleandoc clean cleanall all show doc dot test
+
 BIN_DIR=build/bin
 OBJ_DIR=build/obj
 
@@ -50,6 +52,7 @@ $(BIN_DIR)/%:$(OBJ_DIR)/%.o
 	$(CXX) -o $@ $< -s
 
 doc:
+	@- build/html/*
 	@doxygen misc/Doxyfile 1>build/doxygen_stdout 2>build/doxygen_stderr
 	@xdg-open build/html/index.html
 
@@ -67,8 +70,11 @@ dot: $(PNG_FILES)
 %.png:%.dot $(DOT_FILES)
 	dot -Tpng $< >$@
 
-clean:
+cleandoc:
+	@-rm html/search/*
 	@-rm html/*
+
+clean: cleandoc
 	@-rm $(OBJ_DIR)/*
 	@-rm *.dat
 	@-rm *.dot

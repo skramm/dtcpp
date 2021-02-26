@@ -1058,7 +1058,7 @@ struct ConfusionMatrix
 		return sum;
 	}
 
-/// Returns number of predicted values for class \c cval
+/// Returns number of \b predicted values for class \c cval
 	size_t nbValues( ClassVal cval ) const
 	{
 		assert( cval.get() >= 0 );
@@ -1111,26 +1111,39 @@ void printLine( std::ostream& f, uint w, uint n )
 std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
 {
 	int w = 5;
-	auto nb = cm.nbValues();
+	auto nbVal = cm.nbValues();
+	auto nbCl = cm._mat.size();
 	f << std::setfill(' ');
 	f << "ConfusionMatrix:\nPredicted \\ True class =>\n ||   ";
 //		<< std::setfill('X') << std::setw(5);
 	for( size_t i=0; i<cm._mat.size(); i++ )
 		f << std::setw(w) << i << " ";
 	f << "  class\n \\/ ";
-	priv::printLine( f, w, cm._mat.size() );
+	priv::printLine( f, w, nbCl );
 	f << " rate\n";
-	for( size_t i=0; i<cm._mat.size(); i++ )
+
+	std::vector<size_t> sumCol( nbCl, 0u );
+	for( size_t i=0; i<nbCl; i++ )
 	{
 		f << std::setw(3) << i << " | ";
-		for( const auto& elem: cm._mat[i] )
-			f << std::setw(w) << elem << ' ';
+
+		for( size_t col=0; col<nbCl; col++ )
+		{
+			f << std::setw(w) << cm._mat[i][col] << ' ';
+			sumCol[col] += cm._mat[i][col];
+		}
 		f << "| "
-			<< 100.0 * cm.nbValues( ClassVal(i) ) / nb
-			<< '\n';
+			<< std::setw(w) << cm.nbValues( ClassVal(i) ) << ' '
+			<< std::setprecision(3)
+			<< 100.0 * cm.nbValues( ClassVal(i) ) / nbVal
+			<< "%\n";
 	}
 	f << "    ";
-	priv::printLine( f, w, cm._mat.size() );
+	priv::printLine( f, w, nbCl );
+	f << "\n    | ";
+	for( size_t col=0; col<nbCl; col++ )
+		f << std::setw(w) << sumCol[col] << ' ';
+	f << '\n';
 	return f;
 }
 
@@ -1389,22 +1402,29 @@ TrainingTree::printInfo( std::ostream& f ) const
 }
 
 //---------------------------------------------------------------------
+#if 0
 /// Computes the nb of votes for each class, for the points defined in \c v_Idx
+/**
+\warning This does not take into account class value -1, as it means point is "classless"
+*/
 std::map<ClassVal,uint>
 computeClassVotes( const std::vector<uint>& v_Idx, const DataSet& data )
 {
 	START;
 	assert( v_Idx.size()>0 );
-
+	size_t nbClassLess = 0;
 	std::map<ClassVal,uint> classVotes; // key: class index, value: votes
 	for( auto idx: v_Idx )
 	{
 		const auto& dp = data.getDataPoint( idx );
-		classVotes[ dp.classVal() ]++;
+		if( dp.classVal() == ClassVal(-1) )
+			nbClassLess++;
+		else
+			classVotes[ dp.classVal() ]++;
 	}
 	return classVotes;
 }
-
+#endif
 //---------------------------------------------------------------------
 /// Computes the Gini coefficient for points listed in \c vdpidx
 /**
@@ -1417,12 +1437,27 @@ getGiniImpurity(
 )
 {
 	START;
+	assert( v_dpidx.size()>0 );
+#if 0
 	auto classVotes = computeClassVotes( v_dpidx, data );
+#else
+	size_t nbClassLess = 0;
+	std::map<ClassVal,uint> classVotes; // key: class index, value: votes
+	for( auto idx: v_dpidx )
+	{
+		const auto& dp = data.getDataPoint( idx );
+		if( dp.classVal() == ClassVal(-1) )
+			nbClassLess++;
+		else
+			classVotes[ dp.classVal() ]++;
+	}
+	assert( nbClassLess < v_dpidx.size() );
+#endif
 
 	double giniCoeff = 1.;
 	for( auto elem: classVotes )
 	{
-		auto v = 1. * elem.second / v_dpidx.size();
+		auto v = 1. * elem.second / (v_dpidx.size() - nbClassLess);
 		giniCoeff -= v*v;
 	}
 //	COUT << "global Gini Coeff=" << giniCoeff << '\n';
@@ -1434,6 +1469,7 @@ getGiniImpurity(
 }
 //---------------------------------------------------------------------
 #if 0
+// DEPRECATED
 /// Returns the class that is in majority in the points defined in \c vIdx.
 /// The second value is the percentage of that majority, in the range \f$ [0,1]\f$  (well, \f$ ]0.5,1]\f$  actually !)
 //template<typename T>

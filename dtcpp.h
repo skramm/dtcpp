@@ -51,15 +51,19 @@ namespace dtcpp {
 #define LOG( level, msg ) \
 	if( params.verbose && level<=params.verboseLevel ) \
 	{ \
+		std::cout << std::setfill('0') << std::setw(4) << priv::g_Timer.getDuration(level); \
 		priv::spaceLog( level ); \
-		std::cout << priv::g_Timer.getDuration(); \
 		std::cout << " E" << std::setfill('0') << std::setw(4) << priv::logCount()++ << '-' << __FUNCTION__ << "(): " << msg << '\n'; \
 	}
 
 #define TIMER_START priv::g_Timer.start()
 
 
+// % % % % % % % % % % % % % %
+/// inner namespace
 namespace priv {
+// % % % % % % % % % % % % % %
+
 uint& logCount()
 {
 	static uint s_logCount;
@@ -69,15 +73,17 @@ uint& logCount()
 /// Used in logging macro, see \ref LOG
 void spaceLog( int n )
 {
+	std::cout << ':';
 	for( int i=0; i<n; i++ )
 		std::cout << "  ";
 }
 
 /// Holds timing
+/// \todo add level to have a timing PER log level
 struct Timer
 {
 //auto t1 = std::chrono::high_resolution_clock::now();
-	std::string getDuration()
+	std::string getDuration(int level)
 	{
 		auto t2 = std::chrono::high_resolution_clock::now();
 		auto tdiff = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - ck ).count();
@@ -128,23 +134,11 @@ public:
 private:
 	T value_;
 };
-} // namespace priv
 
-using ThresholdVal = priv::NamedType<float,struct ThresholdValTag>;
-using ClassVal     = priv::NamedType<int,  struct ClassValTag>;
-
-//---------------------------------------------------------------------
 
 // forward declaration
 //template<typename U>
 //class DataSet;
-
-//---------------------------------------------------------------------
-
-// % % % % % % % % % % % % % %
-/// inner namespace
-namespace priv {
-// % % % % % % % % % % % % % %
 
 //---------------------------------------------------------------------
 /// General utility function
@@ -229,6 +223,9 @@ splitString( const std::string &s, char delim )
 // % % % % % % % % % % % % % %
 } // namespace priv
 // % % % % % % % % % % % % % %
+
+using ThresholdVal = priv::NamedType<float,struct ThresholdValTag>;
+using ClassVal     = priv::NamedType<int,  struct ClassValTag>;
 
 //---------------------------------------------------------------------
 /// Run-time parameters for training
@@ -1027,7 +1024,6 @@ struct ConfusionMatrix
 		auto nbClasses = cim.size();
 		assert( nbClasses>1 );
 		_mat.resize( nbClasses );
-		uint i = 0;
 		for( auto& li: _mat )
 		{
 			li.resize( nbClasses );
@@ -1122,7 +1118,7 @@ void printLine( std::ostream& f, uint w, uint n )
 {
 	n++;
 	f << '|';
-	for( uint i=0; i<w*n; i++ )
+	for( uint i=0; i<w*n+5; i++ )
 		f << '-';
 	f <<"|";
 }
@@ -1143,7 +1139,7 @@ operator << ( std::ostream& f, const ConfusionMatrix& cm )
 
 	f << "  class\n \\/ ";
 	priv::printLine( f, w, nbCl );
-	f << " # | rate\n";
+	f << "  # | rate\n";
 
 	std::vector<size_t> sumCol( nbCl, 0u );
 	size_t li = 0;
@@ -1165,7 +1161,7 @@ operator << ( std::ostream& f, const ConfusionMatrix& cm )
 	}
 	f << "    ";
 	priv::printLine( f, w, nbCl );
-	f << "\n    | ";
+	f << "\nsum | ";
 	for( size_t col=0; col<nbCl; col++ )
 		f << std::setw(w) << sumCol[col] << ' ';
 	f <<  "| " << std::setw(w)
@@ -1875,7 +1871,7 @@ splitNode(
 //	static uint s_nodeId = params.initialVertexId;   // starts at one because the initial node (id=0) is created elsewhere
 
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
-	LOG( 1, "splitting node " << graph[v]._nodeId << " holding " << vIdx.size() << " points" );
+	LOG( 1, "splitting node " << graph[v]._nodeId << " depth=" << s_recDepth << ", holding " << vIdx.size() << " points" );
 
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done

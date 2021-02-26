@@ -78,11 +78,8 @@ int main( int argc, const char** argv )
 	auto stats = dataset.computeStats<float>();
 	std::cout << stats;
 
-	auto nbClasses = dataset.nbClasses();
-
 	if( !doFolding )
 	{
-//		TrainingTree tt( nbClasses );
 		TrainingTree tt( dataset.getClassIndexMap() );
 		tt.train( dataset, params );
 		auto cm = tt.classify( dataset );

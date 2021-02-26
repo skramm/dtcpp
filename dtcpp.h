@@ -16,11 +16,7 @@ See doc on https://github.com/skramm/dtcpp
 	- number of attributes set automatically
 	- classes may be integer values or string values, see Fparams
 - Does not handle missing values
-- using boost::graph to model the tree
-
-\todo 2021-02-26 bug, try build/bin/main sample_data/dummy_1.dat:
-409 pts with class 0 but confusion matrix shows none.<br>
-Also: file holds one classless point, does not appear.
+- using boost::graph to implement the tree
 */
 
 #ifndef DTCPP_HG
@@ -36,7 +32,7 @@ Also: file holds one classless point, does not appear.
 #include <chrono>
 
 #include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/graph_utility.hpp> // needed only for print_graph();
+//#include <boost/graph/graph_utility.hpp> // needed only for print_graph();
 
 namespace dtcpp {
 
@@ -389,7 +385,9 @@ struct DatasetStats
 	}
 };
 //---------------------------------------------------------------------
+/// Used in TrainingTree to map a class value to an index in the \ref ConfusionMatrix
 using ClassIndexMap = std::map<ClassVal,size_t>;
+
 //---------------------------------------------------------------------
 /// A dataset, holds a set of \ref DataPoint
 //template<typename T>
@@ -997,7 +995,7 @@ Layout:
 - columns: true class
 - lignes: predicted (classified) class
 
-Definitions:
+Definitions of performance scores:
 - For 2- class problems, follows definitions from https://en.wikipedia.org/wiki/Confusion_matrix
 - For multiclass, see definitions here: https://stats.stackexchange.com/a/338240/23990
 and here: https://towardsdatascience.com/multi-class-classification-extracting-performance-metrics-from-the-confusion-matrix-b379b427a872
@@ -1013,15 +1011,23 @@ For multiclass situations, you need to add for what class you are requesting thi
 \code
 	auto score = cmat.getScore( CM_TPR, ClassValue );
 \endcode
+
+
+
+
+
 */
 struct ConfusionMatrix
 {
 	friend std::ostream& operator << ( std::ostream&, const ConfusionMatrix& );
 
-	ConfusionMatrix( size_t nbClasses )
+	ConfusionMatrix( ClassIndexMap cim )
+		: _cmClassIndexMap(cim)
 	{
+		auto nbClasses = cim.size();
 		assert( nbClasses>1 );
 		_mat.resize( nbClasses );
+		uint i = 0;
 		for( auto& li: _mat )
 		{
 			li.resize( nbClasses );
@@ -1030,6 +1036,19 @@ struct ConfusionMatrix
 	}
 
 #ifdef TESTMODE
+	ConfusionMatrix( size_t nbClasses )
+	{
+		assert( nbClasses>1 );
+		_mat.resize( nbClasses );
+		uint i = 0;
+		for( auto& li: _mat )
+		{
+			li.resize( nbClasses );
+			std::fill( li.begin(), li.end(), 0u );
+			_cmClassIndexMap[ ClassVal(i) ]=i++;
+		}
+	}
+
 	ConfusionMatrix( const std::vector<std::vector<uint>>& m )
 	{
 		_mat = m;
@@ -1045,11 +1064,11 @@ struct ConfusionMatrix
 	{
         return _mat.size();
 	}
-	void assignIndexMap( const ClassIndexMap& cim )
+/*	void assignIndexMap( const ClassIndexMap& cim )
 	{
 		assert( cim.size() == nbClasses() );
 		_cmClassIndexMap = cim;
-	}
+	}*/
     double getScore( CM_Score, ClassVal ) const;
     double getScore( CM_Score ) const;
 
@@ -1073,13 +1092,12 @@ struct ConfusionMatrix
 
 	void add( ClassVal trueVal, ClassVal predictedVal )
 	{
-
 		assert( trueVal.get() >= 0 );
 		assert( predictedVal.get() >=0 );
 
 		auto col = static_cast<size_t>( trueVal.get() );
 		auto li  = static_cast<size_t>( predictedVal.get() );
-		if( _cmClassIndexMap.size() )
+		if( _cmClassIndexMap.size() )  /// \todo this is now always true
 		{
 			col = _cmClassIndexMap.at( trueVal );
 			li  = _cmClassIndexMap.at( predictedVal );
@@ -1096,7 +1114,6 @@ struct ConfusionMatrix
 	private:
 		std::vector<std::vector<uint>> _mat;
 		ClassIndexMap                  _cmClassIndexMap;
-//		bool                           _hasCIM = false;
 };
 
 //---------------------------------------------------------------------
@@ -1112,35 +1129,39 @@ void printLine( std::ostream& f, uint w, uint n )
 }
 //---------------------------------------------------------------------
 /// Streaming of \ref ConfusionMatrix
-std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
+std::ostream&
+operator << ( std::ostream& f, const ConfusionMatrix& cm )
 {
-	int w = 5;
 	auto nbVal = cm.nbValues();
+	size_t w = std::max( (size_t)3, (size_t)std::to_string( nbVal ).size() );
 	auto nbCl = cm._mat.size();
 	f << std::setfill(' ');
 	f << "ConfusionMatrix:\nPredicted \\ True class =>\n ||   ";
-//		<< std::setfill('X') << std::setw(5);
-	for( size_t i=0; i<cm._mat.size(); i++ )
-		f << std::setw(w) << i << " ";
+
+	for( const auto & pci: cm._cmClassIndexMap )
+		f << std::setw(w) << pci.first << " ";
+
 	f << "  class\n \\/ ";
 	priv::printLine( f, w, nbCl );
 	f << " # | rate\n";
 
 	std::vector<size_t> sumCol( nbCl, 0u );
-	for( size_t i=0; i<nbCl; i++ )
+	size_t li = 0;
+	for( const auto & pci: cm._cmClassIndexMap )
 	{
-		f << std::setw(3) << i << " | ";
+		f << std::setw(3) << pci.first << " | ";
 
 		for( size_t col=0; col<nbCl; col++ )
 		{
-			f << std::setw(w) << cm._mat[i][col] << ' ';
-			sumCol[col] += cm._mat[i][col];
+			f << std::setw(w) << cm._mat[li][col] << ' ';
+			sumCol[col] += cm._mat[li][col];
 		}
 		f << "| "
-			<< std::setw(w) << cm.nbValues( ClassVal(i) ) << "  "
+			<< std::setw(w) << cm.nbValues( ClassVal(li) ) << "  "
 			<< std::setprecision(3)
-			<< 100.0 * cm.nbValues( ClassVal(i) ) / nbVal
+			<< 100.0 * cm.nbValues( ClassVal(li) ) / nbVal
 			<< "%\n";
+		li++;
 	}
 	f << "    ";
 	priv::printLine( f, w, nbCl );
@@ -1265,13 +1286,13 @@ class TrainingTree
 		vertexT_t     _initialVertex;
 		size_t        _maxDepth = 1;  ///< defined by training
 		uint          _nbClasses;
-		ClassIndexMap _classIndexMap;
+		ClassIndexMap _classIndexMap;  ///< maps class values to index values
 
 	public:
 /// Constructor 1. Needs to known (at least) the number of classes (so it can define ConfusionMatrix)
-		TrainingTree( uint nbClasses )
+/*		TrainingTree( uint nbClasses )
 			: _nbClasses( nbClasses )
-		{}
+		{}*/
 
 /// Constructor 2, to be used if class values can not be used as indexes.
 		TrainingTree( const ClassIndexMap& cim )
@@ -1408,6 +1429,7 @@ TrainingTree::printInfo( std::ostream& f ) const
 }
 
 //---------------------------------------------------------------------
+// deprecated
 #if 0
 /// Computes the nb of votes for each class, for the points defined in \c v_Idx
 /**
@@ -1435,6 +1457,8 @@ computeClassVotes( const std::vector<uint>& v_Idx, const DataSet& data )
 /// Computes the Gini coefficient for points listed in \c vdpidx
 /**
 Returns a pair holding as first:the Gini Impurity, second: the class votes
+
+\todo handle the case where all the points are classless !
 */
 std::pair<double,std::map<ClassVal,uint>>
 getGiniImpurity(
@@ -1444,9 +1468,7 @@ getGiniImpurity(
 {
 	START;
 	assert( v_dpidx.size()>0 );
-#if 0
-	auto classVotes = computeClassVotes( v_dpidx, data );
-#else
+
 	size_t nbClassLess = 0;
 	std::map<ClassVal,uint> classVotes; // key: class index, value: votes
 	for( auto idx: v_dpidx )
@@ -1458,7 +1480,6 @@ getGiniImpurity(
 			classVotes[ dp.classVal() ]++;
 	}
 	assert( nbClassLess < v_dpidx.size() );
-#endif
 
 	double giniCoeff = 1.;
 	for( auto elem: classVotes )
@@ -2039,25 +2060,18 @@ TrainingTree::classify( const DataPoint& point ) const
 ConfusionMatrix
 TrainingTree::classify( const DataSet& dataset ) const
 {
-	if( _nbClasses>1 )  // if 0 or 1 class, then nothing to classify
+	if( _nbClasses < 2 )  // if 0 or 1 class, then nothing to classify
+		throw std::runtime_error( "nothing to classify, dataset holds " + std::to_string(_nbClasses) + " classes" );
+
+	ConfusionMatrix confmat( _classIndexMap );
+	for( const auto& datapoint: dataset )
 	{
-		ConfusionMatrix confmat( _nbClasses );
-
-		if( _classIndexMap.size() )
-			confmat.assignIndexMap( _classIndexMap );
-
-		for( const auto& datapoint: dataset )
-		{
-			auto cla1 = datapoint.classVal();
-			auto cla2 = classify( datapoint );
-			if( cla1 != ClassVal(-1) )
-				confmat.add( cla1, cla2 );
-		}
-		//        std::cout << confmat;
-		return confmat;
-		}
-
-	return ConfusionMatrix(2); // empty matrix
+		auto cla1 = datapoint.classVal();
+		auto cla2 = classify( datapoint );
+		if( cla1 != ClassVal(-1) )
+			confmat.add( cla1, cla2 );
+	}
+	return confmat;
 }
 
 } // namespace dtcpp

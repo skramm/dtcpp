@@ -17,6 +17,10 @@ See doc on https://github.com/skramm/dtcpp
 	- classes may be integer values or string values, see Fparams
 - Does not handle missing values
 - using boost::graph to model the tree
+
+\todo 2021-02-26 bug, try build/bin/main sample_data/dummy_1.dat:
+409 pts with class 0 but confusion matrix shows none.<br>
+Also: file holds one classless point, does not appear.
 */
 
 #ifndef DTCPP_HG
@@ -393,8 +397,7 @@ class DataSet
 {
 	public:
 		DataSet() : _nbAttribs(0)
-		{
-		}
+		{}
 		DataSet( size_t n ) : _nbAttribs(n)
 		{ assert( n ); }
 		size_t size() const
@@ -514,7 +517,7 @@ class DataSet
 	private:
 		size_t                  _nbAttribs = 0;
 		std::vector<DataPoint>  _data;
-		std::map<ClassVal,uint> _classCount;
+		std::map<ClassVal,uint> _classCount;           ///< Holds the number of points for each class value. Does \b NOT count classless points
 		uint                    _nbNoClassPoints = 0u;
 };
 //using DataSetf = DataSet<float>;
@@ -668,7 +671,9 @@ DataSet::load( std::string fname, const Fparams params )
 				if( size() == 0 )                    // if this is the first datapoint, then set the nb of attributes
 					setNbAttribs( params.dataFilesHoldsClass ? v_tok.size()-1 : v_tok.size() );
 
-				if( params.dataFilesHoldsClass )
+				if( !params.dataFilesHoldsClass )
+					_data.push_back( DataPoint( v_tok ) );
+				else
 				{
 					int classIndex = -1;
 					auto cla = v_tok.back();
@@ -676,14 +681,10 @@ DataSet::load( std::string fname, const Fparams params )
 						cla = v_tok.front();
 
 					if( !params.classAsString )
-					{
 						classIndex = std::stoi( cla );
-//						if( classIndex < 0 )
-//							throw std::runtime_error( "line " + temp + ": invalid value for class, can't be <0" );
-					}
 					else
 					{
-						if( classStringMap.find( cla ) == classStringMap.end() )  // if not there, then
+						if( classStringMap.find( cla ) == classStringMap.end() )  // if not registered, then
 						{
 							classIndex            = classIndexCounter;
 							classStringMap[ cla ] = classIndexCounter;             // new class, add it
@@ -692,17 +693,16 @@ DataSet::load( std::string fname, const Fparams params )
 						else
 							classIndex = classStringMap[ cla ];
 					}
-					_classCount[ ClassVal(classIndex) ]++;
-	//				v_tok.resize( v_tok.size()-1 );
+					if( classIndex < 0 )
+						_nbNoClassPoints++;
+
+					else
+						_classCount[ ClassVal(classIndex) ]++;
 
 					if( params.classIsfirst )
 						std::rotate( v_tok.begin(), v_tok.begin()+1, v_tok.end() );
 					v_tok.erase( v_tok.end()-1 );   // remove last element (class)
 					_data.push_back( DataPoint( v_tok, ClassVal(classIndex) ) );
-				}
-				else
-				{
-					_data.push_back( DataPoint( v_tok ) );
 				}
 			}
 		}
@@ -760,7 +760,6 @@ DataSet::printClassHisto( std::string fname ) const
 void
 DataSet::printInfo( std::ostream& f, const char* name ) const
 {
-
 	f << "Dataset: ";
 	if( name )
 		f << name;
@@ -769,13 +768,16 @@ DataSet::printInfo( std::ostream& f, const char* name ) const
 		<< "\n # classes="          << nbClasses()
 		<< "\n # classless points=" << _nbNoClassPoints
 		<< "\nClasses frequency:\n";
+	size_t sum = 0;
 	for( const auto& cval: _classCount )
+	{
 		std::cout << cval.first << ": "
 			<< cval.second
 			<< " (" << std::setw(4) << 100. * cval.second/size()
 			<< " %)\n";
-
-	f << '\n';
+		sum += cval.second;
+	}
+	f << " => " << sum << " points with class value\n";
 }
 //---------------------------------------------------------------------
 //template<typename T>
@@ -1014,6 +1016,8 @@ For multiclass situations, you need to add for what class you are requesting thi
 */
 struct ConfusionMatrix
 {
+	friend std::ostream& operator << ( std::ostream&, const ConfusionMatrix& );
+
 	ConfusionMatrix( size_t nbClasses )
 	{
 		assert( nbClasses>1 );
@@ -1084,7 +1088,6 @@ struct ConfusionMatrix
 		assert( li < _mat.size() && col < _mat.size() );
 		_mat[li][col]++;
 	}
-	friend std::ostream& operator << ( std::ostream&, const ConfusionMatrix& );
 	void printAllScores( std::ostream&, const char* msg=0 ) const;
 
 	private:
@@ -1108,6 +1111,7 @@ void printLine( std::ostream& f, uint w, uint n )
 }
 }
 //---------------------------------------------------------------------
+/// Streaming of \ref ConfusionMatrix
 std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
 {
 	int w = 5;
@@ -1120,7 +1124,7 @@ std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
 		f << std::setw(w) << i << " ";
 	f << "  class\n \\/ ";
 	priv::printLine( f, w, nbCl );
-	f << " rate\n";
+	f << " # | rate\n";
 
 	std::vector<size_t> sumCol( nbCl, 0u );
 	for( size_t i=0; i<nbCl; i++ )
@@ -1133,7 +1137,7 @@ std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
 			sumCol[col] += cm._mat[i][col];
 		}
 		f << "| "
-			<< std::setw(w) << cm.nbValues( ClassVal(i) ) << ' '
+			<< std::setw(w) << cm.nbValues( ClassVal(i) ) << "  "
 			<< std::setprecision(3)
 			<< 100.0 * cm.nbValues( ClassVal(i) ) / nbVal
 			<< "%\n";
@@ -1143,7 +1147,9 @@ std::ostream& operator << ( std::ostream& f, const ConfusionMatrix& cm )
 	f << "\n    | ";
 	for( size_t col=0; col<nbCl; col++ )
 		f << std::setw(w) << sumCol[col] << ' ';
-	f << '\n';
+	f <<  "| " << std::setw(w)
+		<< std::accumulate( sumCol.begin(), sumCol.end(), 0u )
+		<< '\n';
 	return f;
 }
 

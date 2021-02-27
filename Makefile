@@ -76,6 +76,7 @@ cleandoc:
 
 clean: cleandoc
 	@-rm $(OBJ_DIR)/*
+	@-rm build/*
 	@-rm *.dat
 	@-rm *.dot
 	@-rm *.png

@@ -34,6 +34,8 @@ See doc on https://github.com/skramm/dtcpp
 #include <boost/graph/adjacency_list.hpp>
 //#include <boost/graph/graph_utility.hpp> // needed only for print_graph();
 
+#include <boost/histogram.hpp>
+
 namespace dtcpp {
 
 #ifdef DEBUG
@@ -367,19 +369,30 @@ struct AttribStats
 	}
 };
 //---------------------------------------------------------------------
-/// Holds attribute stats, see DataSet::computeStats()
+/// Holds attribute stats, see DataSet::computeStats() (just a wrapper, actually...)
 template<typename T>
 struct DatasetStats
 {
-	std::vector<AttribStats<T>> v_stats;
-	friend std::ostream& operator << ( std::ostream& f, const DatasetStats& st )
-	{
-		f << "DatasetStats: " << st.v_stats.size() << " attributes:"; // << st.nbClasses() << '\n';
-		for( uint i=0; i<st.v_stats.size(); i++ )
-			f << "\n -attribute " << i << ": " << st.v_stats[i];
-		f << '\n';
-		return f;
-	}
+	private:
+		std::vector<AttribStats<T>> v_stats;
+
+	public:
+/// Constructor. Argument is the number of attributes
+		DatasetStats( size_t nbAttribs ) : v_stats(nbAttribs)
+		{}
+		void add( size_t idx, const AttribStats<T>& ats )
+		{
+			v_stats[idx] = ats;
+		}
+
+		friend std::ostream& operator << ( std::ostream& f, const DatasetStats<T>& st )
+		{
+			f << "DatasetStats: " << st.v_stats.size() << " attributes:"; // << st.nbClasses() << '\n';
+			for( uint i=0; i<st.v_stats.size(); i++ )
+				f << "\n -attribute " << i << ": " << st.v_stats[i];
+			f << '\n';
+			return f;
+		}
 };
 //---------------------------------------------------------------------
 /// Used in TrainingTree to map a class value to an index in the \ref ConfusionMatrix
@@ -520,61 +533,105 @@ class DataSet
 
 
 //---------------------------------------------------------------------
-/// Compute statistics of the dataset, attributes by attribute.
+/// Writes in current folder a file named "attrib_histo_<i>.dat", holding
+/// the histogram values of attribute \c i.
 /**
-Done by storing for a given attribute all the values in a vector, then computing stats on that vector
+Uses Boost::histogram, see https://www.boost.org/doc/libs/1_70_0/libs/histogram
+*/
+template<typename T>
+void
+saveAttribHisto( size_t i, const std::vector<float>& vat, const AttribStats<T>& atstats, uint nbBins )
+{
+	char sep = ' ';
+	auto h = boost::histogram::make_histogram(
+		boost::histogram::axis::regular<>(
+			nbBins,
+			atstats._minVal,
+			atstats._maxVal
+		)
+	);
+	std::string fname( "attrib_histo_" + std::to_string(i) + ".dat" );
+	std::ofstream f( fname );
+	if( !f.is_open() )
+		throw std::runtime_error( "unable to open file '" + fname + "'" );
 
+	std::for_each( vat.begin(), vat.end(), std::ref(h) );
+
+	f << "# histogram for attribute " << i << '\n';
+	for (auto x : indexed(h, boost::histogram::coverage::all))
+		f << x.index() << sep << x.bin().lower() << sep << x.bin().upper() << sep << *x << '\n';
+}
+//---------------------------------------------------------------------
+/// Compute statistics of an attribute.
+/**
 - median: https://stackoverflow.com/a/42791986/193789
 - stddev: https://stackoverflow.com/a/7616783/193789
 
+\note Argument must not be const because it will be (partially) sorted here
+*/
+template<typename T>
+AttribStats<T>
+computeAttribStats( std::vector<float>& vat )
+{
+	auto nbPts = vat.size();
+
+	auto it_mm = std::minmax_element( vat.begin(), vat.end() );
+	AttribStats<T> at_stat { *it_mm.first, *it_mm.second };     // sets min and max values
+
+	auto sum = std::accumulate( vat.begin(), vat.end(), 0. );
+	auto mean = sum / nbPts;
+	at_stat._meanVal = mean;
+
+	std::vector<double> diff( nbPts );
+	std::transform( vat.begin(), vat.end(), diff.begin(), [mean](double x) { return x - mean; });
+
+	auto sq_sum = std::inner_product( diff.begin(), diff.end(), diff.begin(), 0. );
+
+	at_stat._stddevVal = std::sqrt( sq_sum / nbPts );
+
+	if( nbPts % 2 == 0)  // if even
+	{
+		const auto median_it1 = vat.begin() + nbPts / 2 - 1;
+		const auto median_it2 = vat.begin() + nbPts / 2;
+
+		std::nth_element( vat.begin(), median_it1 , vat.end() );
+		const auto e1 = *median_it1;
+
+		std::nth_element( vat.begin(), median_it2 , vat.end() );
+		const auto e2 = *median_it2;
+
+		at_stat._medianVal = (e1 + e2) / 2;
+
+	}
+	else                // if odd
+	{
+		const auto median_it = vat.begin() + vat.size() / 2;
+		std::nth_element( vat.begin(), median_it , vat.end() );
+		at_stat._medianVal = *median_it;
+	}
+	return at_stat;
+}
+//---------------------------------------------------------------------
+/// Compute statistics of the dataset, attribute by attribute.
+/**
+Done by storing for a given attribute all the values in a vector, then computing stats on that vector
 */
 template<typename T>
 DatasetStats<T>
 DataSet::computeStats() const
 {
-	DatasetStats<T> dstats;
-	for( uint i=0; i<nbAttribs(); i++ )
+	DatasetStats<T> dstats( nbAttribs() );
+	for( size_t i=0; i<nbAttribs(); i++ )
 	{
 		std::vector<float> vat;
 		vat.reserve( size() );               // guarantees we won't have any reallocating
 		for( const auto& point: _data )
 			vat.push_back( point.attribVal(i) );
 
-		auto it_mm = std::minmax_element( vat.begin(), vat.end() );
-		AttribStats<T> pt_stat { *it_mm.first, *it_mm.second };     // sets min and max values
+		const auto& atstats = computeAttribStats<T>( vat );
+		dstats.add( i, atstats );
 
-		auto sum = std::accumulate( vat.begin(), vat.end(), 0. );
-		auto mean = sum / size();
-		pt_stat._meanVal = mean;
-
-		std::vector<double> diff( size() );
-		std::transform( vat.begin(), vat.end(), diff.begin(), [mean](double x) { return x - mean; });
-
-		auto sq_sum = std::inner_product( diff.begin(), diff.end(), diff.begin(), 0. );
-
-		pt_stat._stddevVal = std::sqrt( sq_sum / size() );
-
-		if( size() % 2 == 0)  // if even
-		{
-			const auto median_it1 = vat.begin() + vat.size() / 2 - 1;
-			const auto median_it2 = vat.begin() + vat.size() / 2;
-
-			std::nth_element( vat.begin(), median_it1 , vat.end() );
-			const auto e1 = *median_it1;
-
-			std::nth_element( vat.begin(), median_it2 , vat.end() );
-			const auto e2 = *median_it2;
-
-			pt_stat._medianVal = (e1 + e2) / 2;
-
-		}
-		else                // if odd
-		{
-			const auto median_it = vat.begin() + vat.size() / 2;
-			std::nth_element( vat.begin(), median_it , vat.end() );
-			pt_stat._medianVal = *median_it;
-		}
-		dstats.v_stats.push_back( pt_stat );
+		saveAttribHisto( i, vat, atstats, 15 );
 	}
 	return dstats;
 }
@@ -1674,7 +1731,7 @@ computeBestThreshold(
 )
 {
 	START;
-	LOG(3, "Searching best for attrib=" << atIdx );
+//	LOG(3, "Searching best threshold for attrib=" << atIdx );
 
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
 
@@ -1683,7 +1740,7 @@ computeBestThreshold(
 		v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
 
 	auto nbRemoval = removeDuplicates( v_attribVal, params );
-//	std::cout << "Removal of " << nbRemoval << " attribute values\n";
+	std::cout << "Removal of " << nbRemoval << " attribute values\n";
 
 	if( v_attribVal.size() < 2 )         // if only one value, is pointless
 	{
@@ -1696,10 +1753,12 @@ computeBestThreshold(
 	for( uint i=0; i<v_thresVal.size(); i++ )
 		v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
 
+	LOG(3, "Searching best threshold for attrib=" << atIdx << " among " << v_thresVal.size() << " thresholds, based on " << v_dpidx.size() << " pts" );
+
 // step 2: compute IG for each threshold value
 
 	std::vector<float> deltaGini( v_thresVal.size() );   // one value per threshold
-	std::vector<uint> nb_LT( v_thresVal.size(), 0u );    // will hold the nb of points lying below the threshol
+	std::vector<uint> nb_LT( v_thresVal.size(), 0u );    // will hold the nb of points lying below the threshold
 	for( size_t i=0; i<v_thresVal.size(); i++ )          // for each threshold value
 	{
 //		COUT << "thres " << i << "=" << v_thresVal[i] << '\n';

@@ -99,7 +99,21 @@ struct Timer
 	std::chrono::high_resolution_clock::time_point ck;
 };
 
+/// Used for logging, to measure duration.
 Timer g_Timer;
+
+
+/// Root string used to generated the script that will be used to generate plots of the attribute histograms,
+/// see DataSet::computeStats()
+std::string g_root_gnuplot_histo =
+	"#!/usr/local/bin/gnuplot\n \
+	set terminal pngcairo\n \
+	set style data histogram\n \
+	set style histogram cluster gap 1\n \
+	set style fill solid\n \
+	set boxwidth 1\n";
+
+
 
 //---------------------------------------------------------------------
 /// A template to have strong types, taken from J. Boccara
@@ -612,14 +626,20 @@ computeAttribStats( std::vector<float>& vat )
 	return at_stat;
 }
 //---------------------------------------------------------------------
-/// Compute statistics of the dataset, attribute by attribute.
+/// Compute statistics of the dataset, attribute by attribute, and saves histogram in data files.
+/// Also generated a Gnuplot script to plot these.
 /**
+
 Done by storing for a given attribute all the values in a vector, then computing stats on that vector
 */
 template<typename T>
 DatasetStats<T>
 DataSet::computeStats() const
 {
+	std::ofstream fplot( "plot_attrib_histo.plt" );
+	assert( fplot.is_open() );
+	fplot << priv::g_root_gnuplot_histo << "\n";
+
 	DatasetStats<T> dstats( nbAttribs() );
 	for( size_t i=0; i<nbAttribs(); i++ )
 	{
@@ -631,8 +651,12 @@ DataSet::computeStats() const
 		const auto& atstats = computeAttribStats<T>( vat );
 		dstats.add( i, atstats );
 
-		saveAttribHisto( i, vat, atstats, 15 );
+		saveAttribHisto( i, vat, atstats, 25 );
+		fplot << "set output 'attrib_histo_"<< i << ".png'\n"
+			<< "plot 'attrib_histo_" << i
+			<< ".dat' using 4:xtic(1) noti\n\n";
 	}
+
 	return dstats;
 }
 //---------------------------------------------------------------------
@@ -771,23 +795,6 @@ DataSet::load( std::string fname, const Fparams params )
 		<< "\n  - nb classes=" << nbClasses()
 		<< '\n';
 #endif
-#if 0
-	if( params.dataFilesHoldsClass )
-	{
-		std::ofstream fhisto( "histogram.dat" );
-		if( fhisto.is_open() )
-		{
-			fhisto << "# data class histogram file for input file '" <<  fname
-				<< "'\n# class_index occurence_count percentage\n";
-			for( const auto& cval: _classCount )
-				fhisto << cval.first << " "
-					<< cval.second << " " << 100. * cval.second/size()
-					<< '\n';
-		}
-		else
-			std::cerr << "Warning, unable to save histogram file\n";
-	}
-#endif
 	return true;
 }
 //---------------------------------------------------------------------
@@ -843,14 +850,7 @@ DataSet::print( std::ostream& f ) const
 	f << " class\n";
 
 	for( const auto& pt: _data )
-	{
 		f << pt;
-/*		for( const auto& val: pt._attrValue )
-			f << val << ";";
-
-		f << pt.classVal() << "\n";
-*/
-	}
 	f << "# -------------------------------------------\n";
 }
 //---------------------------------------------------------------------
@@ -907,20 +907,6 @@ getString( NodeType nt )
 	}
 	return std::string(s);
 }
-//---------------------------------------------------------------------
-# if 0
-/// A node of the tree
-/// \todo do some inheritance here.
-struct NodeC
-{
-	NodeType _type = NT_undef;
-	size_t   _attrIndex = 0;     ///< Attribute Index that this nodes classifies
-	float    _threshold = 0.f;   ///< Threshold on the attribute value (only for decision nodes)
-	ClassVal _class = ClassVal(-1);        ///< (only for terminal nodes)
-	uint     depth = 0;         ///< depth of the node in the tree
-};
-#endif
-
 //---------------------------------------------------------------------
 /// A node of the training tree
 struct NodeT
@@ -1740,7 +1726,7 @@ computeBestThreshold(
 		v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
 
 	auto nbRemoval = removeDuplicates( v_attribVal, params );
-	std::cout << "Removal of " << nbRemoval << " attribute values\n";
+//	std::cout << "Removal of " << nbRemoval << " attribute values\n";
 
 	if( v_attribVal.size() < 2 )         // if only one value, is pointless
 	{

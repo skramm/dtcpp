@@ -36,8 +36,11 @@ This software can be used
 ## Build information
 
 ### Dependencies:
-* for the library, the only dependency is [Boost Graph](https://www.boost.org/doc/libs/1_75_0/libs/graph/doc/index.html)<br>
+
+* for the library:
+ * , the only dependency is [Boost Graph](https://www.boost.org/doc/libs/1_75_0/libs/graph/doc/index.html)<br>
 Isn't provided, if not installed => `sudo apt install libboost-all-dev`
+ * [Boost::histogram](https://www.boost.org/doc/libs/1_75_0/libs/histogram)
 
 * For the demo classifier program:
  * `argh`: command-line parser, from https://github.com/adishavit/argh<br>

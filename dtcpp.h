@@ -378,6 +378,7 @@ struct AttribStats
 			<< " mean="   << st._meanVal
 			<< " stddev=" << st._stddevVal
 			<< " median=" << st._medianVal
+			<< " ratio stddev/range=" << 100. * st._stddevVal / (st._maxVal - st._minVal)
 			<< ' ';
 		return f;
 	}
@@ -526,6 +527,8 @@ class DataSet
 			return cim;
 		}
 
+		int countClassPerBin( const std::vector<std::pair<float,float>>& ) const;
+
 /// Returns the number of points with class \c val (or number of non-assigned points if \c val=-1)
 		size_t getClassCount( ClassVal val ) const
 		{
@@ -553,7 +556,7 @@ class DataSet
 Uses Boost::histogram, see https://www.boost.org/doc/libs/1_70_0/libs/histogram
 */
 template<typename T>
-void
+std::vector<std::pair<float,float>>
 saveAttribHisto( size_t i, const std::vector<float>& vat, const AttribStats<T>& atstats, uint nbBins )
 {
 	char sep = ' ';
@@ -571,9 +574,15 @@ saveAttribHisto( size_t i, const std::vector<float>& vat, const AttribStats<T>& 
 
 	std::for_each( vat.begin(), vat.end(), std::ref(h) );
 
+	std::vector<std::pair<float,float>>	v_ret;
 	f << "# histogram for attribute " << i << '\n';
 	for (auto x : indexed(h, boost::histogram::coverage::all))
+	{
 		f << x.index() << sep << x.bin().lower() << sep << x.bin().upper() << sep << *x << '\n';
+		v_ret.push_back( std::make_pair( x.bin().lower(), x.bin().upper() ) );
+	}
+	return v_ret;
+
 }
 //---------------------------------------------------------------------
 /// Compute statistics of an attribute.
@@ -626,8 +635,14 @@ computeAttribStats( std::vector<float>& vat )
 	return at_stat;
 }
 //---------------------------------------------------------------------
+int // TEMP
+DataSet::countClassPerBin( const std::vector<std::pair<float,float>>& v_bins ) const
+{
+	return 0;
+}
+//---------------------------------------------------------------------
 /// Compute statistics of the dataset, attribute by attribute, and saves histogram in data files.
-/// Also generated a Gnuplot script to plot these.
+/// Also generates a Gnuplot script to plot these.
 /**
 
 Done by storing for a given attribute all the values in a vector, then computing stats on that vector
@@ -651,7 +666,9 @@ DataSet::computeStats() const
 		const auto& atstats = computeAttribStats<T>( vat );
 		dstats.add( i, atstats );
 
-		saveAttribHisto( i, vat, atstats, 25 );
+		auto v_bins = saveAttribHisto( i, vat, atstats, 20 );
+		COUT << "NB BINS=" << v_bins.size();
+		auto ccpb = countClassPerBin( v_bins );
 		fplot << "set output 'attrib_histo_"<< i << ".png'\n"
 			<< "plot 'attrib_histo_" << i
 			<< ".dat' using 4:xtic(1) noti\n\n";

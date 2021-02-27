@@ -526,8 +526,7 @@ class DataSet
 				cim[cc.first] = i++;
 			return cim;
 		}
-
-		int countClassPerBin( const std::vector<std::pair<float,float>>& ) const;
+		std::vector<uint> countClassPerBin( size_t, const std::vector<std::pair<float,float>>& ) const;
 
 /// Returns the number of points with class \c val (or number of non-assigned points if \c val=-1)
 		size_t getClassCount( ClassVal val ) const
@@ -635,10 +634,45 @@ computeAttribStats( std::vector<float>& vat )
 	return at_stat;
 }
 //---------------------------------------------------------------------
-int // TEMP
-DataSet::countClassPerBin( const std::vector<std::pair<float,float>>& v_bins ) const
+/// For each bin defined by \c v_bins: count the number of classes in the dataset, for attribute \c attrIdx
+/**
+\return A vector of size equal to the number of bins, holding the number of classes in that bin
+*/
+std::vector<uint>
+DataSet::countClassPerBin( size_t attrIdx, const std::vector<std::pair<float,float>>& v_bins ) const
 {
-	return 0;
+	auto nbBins = v_bins.size();
+
+	std::vector<uint> v_ret( nbBins );
+	std::vector<std::set<ClassVal>> classSets( nbBins ); // one set of classes per bin
+
+	for( const auto& pt: _data )                   // for each point
+	{
+		auto attribVal = pt.attribVal( attrIdx );  // get attribute value
+		auto classVal = pt.classVal();             // and class value
+		if( classVal != ClassVal(-1) )             // if not classless, then
+		{
+			for( size_t i=0; i<nbBins; i++ )       // see in which bin the attribute values fits
+				if( attribVal > v_bins[i].first && attribVal <= v_bins[i].second )
+					classSets[i].insert( classVal );
+		}
+	}
+
+	for( size_t i=0; i<nbBins; i++ )
+		v_ret[i] = classSets[i].size();
+
+	return v_ret;
+}
+//---------------------------------------------------------------------
+void
+saveClassCountPerBin( size_t attrIdx, const std::vector<uint>& ccpb, size_t nbPts )
+{
+	char sep = ' ';
+	std::ofstream f( "histo_ccpb_attrib_" + std::to_string(attrIdx) + ".dat" );
+	assert( f.is_open() );
+	f << "# attribute " << std::to_string(attrIdx) << '\n';
+	for( size_t i=0; i<ccpb.size(); i++ )
+		f << i << sep << ccpb[i] << sep << 1.0 * ccpb[i] / nbPts << '\n';
 }
 //---------------------------------------------------------------------
 /// Compute statistics of the dataset, attribute by attribute, and saves histogram in data files.
@@ -668,10 +702,22 @@ DataSet::computeStats() const
 
 		auto v_bins = saveAttribHisto( i, vat, atstats, 20 );
 		COUT << "NB BINS=" << v_bins.size();
-		auto ccpb = countClassPerBin( v_bins );
+
+		auto ccpb = countClassPerBin( i, v_bins );
+		saveClassCountPerBin( i, ccpb, size() );
+
 		fplot << "set output 'attrib_histo_"<< i << ".png'\n"
-			<< "plot 'attrib_histo_" << i
-			<< ".dat' using 4:xtic(1) noti\n\n";
+			<< "set multiplot\n"
+			<< "set title 'Nb pts per bin'\n"
+			<< "set origin 0,0\n"
+			<< "set size 1,0.5\n"
+			<< "plot 'attrib_histo_" << i << ".dat' using 4:xtic(1) noti\n"
+			<< "set title 'Ratio Nb classes per bin/nbpts'\n"
+			<< "set origin 0,0.5\n"
+			<< "set size 1,0.5\n"
+			<< "plot 'histo_ccpb_attrib_" << i << ".dat' using 3:xtic(1) ti '#classes per bin'\n"
+			<< "unset multiplot\n"
+			<< '\n';
 	}
 
 	return dstats;

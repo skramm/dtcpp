@@ -301,9 +301,16 @@ class DataPoint
 		DataPoint( const std::vector<std::string>& v_string )
 		{
 			assert( v_string.size() > 0 );              // at least one attribute
-
-			for( size_t i=0; i<v_string.size(); i++ )
-				_attrValue.push_back( std::stof( v_string[i] ) );
+			try
+			{
+				for( size_t i=0; i<v_string.size(); i++ )
+					_attrValue.push_back( std::stof( v_string[i] ) );
+			}
+			catch(...)
+			{
+				priv::printVector( std::cerr, v_string, "string conversion error" );
+				throw std::runtime_error( "unable to convert a string value to float" );
+			}
 		}
 
 /// Constructor from a vector of floats and a class value
@@ -350,13 +357,15 @@ class DataPoint
 };
 
 //---------------------------------------------------------------------
-/// Parameters for data files
+/// Parameters for reading data files
 struct Fparams
 {
-	char sep = ' ';              ///< input field separator
-	bool classAsString = false;  ///< class values are given as strings
-	bool dataFilesHoldsClass = true; ///< set to false to read files holding only attribute values (for classification task)
-	bool classIsfirst = false;     ///< default: class is last element of line, if first, then set this to true
+	char sep = ' ';                   ///< input field separator
+	bool classAsString = false;       ///< class values are given as strings
+	bool dataFilesHoldsClass = true;  ///< set to false to read files holding only attribute values (for classification task)
+	bool classIsfirst = false;        ///< default: class is last element of line, if first, then set this to true
+	bool firstLineHoldsName = false;  ///< unused \todo implement this
+	uint nbBinHistograms = 15;        ///< Nb of bins for the data analysis histograms
 };
 
 //---------------------------------------------------------------------
@@ -509,7 +518,7 @@ class DataSet
 			std::shuffle(std::begin(_data), std::end(_data), std::random_device() );
 		}
 		template<typename T>
-		DatasetStats<T> computeStats() const;
+		DatasetStats<T> computeStats( uint nbBins=15 ) const;
 
 		size_t nbClasses( const std::vector<uint>& ) const;
 /// Returns nb of classes in the dataset, \b NOT considering the points without any class assigned
@@ -580,7 +589,7 @@ saveAttribHisto( size_t i, const std::vector<float>& vat, const AttribStats<T>& 
 //	for (auto x : indexed(h, boost::histogram::coverage::all))
 	for (auto x : indexed(h) )
 	{
-		f << x.index() << sep << x.bin().lower() << sep << x.bin().upper() << sep << *x << '\n';
+		f << x.index()+1 << sep << x.bin().lower() << sep << x.bin().upper() << sep << *x << '\n';
 //		v_ret.push_back( std::make_pair( x.bin().lower(), x.bin().upper() ) );
 	}
 	return h;
@@ -647,7 +656,7 @@ std::vector<std::pair<uint,uint>>
 DataSet::countClassPerBin( size_t attrIdx, const HISTO& histo ) const
 {
 	auto nbBins = histo.size();
-	COUT << "nbBins=" << nbBins << '\n';
+//	COUT << "nbBins=" << nbBins << '\n';
 
 	std::vector<std::set<ClassVal>> classSets( nbBins ); // one set of classes per bin
 
@@ -687,8 +696,17 @@ saveClassCountPerBin( size_t attrIdx, const std::vector<std::pair<uint,uint>>& v
 	char sep = ' ';
 	std::ofstream f( "histo_ccpb_attrib_" + std::to_string(attrIdx) + ".dat" );
 	assert( f.is_open() );
-	f << "# attribute " << std::to_string(attrIdx) << '\n';
-	for( size_t i=0; i<v_ccpb.size(); i++ )
+	f << "# attribute " << std::to_string(attrIdx)
+		<< "\n# index "
+		<< sep << "nb_of_classes_per_bin"
+		<< sep << "ratio_nb_classes/nb_pts_per_bin\n";
+	assert( v_ccpb.size()>3 );
+/*
+We start at 1 and stop before the last one, because this is build from the
+Boost::histogram object, and that thing always two additional bins, the first for
+values lower than the "low" threshold, and one for values above the "high" threshold
+*/
+	for( size_t i=1; i<v_ccpb.size()-1; i++ )
 	{
 		f << i << sep << v_ccpb[i].first << sep;
 		if( v_ccpb[i].second  )
@@ -707,7 +725,7 @@ Done by storing for a given attribute all the values in a vector, then computing
 */
 template<typename T>
 DatasetStats<T>
-DataSet::computeStats() const
+DataSet::computeStats( uint nbBins ) const
 {
 	std::ofstream fplot( "plot_attrib_histo.plt" );
 	assert( fplot.is_open() );
@@ -725,7 +743,7 @@ DataSet::computeStats() const
 		dstats.add( i, atstats );
 
 //		auto v_bins = saveAttribHisto( i, vat, atstats, 20 );
-		auto histo = saveAttribHisto( i, vat, atstats, 20 );
+		auto histo = saveAttribHisto( i, vat, atstats, nbBins );
 //		COUT << "NB BINS=" << v_bins.size();
 
 		auto v_ccpb = countClassPerBin( i, histo );
@@ -846,7 +864,16 @@ DataSet::load( std::string fname, const Fparams params )
 						cla = v_tok.front();
 
 					if( !params.classAsString )
-						classIndex = std::stoi( cla );
+					{
+						try
+						{
+							classIndex = std::stoi( cla );
+						}
+						catch( ... )
+						{
+							throw std::runtime_error( "Unable to convert string '" + cla + "' on line " + std::to_string(nb_lines) + " to an integer value" );
+						}
+					}
 					else
 					{
 						if( classStringMap.find( cla ) == classStringMap.end() )  // if not registered, then

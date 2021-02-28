@@ -4,8 +4,6 @@
 */
 
 
-int main()
-{
 #define DEBUG
 //#define DEBUG_START
 
@@ -42,19 +40,18 @@ int main( int argc, const char** argv )
 		std::cout << " - enabling logging with level " << params.verboseLevel << '\n';
 	}
 
+	uint nbBins = 15;
+	auto histoBins = cmdl("nb").str();
+	if( !histoBins.empty() )
+	{
+		nbBins = std::stoi( histoBins );
+	}
+	std::cout << " - histograms built on " << nbBins << " bins\n";
+
+
 // optional boolean arg: -cs => the class value in the datafile is given as a string value
 	if( cmdl["cs"] )
 		fparams.classAsString = true;
-
-// optional boolean arg: -i => only prints info about the data set and exit
-	bool noProcess = false;
-	if( cmdl["i"] )
-		noProcess = true;
-
-// optional arg: -f => evaluate performance on training dataset by doing folds on data
-	bool doFolding = false;
-	if( cmdl["f"] )
-		doFolding = true;
 
 	DataSet dataset;
 	std::string fname = "sample_data/tds_1.csv";
@@ -69,14 +66,6 @@ int main( int argc, const char** argv )
 	dataset.printInfo( std::cout );
 	dataset.printClassHisto( "histo" );
 
-	if( noProcess )
-	{
-		std::cout << "No processing required, exiting\n";
-		std::exit(2);
-	}
-
-	auto stats = dataset.computeStats<float>();
+	auto stats = dataset.computeStats<float>( nbBins );
 	std::cout << stats;
-
-
 }

@@ -7,12 +7,14 @@ SHELL=bash
 BIN_DIR=build/bin
 OBJ_DIR=build/obj
 
+
 SRC_FILES = $(wildcard *.cpp)
+
 DOT_FILES = $(wildcard *.dot)
 
 PNG_FILES = $(patsubst %.dot,%.png,$(DOT_FILES))
 OBJ_FILES = $(patsubst %.cpp,$(OBJ_DIR)/%,$(SRC_FILES))
-
+EXE_FILES = $(patsubst %.cpp,$(BIN_DIR)/%,$(SRC_FILES))
 #----------------------------------------------
 ifeq "$(NDEBUG)" ""
 	NDEBUG=N
@@ -24,28 +26,33 @@ endif
 
 
 
-all: $(BIN_DIR)/main
+all: $(EXE_FILES)
 	@echo "done"
+
+A: $(BIN_DIR)/dectree
+
+B: $(BIN_DIR)/datanalysis
+
 
 # default run
 run: all
-	$(BIN_DIR)/main -f
+	$(BIN_DIR)/dectree -f
 
 # iris dataset
 run2: all
-	$(BIN_DIR)/main sample_data/iris.data -sep "," -cs -f
+	$(BIN_DIR)/dectree sample_data/iris.data -sep "," -cs -f
 
 run3: all
-	$(BIN_DIR)/main sample_data/winequality-white.csv -sep ";" -cs -ll 2
+	$(BIN_DIR)/dectree sample_data/winequality-white.csv -sep ";" -cs -ll 2
 
 
 show:
 	@echo "OBJ_FILES=$(OBJ_FILES)"
-	@echo "EXEC_FILES=$(EXEC_FILES)"
+	@echo "EXE_FILES=$(EXE_FILES)"
 	@echo "DOT_FILES=$(DOT_FILES)"
 	@echo "PNG_FILES=$(PNG_FILES)"
 
-$(OBJ_DIR)/%.o: %.cpp dtcpp.h $(SRC_FILES)
+$(OBJ_DIR)/%.o: %.cpp dtcpp.h
 	$(CXX) -Wall -std=gnu++14 $(CFLAGS) -fexceptions -O2 -Iother/ -c $< -o $@
 
 $(BIN_DIR)/%:$(OBJ_DIR)/%.o

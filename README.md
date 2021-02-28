@@ -31,7 +31,7 @@ This software can be used
 * `-ll X` : sets log level to 'X'. Available levels: 0,1,2,3
 * `-i` : load the datafile and prints Info on its contents, then exit (no processing)
 * `-f` : do Folding on the provided data
-
+* `-nb xx` : number of bins for building the histogram analysis (useful only for datanalylis)
 
 ## Build information
 

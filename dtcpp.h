@@ -36,6 +36,7 @@ See doc on https://github.com/skramm/dtcpp
 
 #include <boost/histogram.hpp>
 
+/// All the API and code lies here
 namespace dtcpp {
 
 #ifdef DEBUG
@@ -62,7 +63,7 @@ namespace dtcpp {
 
 
 // % % % % % % % % % % % % % %
-/// inner namespace
+/// private namespace; not part of API
 namespace priv {
 // % % % % % % % % % % % % % %
 
@@ -113,7 +114,15 @@ std::string g_root_gnuplot_histo =
 	set style fill solid\n \
 	set boxwidth 1\n";
 
-
+//---------------------------------------------------------------------
+auto
+openOutputFile( std::string fname )
+{
+	std::ofstream f(fname);
+	if( !f.is_open() )
+		throw std::runtime_error( "unable to open file " + fname );
+	return f;
+}
 
 //---------------------------------------------------------------------
 /// A template to have strong types, taken from J. Boccara
@@ -339,7 +348,13 @@ class DataPoint
 		}
 		ClassVal classVal() const { return _class; }
 		void setSize( size_t n ) { _attrValue.resize(n); }
-		float attribVal( size_t idx ) const
+
+		const float& attribVal( size_t idx ) const
+		{
+			assert( idx<_attrValue.size() );
+			return _attrValue[idx];
+		}
+		float& attribVal( size_t idx )
 		{
 			assert( idx<_attrValue.size() );
 			return _attrValue[idx];
@@ -419,7 +434,11 @@ struct DatasetStats
 		{
 			v_stats[idx] = ats;
 		}
-
+		AttribStats<T> get( size_t idx ) const
+		{
+			assert( idx < v_stats.size() );
+			return v_stats[idx];
+		}
 		friend std::ostream& operator << ( std::ostream& f, const DatasetStats<T>& st )
 		{
 			f << "DatasetStats: " << st.v_stats.size() << " attributes:"; // << st.nbClasses() << '\n';
@@ -432,6 +451,21 @@ struct DatasetStats
 //---------------------------------------------------------------------
 /// Used in TrainingTree to map a class value to an index in the \ref ConfusionMatrix
 using ClassIndexMap = std::map<ClassVal,size_t>;
+
+//---------------------------------------------------------------------
+/// Outlier Detection Method. Related to Dataset::tagOutliers()
+enum class En_OD_method
+{
+	fixedSigma
+	,ChauvenetCrit ///< https://en.wikipedia.org/wiki/Chauvenet%27s_criterion
+};
+//---------------------------------------------------------------------
+/// Outlier Removal Method. Related to Dataset::tagOutliers()
+enum class En_OR_method
+{
+ 	disablePoint       ///< tag the point as disabled
+ 	,replaceWithMean   ///< replace attribute value by its mean value
+};
 
 //---------------------------------------------------------------------
 /// A dataset, holds a set of \ref DataPoint
@@ -488,7 +522,7 @@ class DataSet
 				_nbNoClassPoints++;
 		}
 //		template<typename U>
-		DataPoint& getDataPoint( uint idx )
+		DataPoint& getDataPoint( size_t idx )
 		{
 #ifdef DTCPP_ERRORS_ASSERT
 			assert( idx < _data.size() );
@@ -504,7 +538,7 @@ class DataSet
 			return _data[idx];
 		}
 //		template<typename U>
-		const DataPoint& getDataPoint( uint idx ) const
+		const DataPoint& getDataPoint( size_t idx ) const
 		{
 			assert( idx < _data.size() );
 			return _data[idx];
@@ -515,7 +549,8 @@ class DataSet
 		void printInfo( std::ostream&, const char* name=0 ) const;
 		void printClassHisto( std::string fname ) const;
 
-		void generatePlotScript() const;
+		template<typename T>
+		void generateAttribPlot( std::string fname, const DatasetStats<T>& ) const;
 
 		void clear()
 		{
@@ -533,6 +568,12 @@ class DataSet
 		template<typename T>
 		DatasetStats<T> computeStats( uint nbBins=15 ) const;
 
+		template<typename T>
+		size_t tagOutliers( const DatasetStats<T>&, En_OD_method odm=En_OD_method::fixedSigma, En_OR_method orm=En_OR_method::disablePoint, float param=2.f );
+		size_t getNbtaggedOutliers() const
+		{
+			 return _vIsOutlier.size();
+		}
 		size_t nbClasses( const std::vector<uint>& ) const;
 /// Returns nb of classes in the dataset, \b NOT considering the points without any class assigned
 		size_t nbClasses() const
@@ -566,6 +607,7 @@ class DataSet
 		std::vector<DataPoint>  _data;
 		std::map<ClassVal,uint> _classCount;           ///< Holds the number of points for each class value. Does \b NOT count classless points
 		uint                    _nbNoClassPoints = 0u;
+		std::vector<bool>       _vIsOutlier;            ///< Will be allocated ONLY if tagOutliers() is called, with En_OR_method::disablePoint
 };
 //using DataSetf = DataSet<float>;
 //using DataSetd = DataSet<double>;
@@ -578,7 +620,6 @@ class DataSet
 Uses Boost::histogram, see https://www.boost.org/doc/libs/1_70_0/libs/histogram
 */
 template<typename T>
-//std::vector<std::pair<float,float>>
 auto
 saveAttribHisto( size_t i, const std::vector<float>& vat, const AttribStats<T>& atstats, uint nbBins )
 {
@@ -591,23 +632,16 @@ saveAttribHisto( size_t i, const std::vector<float>& vat, const AttribStats<T>& 
 		)
 	);
 	std::string fname( "attrib_histo_" + std::to_string(i) + ".dat" );
-	std::ofstream f( fname );
-	if( !f.is_open() )
-		throw std::runtime_error( "unable to open file '" + fname + "'" );
+	auto f = priv::openOutputFile( fname );
 
 	std::for_each( vat.begin(), vat.end(), std::ref(h) );
 
-//	std::vector<std::pair<float,float>>	v_ret;
 	f << "# histogram for attribute " << i << '\n';
-//	for (auto x : indexed(h, boost::histogram::coverage::all))
 	for (auto x : indexed(h) )
 	{
 		f << x.index()+1 << sep << x.bin().lower() << sep << x.bin().upper() << sep << *x << '\n';
-//		v_ret.push_back( std::make_pair( x.bin().lower(), x.bin().upper() ) );
 	}
 	return h;
-//	return v_ret;
-
 }
 //---------------------------------------------------------------------
 /// Compute statistics of an attribute.
@@ -707,7 +741,8 @@ void
 saveClassCountPerBin( size_t attrIdx, const std::vector<std::pair<uint,uint>>& v_ccpb )
 {
 	char sep = ' ';
-	std::ofstream f( "histo_ccpb_attrib_" + std::to_string(attrIdx) + ".dat" );
+
+	auto f = priv::openOutputFile( "histo_ccpb_attrib_" + std::to_string(attrIdx) + ".dat" );
 	assert( f.is_open() );
 	f << "# attribute " << std::to_string(attrIdx)
 		<< "\n# index "
@@ -730,18 +765,80 @@ values lower than the "low" threshold, and one for values above the "high" thres
 	}
 }
 //---------------------------------------------------------------------
+/// Outlier detection for an attribute, returns true if it is detected as so.
+/// Helper function for DataSet::tagOutliers()
+template<typename T>
+bool
+isOutlier( T atval, AttribStats<T> stat, En_OD_method odm, float param )
+{
+	switch( odm )
+	{
+		case En_OD_method::fixedSigma:
+		break;
+
+		case En_OD_method::ChauvenetCrit:
+		break;
+
+		default: assert(0);
+	}
+	return false; // TEMP
+}
+//---------------------------------------------------------------------
+/// Search and tag for outliers in the dataset. The exact action taken depends on \c orm
+/**
+- if orm=replaceWithMean, then the outlier attribute value will have its value replaced by the mean value of the attribute
+- if orm=disablePoint, then the point will simply be tagged as outlier, thus not taken into account when training
+
+Default behavior is to discard dataset points that have an attribute more than 2 sigma away from mean value.
+*/
+template<typename T>
+size_t
+DataSet::tagOutliers( const DatasetStats<T>& stats, En_OD_method odm, En_OR_method orm, float param )
+{
+	size_t nbOutliers = 0;
+	if( orm == En_OR_method::disablePoint )
+	{
+		_vIsOutlier.resize( size() );
+		std::fill( _vIsOutlier.begin(), _vIsOutlier.end(), false );
+	}
+	for( size_t p=0; p<size(); p++ )
+	{
+		bool ptDisabled = false;
+		auto& pt = getDataPoint(p);
+		for( size_t i=0; i<nbAttribs() && !ptDisabled; i++ )  // loop through all attributes
+		{                                                           // but stop if point is already disabled
+			auto& atval = pt.attribVal(i);
+			if( isOutlier( atval, stats.get(i), odm, param ) )
+			{
+				nbOutliers++;
+				switch( orm )
+				{
+					case En_OR_method::disablePoint:
+						_vIsOutlier.at(p) = true;
+						ptDisabled = true;
+					break;
+					case En_OR_method::replaceWithMean:
+						atval = stats.get(i)._meanVal;
+					break;
+					default: assert(0);
+				}
+			}
+		}
+	}
+	return nbOutliers;
+}
+
+//---------------------------------------------------------------------
 /// Compute statistics of the dataset, attribute by attribute, and saves histogram in data files.
 /// Also generates a Gnuplot script to plot these.
 /**
-
 Done by storing for a given attribute all the values in a vector, then computing stats on that vector
 */
 template<typename T>
 DatasetStats<T>
 DataSet::computeStats( uint nbBins ) const
 {
-	std::ofstream fplot( "plot_attrib_histo.plt" );
-	assert( fplot.is_open() );
+	auto fplot = priv::openOutputFile( "plot_attrib_histo.plt" );
 	fplot << priv::g_root_gnuplot_histo << "\n";
 
 	DatasetStats<T> dstats( nbAttribs() );
@@ -824,21 +921,43 @@ DataSet::getFolds( uint index, uint nbFolds ) const
 }
 
 //---------------------------------------------------------------------
-/// Generates a Gnuplot script, to plot data, and
-/// save the whole dataset in a csv file, so that it has always the same format
-/// (input files might not be). Related to DataSet::generatePlotScript()
-void
-DataSet::generatePlotScript() const
+/// Helper function for DataSet::generateAttribPlot()
+namespace priv {
+void addVerticalLine( std::ostream& f, std::string label, float vpos, float xpos, std::string color )
 {
-	{
-		std::ofstream f( "data.csv" );
-		assert( f.is_open() );
+	f << "set arrow from " << xpos << ", graph 0 to " << xpos << ", graph 1 nohead lc rgb '"
+		<< color << "' lw 1\n"
+		<< "set label '" << label << "' at " << xpos << ", graph " << vpos << " rotate by 90 front textcolor rgb '"
+		<< color << "'\n";
+}
+} // namespace priv
+//---------------------------------------------------------------------
+/// Generates two files in current folder: 1-a Gnuplot script, to plot data, and
+/// 2- the whole dataset in a csv file, so that it has always the same format
+/**
+\note You could of course write a plotting script yourself to plot
+the input data file, the code here just abstracts the input file format details,
+and saves you the burden of writing such a script.<br>
+Moreover, you can always tweak the generated script to fit your needs.
+*/
+template<typename T>
+void
+DataSet::generateAttribPlot(
+	std::string fname, ///< File name, no extension (the 2 files will have that name, with extensions .plt and .csv)
+	const DatasetStats<T>& dss
+) const
+{
+	auto f1 = priv::openOutputFile( fname + ".csv" );
+	if( _vIsOutlier.size() )
+		for( size_t i=0; i<_data.size(); i++ )
+			if( !_vIsOutlier[i] )
+				getDataPoint(i).print( f1 );
+	else
 		for( const auto& pt: _data )
-			pt.print( f );
-		f << '\n';
-	}
-	std::ofstream f( "data.plt" );
-	assert( f.is_open() );
+			pt.print( f1 );
+	f1 << '\n';
+
+	auto f = priv::openOutputFile( fname + ".plt" );
 	f << "#!/usr/local/bin/gnuplot"
 		<< "\nset terminal pngcairo"
 		<< "\nset ylabel 'CLASS'"
@@ -850,9 +969,17 @@ DataSet::generatePlotScript() const
 
 	for( size_t i=0; i<nbAttribs(); i++ )
 	{
+		auto st = dss.get(i);
 		f << "set output 'data_" << i << ".png'\n"
-			<< "set title 'class vs. attribute " << i << "'\n"
-			<< "plot 'data.csv' using " << i+1 << ":class notitle\n"
+			<< "unset arrow\n"
+			<< "unset label\n";
+		priv::addVerticalLine( f, "mean",       0.8, st._meanVal,               "red" );
+		priv::addVerticalLine( f, "mean-sigma", 0.7, st._meanVal-st._stddevVal, "blue" );
+		priv::addVerticalLine( f, "mean+sigma", 0.7, st._meanVal+st._stddevVal, "blue" );
+		priv::addVerticalLine( f, "median",     0.6, st._medianVal,             "green" );
+		f << "set title 'Class vs. attribute " << i << "'\n"
+			<< "set ytics 0,1," << nbClasses()-1
+			<< "\nplot 'data.csv' using " << i+1 << ":class notitle\n"
 			<< '\n';
 	}
 }
@@ -964,9 +1091,7 @@ DataSet::load( std::string fname, const Fparams params )
 void
 DataSet::printClassHisto( std::string fname ) const
 {
-	std::ofstream fhisto( fname + ".dat" );
-	if( !fhisto.is_open() )
-		throw std::runtime_error( "unable to open file '" + fname + ".dat' in write mode" );
+	auto fhisto = priv::openOutputFile( fname + ".dat" );
 
 	fhisto << "# data class histogram file for input file '" <<  fname
 		<< "'\n# class_index occurence_count percentage\n";
@@ -1510,7 +1635,7 @@ class TrainingTree
 		void     train( const DataSet&, Params params=Params() );
 		ConfusionMatrix classify( const DataSet& ) const;
 		ClassVal        classify( const DataPoint& ) const;
-		void     printDot( std::ostream& ) const;
+
 		void     printDot( std::string fname ) const;
 		void     printInfo( std::ostream& ) const;
 		size_t   maxDepth() const { return _maxDepth; }
@@ -1587,12 +1712,11 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 
 //---------------------------------------------------------------------
 /// Print a DOT file of the tree by calling the recursive function \ref printNodeChilds()
-//template<typename T>
 inline
 void
-TrainingTree::printDot( std::ostream& f ) const
+TrainingTree::printDot( std::string fname ) const
 {
-	START;
+	auto f = priv::openOutputFile( fname );
 	f << "digraph g {\nnode [shape=\"box\"];\n";
 	f << _graph[_initialVertex]._nodeId
 		<< " [label=\"n" << _graph[_initialVertex]._nodeId
@@ -1600,18 +1724,9 @@ TrainingTree::printDot( std::ostream& f ) const
 		<< " thres="    << _graph[_initialVertex]._threshold
 		<< "\\n#"      << _graph[_initialVertex].v_Idx.size()
 		<< "\",color = blue];\n";
+
 	priv::printNodeChilds( f, _initialVertex, _graph );
 	f << "}\n";
-}
-
-inline
-void
-TrainingTree::printDot( std::string fname ) const
-{
-	std::ofstream f(fname);
-	if( !f.is_open() )
-		throw std::runtime_error( "unable to open file " + fname );
-	printDot( f );
 }
 
 //---------------------------------------------------------------------

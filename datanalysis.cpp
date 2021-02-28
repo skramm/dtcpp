@@ -66,8 +66,14 @@ int main( int argc, const char** argv )
 	dataset.printInfo( std::cout );
 	dataset.printClassHisto( "histo" );
 
-	dataset.generatePlotScript();
-
 	auto stats = dataset.computeStats<float>( nbBins );
 	std::cout << stats;
+	dataset.generateAttribPlot( "data", stats );
+
+	dataset.tagOutliers( stats );
+
+	auto stats2 = dataset.computeStats<float>( nbBins );
+	std::cout << stats2;
+	dataset.generateAttribPlot( "data2", stats2 );
+
 }

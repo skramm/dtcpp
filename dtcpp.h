@@ -160,15 +160,21 @@ private:
 /// General utility function
 template<typename T>
 void
-printVector( std::ostream& f, const std::vector<T>& vec, const char* msg=0 )
+printVector( std::ostream& f, const std::vector<T>& vec, const char* msg=0, bool lineBreak=false )
 {
 	f << "Vector: ";
 	if( msg )
 		f << msg;
 	f << " #=" << vec.size() << ":\n";
 	for( const auto& elem : vec )
-		f << elem << "-";
-	f << "\n";
+	{
+		f << elem;
+		if( lineBreak )
+			f << '\n';
+		else
+			f << "-";
+	}
+	f << '\n';
 }
 /// General utility function
 template<typename K, typename V>
@@ -308,7 +314,7 @@ class DataPoint
 			}
 			catch(...)
 			{
-				priv::printVector( std::cerr, v_string, "string conversion error" );
+				priv::printVector( std::cerr, v_string, "string conversion error", false );
 				throw std::runtime_error( "unable to convert a string value to float" );
 			}
 		}
@@ -345,7 +351,12 @@ class DataPoint
 			assert( vec.size() == nbAttribs() );
 			_attrValue = vec;
 		}
-
+		void print( std::ostream& f ) const
+		{
+			for( const auto& v: _attrValue )
+				f << v << ' ';
+			f << classVal() << '\n';
+		}
 		friend std::ostream& operator << ( std::ostream& f, const DataPoint& pt )
 		{
 			f << "Datapoint: ";
@@ -503,6 +514,8 @@ class DataSet
 		void print( std::ostream&, const std::vector<uint>& ) const;
 		void printInfo( std::ostream&, const char* name=0 ) const;
 		void printClassHisto( std::string fname ) const;
+
+		void generatePlotScript() const;
 
 		void clear()
 		{
@@ -808,6 +821,40 @@ DataSet::getFolds( uint index, uint nbFolds ) const
 		<< " ds_train #=" << ds_train.size() << "\n";
 
 	return std::make_pair( ds_train, ds_test );
+}
+
+//---------------------------------------------------------------------
+/// Generates a Gnuplot script, to plot data, and
+/// save the whole dataset in a csv file, so that it has always the same format
+/// (input files might not be). Related to DataSet::generatePlotScript()
+void
+DataSet::generatePlotScript() const
+{
+	{
+		std::ofstream f( "data.csv" );
+		assert( f.is_open() );
+		for( const auto& pt: _data )
+			pt.print( f );
+		f << '\n';
+	}
+	std::ofstream f( "data.plt" );
+	assert( f.is_open() );
+	f << "#!/usr/local/bin/gnuplot"
+		<< "\nset terminal pngcairo"
+		<< "\nset ylabel 'CLASS'"
+		<< "\nset yrange [-1:" << nbClasses() << ']'
+		<< "\nclass=" << nbAttribs()+1
+		<< "\nset datafile separator ' '"
+		<< "\nset grid"
+		<< "\n\n";
+
+	for( size_t i=0; i<nbAttribs(); i++ )
+	{
+		f << "set output 'data_" << i << ".png'\n"
+			<< "set title 'class vs. attribute " << i << "'\n"
+			<< "plot 'data.csv' using " << i+1 << ":class notitle\n"
+			<< '\n';
+	}
 }
 
 //---------------------------------------------------------------------

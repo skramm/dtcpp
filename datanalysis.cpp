@@ -66,6 +66,8 @@ int main( int argc, const char** argv )
 	dataset.printInfo( std::cout );
 	dataset.printClassHisto( "histo" );
 
+	dataset.generatePlotScript();
+
 	auto stats = dataset.computeStats<float>( nbBins );
 	std::cout << stats;
 }

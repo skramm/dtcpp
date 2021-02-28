@@ -774,6 +774,12 @@ isOutlier( T atval, AttribStats<T> stat, En_OD_method odm, float param )
 	switch( odm )
 	{
 		case En_OD_method::fixedSigma:
+			if(
+				atval > stat._meanVal + param * stat._stddevVal
+			||
+				atval < stat._meanVal - param * stat._stddevVal
+			)
+				return true;
 		break;
 
 		case En_OD_method::ChauvenetCrit:
@@ -949,9 +955,16 @@ DataSet::generateAttribPlot(
 {
 	auto f1 = priv::openOutputFile( fname + ".csv" );
 	if( _vIsOutlier.size() )
-		for( size_t i=0; i<_data.size(); i++ )
+	{
+		for( size_t i=0; i<size(); i++ )
 			if( !_vIsOutlier[i] )
 				getDataPoint(i).print( f1 );
+
+//				std::cout << "pt " << i << " is NOT outlier\n";
+//			}
+//			else
+//				std::cout << "pt " << i << " is outlier\n";
+	}
 	else
 		for( const auto& pt: _data )
 			pt.print( f1 );
@@ -961,7 +974,7 @@ DataSet::generateAttribPlot(
 	f << "#!/usr/local/bin/gnuplot"
 		<< "\nset terminal pngcairo"
 		<< "\nset ylabel 'CLASS'"
-		<< "\nset yrange [-1:" << nbClasses() << ']'
+		<< "\nset yrange [-0.5:" << nbClasses()-0.5f << ']'
 		<< "\nclass=" << nbAttribs()+1
 		<< "\nset datafile separator ' '"
 		<< "\nset grid"
@@ -970,7 +983,7 @@ DataSet::generateAttribPlot(
 	for( size_t i=0; i<nbAttribs(); i++ )
 	{
 		auto st = dss.get(i);
-		f << "set output 'data_" << i << ".png'\n"
+		f << "set output '" << fname << '_' << i << ".png'\n"
 			<< "unset arrow\n"
 			<< "unset label\n";
 		priv::addVerticalLine( f, "mean",       0.8, st._meanVal,               "red" );
@@ -979,7 +992,7 @@ DataSet::generateAttribPlot(
 		priv::addVerticalLine( f, "median",     0.6, st._medianVal,             "green" );
 		f << "set title 'Class vs. attribute " << i << "'\n"
 			<< "set ytics 0,1," << nbClasses()-1
-			<< "\nplot 'data.csv' using " << i+1 << ":class notitle\n"
+			<< "\nplot '" << fname << ".csv' using " << i+1 << ":class notitle\n"
 			<< '\n';
 	}
 }
@@ -1113,8 +1126,12 @@ DataSet::printInfo( std::ostream& f, const char* name ) const
 	f << "\n # points="             << size()
 		<< "\n # attributes="       << nbAttribs()
 		<< "\n # classes="          << nbClasses()
-		<< "\n # classless points=" << _nbNoClassPoints
-		<< "\nClasses frequency:\n";
+		<< "\n # classless points=" << _nbNoClassPoints;
+
+	if( _vIsOutlier.size() )
+		f << "\n # outliers=" << std::count( _vIsOutlier.begin(), _vIsOutlier.end(), true );
+
+	f << "\nClasses frequency:\n";
 	size_t sum = 0;
 	for( const auto& cval: _classCount )
 	{

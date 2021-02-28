@@ -63,15 +63,18 @@ int main( int argc, const char** argv )
 		std::cerr << "Error, unable to load data file: " << fname << '\n';
 		std::exit(1);
 	}
-	dataset.printInfo( std::cout );
-	dataset.printClassHisto( "histo" );
 
+//	dataset.printClassHisto( "histo" );
+
+	dataset.printInfo( std::cout );
 	auto stats = dataset.computeStats<float>( nbBins );
 	std::cout << stats;
 	dataset.generateAttribPlot( "data", stats );
 
-	dataset.tagOutliers( stats );
+	auto nbOutliers = dataset.tagOutliers( stats );
+	std::cout << "nb outliers=" << nbOutliers << " (" << 100. * nbOutliers / dataset.size() << " %)\n";
 
+	dataset.printInfo( std::cout );
 	auto stats2 = dataset.computeStats<float>( nbBins );
 	std::cout << stats2;
 	dataset.generateAttribPlot( "data2", stats2 );

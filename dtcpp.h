@@ -286,6 +286,13 @@ splitString( const std::string &s, char delim )
 	return velems;
 }
 
+//---------------------------------------------------------------------
+/// Edge of the tree. Value is true/false of the above decision, depending on threshold
+struct EdgeData
+{
+	bool edgeSide;
+};
+
 // % % % % % % % % % % % % % %
 } // namespace priv
 // % % % % % % % % % % % % % %
@@ -304,8 +311,7 @@ struct Params
 	int   verboseLevel = 0;      ///< verbose Level, related to \ref verbose
 	bool  doFolding = false;
 	uint  nbFolds = 5;
-	uint  maxTreeDepth = 10;
-//	uint  initialVertexId = 1u;
+	uint  maxTreeDepth = 12;
 };
 
 //---------------------------------------------------------------------
@@ -318,7 +324,12 @@ enum DataType
 
 class DataSetDescription
 {
-
+public:
+		DataSetDescription( uint nbAttribs )
+			: _dataType(nbAttribs)
+		{}
+	private:
+		std::vector<DataType> _dataType;
 };
 
 } // namespace prelim {
@@ -582,7 +593,7 @@ class DataSet
 		void print( std::ostream& ) const;
 		void print( std::ostream&, const std::vector<uint>& ) const;
 		void printInfo( std::ostream&, const char* name=0 ) const;
-		void printClassHisto( std::string fname ) const;
+		void generateClassDistrib( std::string fname ) const;
 
 		template<typename T>
 		void generateAttribPlot( std::string fname, const DatasetStats<T>& ) const;
@@ -592,6 +603,7 @@ class DataSet
 			_data.clear();
 			_classCount.clear();
 			_nbNoClassPoints = 0u;
+			clearOutliers();
 		}
 		std::pair<DataSet,DataSet> getFolds( uint i, uint nbFolds ) const;
 
@@ -602,14 +614,10 @@ class DataSet
 		}
 		template<typename T>
 		DatasetStats<T> computeStats( uint nbBins=15 ) const;
-
+/// \name Outlier handling
+///@{
 		template<typename T>
-		size_t tagOutliers( const DatasetStats<T>&, En_OD_method odm=En_OD_method::fixedSigma, En_OR_method orm=En_OR_method::disablePoint, float param=3.f );
-
-		bool hasOutliers() const
-		{
-			return _vIsOutlier.size();
-		}
+		void tagOutliers( const DatasetStats<T>&, En_OD_method odm=En_OD_method::fixedSigma, En_OR_method orm=En_OR_method::disablePoint, float param=3.f );
 
 		bool pointIsOutlier( size_t i ) const
 		{
@@ -620,7 +628,16 @@ class DataSet
 			}
 			return false;
 		}
-
+		void clearOutliers()
+		{
+			_vIsOutlier.clear();
+			_nbOutliers = 0;
+		}
+		size_t nbOutliers() const
+		{
+			return _nbOutliers;
+		}
+///@}
 		size_t nbClasses( const std::vector<uint>& ) const;
 
 /// Returns nb of classes in the dataset, \b NOT considering the points without any class assigned
@@ -657,16 +674,18 @@ class DataSet
 		std::map<ClassVal,uint> _classCount;           ///< Holds the number of points for each class value. Does \b NOT count classless points
 		uint                    _nbNoClassPoints = 0u;
 		std::vector<bool>       _vIsOutlier;            ///< Will be allocated ONLY if tagOutliers() is called, with En_OR_method::disablePoint
+		size_t                  _nbOutliers;   ///< to avoid recounting them when unneeded
 };
 //using DataSetf = DataSet<float>;
 //using DataSetd = DataSet<double>;
 
 
 //---------------------------------------------------------------------
-/// Writes in current folder a file named "attrib_histo_<i>.dat", holding
-/// the histogram values of attribute \c i.
+/// Writes in current folder a file named <code>attrib_histo_<i>.dat</code>, holding
+/// the histogram values of attribute \c i. Helper function for DataSet::computeStats()
 /**
-Uses Boost::histogram, see https://www.boost.org/doc/libs/1_70_0/libs/histogram
+<br>
+- Uses Boost::histogram, see https://www.boost.org/doc/libs/1_70_0/libs/histogram
 */
 template<typename T>
 auto
@@ -746,22 +765,26 @@ computeAttribStats( std::vector<float>& vat )
 /// For each bin of the histogram \c histo: count the number of classes in the dataset, for attribute \c attrIdx
 /**
 \return A vector of size equal to the number of bins, holding the number of classes in that bin
+
+\todo check if not problem here: \c histo has 2 additional bins (first and last, for values higher and lower).
+Isn't that a problem ?
 */
 template<typename HISTO>
 std::vector<std::pair<uint,uint>>
 DataSet::countClassPerBin( size_t attrIdx, const HISTO& histo ) const
 {
 	auto nbBins = histo.size();
-//	COUT << "nbBins=" << nbBins << '\n';
-
 	std::vector<std::set<ClassVal>> classSets( nbBins ); // one set of classes per bin
 
-	for( const auto& pt: _data )                   // for each point
+	for(size_t idx=0; idx<size(); idx++ )
 	{
+		const auto& pt = getDataPoint(idx);        // for each point
 		auto attribVal = pt.attribVal( attrIdx );  // get attribute value
 		auto classVal = pt.classVal();             // and class value
-		if( classVal != ClassVal(-1) )             // if not classless, then
-		{
+
+		if( classVal != ClassVal(-1)               // if not classless, then
+			&& !pointIsOutlier(idx) )              // AND not an outlier
+		{                                          // then assign it to the correct bin
 			size_t i = 0;
 			for (auto&& x : boost::histogram::indexed(histo) )
 			{
@@ -847,10 +870,10 @@ attribIsOutlier( T atval, AttribStats<T> stat, En_OD_method odm, float param )
 Default behavior is to discard dataset points that have an attribute more than 2 sigma away from mean value.
 */
 template<typename T>
-size_t
+void
 DataSet::tagOutliers( const DatasetStats<T>& stats, En_OD_method odm, En_OR_method orm, float param )
 {
-	size_t nbOutliers = 0;
+	_nbOutliers = 0;
 	if( orm == En_OR_method::disablePoint )
 	{
 		_vIsOutlier.resize( size() );
@@ -865,7 +888,7 @@ DataSet::tagOutliers( const DatasetStats<T>& stats, En_OD_method odm, En_OR_meth
 			auto& atval = pt.attribVal(i);
 			if( attribIsOutlier( atval, stats.get(i), odm, param ) )
 			{
-				nbOutliers++;
+				_nbOutliers++;
 				switch( orm )
 				{
 					case En_OR_method::disablePoint:
@@ -880,7 +903,6 @@ DataSet::tagOutliers( const DatasetStats<T>& stats, En_OD_method odm, En_OR_meth
 			}
 		}
 	}
-	return nbOutliers;
 }
 
 //---------------------------------------------------------------------
@@ -907,9 +929,7 @@ DataSet::computeStats( uint nbBins ) const
 		const auto& atstats = computeAttribStats<T>( vat );
 		dstats.add( i, atstats );
 
-//		auto v_bins = saveAttribHisto( i, vat, atstats, 20 );
 		auto histo = saveAttribHisto( i, vat, atstats, nbBins );
-//		COUT << "NB BINS=" << v_bins.size();
 
 		auto v_ccpb = countClassPerBin( i, histo );
 		saveClassCountPerBin( i, v_ccpb );
@@ -954,6 +974,8 @@ If the \f$ nbPts/nbFolds \f$  is not an integer value, then the test set will ho
 and the training set will hold the rest of the points.
 
 The \c index defines which fraction of the points are returned in the test set
+
+\todo Remove outliers from folds !
 */
 std::pair<DataSet,DataSet>
 DataSet::getFolds( uint index, uint nbFolds ) const
@@ -976,8 +998,11 @@ DataSet::getFolds( uint index, uint nbFolds ) const
 }
 
 //---------------------------------------------------------------------
-/// Helper function for DataSet::generateAttribPlot()
+// % % % % % % % % % % % % % %
 namespace priv {
+// % % % % % % % % % % % % % %
+
+/// Helper function for DataSet::generateAttribPlot()
 void addVerticalLine( std::ostream& f, std::string label, float vpos, float xpos, std::string color )
 {
 	f << "set arrow from " << xpos << ", graph 0 to " << xpos << ", graph 1 nohead lc rgb '"
@@ -985,7 +1010,10 @@ void addVerticalLine( std::ostream& f, std::string label, float vpos, float xpos
 		<< "set label '" << label << "' at " << xpos << ", graph " << vpos << " rotate by 90 front textcolor rgb '"
 		<< color << "'\n";
 }
+// % % % % % % % % % % % % % %
 } // namespace priv
+// % % % % % % % % % % % % % %
+
 //---------------------------------------------------------------------
 /// Generates two files in current folder: 1-a Gnuplot script, to plot data, and
 /// 2- the whole dataset in a csv file, so that it has always the same format
@@ -1144,7 +1172,7 @@ DataSet::load( std::string fname, const Fparams params )
 }
 //---------------------------------------------------------------------
 void
-DataSet::printClassHisto( std::string fname ) const
+DataSet::generateClassDistrib( std::string fname ) const
 {
 	auto fhisto = priv::openOutputFile( fname, priv::FT_DAT );
 
@@ -1170,8 +1198,8 @@ DataSet::printInfo( std::ostream& f, const char* name ) const
 		<< "\n # classes="          << nbClasses()
 		<< "\n # classless points=" << _nbNoClassPoints;
 
-	if( _vIsOutlier.size() )
-		f << "\n # outliers=" << std::count( _vIsOutlier.begin(), _vIsOutlier.end(), true );
+//	if( _vIsOutlier.size() )
+		f << "\n # outliers=" << _nbOutliers;
 
 	f << "\nClasses frequency:\n";
 	size_t sum = 0;
@@ -1291,13 +1319,6 @@ struct NodeT
  uint NodeT::s_Counter = 0;
 
 //---------------------------------------------------------------------
-/// Edge of the tree. Value is true/false of the above decision, depending on threshold
-struct EdgeData
-{
-	bool edgeSide;
-};
-
-//---------------------------------------------------------------------
 /// Used for training
 /**
 \note IMPORTANT: we use list because when splitting the vector of indexes of points of a node,
@@ -1312,7 +1333,7 @@ using GraphT = boost::adjacency_list<
 		boost::listS,
 		boost::directedS,
 		NodeT,
-		EdgeData
+		priv::EdgeData
 	>;
 
 using vertexT_t = boost::graph_traits<GraphT>::vertex_descriptor;
@@ -1499,7 +1520,9 @@ struct ConfusionMatrix
 };
 
 //---------------------------------------------------------------------
+// % % % % % % % % % % % % % %
 namespace priv {
+// % % % % % % % % % % % % % %
 void printLine( std::ostream& f, uint w, uint n )
 {
 	n++;
@@ -1508,7 +1531,9 @@ void printLine( std::ostream& f, uint w, uint n )
 		f << '-';
 	f <<"|";
 }
-}
+// % % % % % % % % % % % % % %
+} // namespace priv
+// % % % % % % % % % % % % % %
 //---------------------------------------------------------------------
 /// Streaming of \ref ConfusionMatrix
 std::ostream&
@@ -2374,7 +2399,7 @@ TrainingTree::train( const DataSet& data, const Params params )
 
 	std::vector<uint> v_idx;
 	v_idx.reserve( data.size() );
-	if( data.hasOutliers() )
+	if( data.nbOutliers() )
 	{
 		for( size_t i=0; i<data.size(); i++ )
 			if( !data.pointIsOutlier(i) )

@@ -72,7 +72,7 @@ int main( int argc, const char** argv )
 		std::exit(1);
 	}
 	dataset.printInfo( std::cout );
-	dataset.printClassHisto( "histo" );
+	dataset.generateClassDistrib( "histo" );
 
 	if( noProcess )
 	{
@@ -108,8 +108,8 @@ int main( int argc, const char** argv )
 			auto data_train = p_data_subsets.first;
 			auto data_test  = p_data_subsets.second;
 
-			data_train.printClassHisto( "histo_tr_" + std::to_string(i) );
-			data_test.printClassHisto(  "histo_te_" + std::to_string(i) );
+			data_train.generateClassDistrib( "histo_tr_" + std::to_string(i) );
+			data_test.generateClassDistrib(  "histo_te_" + std::to_string(i) );
 
 			data_train.printInfo( std::cout, "train" );
 			data_test.printInfo(  std::cout, "test" );

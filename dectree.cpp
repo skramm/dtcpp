@@ -6,7 +6,7 @@ See doc on https://github.com/skramm/dtcpp
 \author S. Kramm - 2021
 */
 
-#define DEBUG
+//#define DEBUG
 //#define DEBUG_START
 
 #include "dtcpp.h"
@@ -56,6 +56,11 @@ int main( int argc, const char** argv )
 	if( cmdl["f"] )
 		doFolding = true;
 
+	bool doRemoveOutliers = false;
+	if( cmdl["ro"] )
+		doRemoveOutliers = true;
+	std::cout << " - removal of outliers: " << std::boolalpha << doRemoveOutliers << '\n';
+
 	DataSet dataset;
 	std::string fname = "sample_data/tds_1.csv";
 	if( cmdl.size() > 1 )
@@ -78,6 +83,9 @@ int main( int argc, const char** argv )
 	auto stats = dataset.computeStats<float>();
 	std::cout << stats;
 
+	if( doRemoveOutliers )
+		dataset.tagOutliers( stats );
+
 	if( !doFolding )
 	{
 		TrainingTree tt( dataset.getClassIndexMap() );
@@ -85,7 +93,7 @@ int main( int argc, const char** argv )
 		auto cm = tt.classify( dataset );
 		std::cout << cm << "\n";
 		tt.printInfo( std::cout );
-		tt.printDot( "demo.dot" );
+		tt.printDot( "dectree" );
 		cm.printAllScores( std::cout );
 	}
 	else
@@ -106,9 +114,8 @@ int main( int argc, const char** argv )
 			data_train.printInfo( std::cout, "train" );
 			data_test.printInfo(  std::cout, "test" );
 			tt.train( data_train, params );
-			std::ostringstream oss;
-			oss << "demo_" << i << ".dot";
-			tt.printDot( oss.str() );
+			tt.printDot( "dectree_" + std::to_string(i) );
+
 			auto cm_train = tt.classify( data_train );
 			auto cm_test  = tt.classify( data_test );
 			std::cout << "\n* Fold " << i+1 << "/" << nbFolds << '\n';

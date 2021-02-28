@@ -4,7 +4,7 @@ Naive attempt of a Decision Tree implementation for continuous variables (WIP !!
 * author: S. Kramm
 * licence: GPL v3
 * home page: https://github.com/skramm/dtcpp
-* language: C++14 (but might be ok with C++11, untested)
+* language: C++14
 
 
 This software can be used
@@ -14,9 +14,20 @@ This software can be used
 ## Features
 * input dataset format: csv style
  * class values: string or numerical (integer values)
+ * attribute values: only numerical at present
  * class value position: either first or last element of the line
  * field separator character adjustable
 
+## Recommended tools
+
+While not mandatory, this software will greatly benefit from some additional standard tools,
+that are freely available on any OS/architecture:
+* Gnuplot
+* Graphviz
+
+For those who intent to dive into the code, you will also need (besides a C++14 compiler...):
+* GnuMake
+* Doxygen
 
 ## Command-line
 
@@ -32,15 +43,17 @@ This software can be used
 * `-i` : load the datafile and prints Info on its contents, then exit (no processing)
 * `-f` : do Folding on the provided data
 * `-nb xx` : number of bins for building the histogram analysis (useful only for app `datanalylis`)
+* `-ro` : remove outliers before training
 
 ## Build information
 
 ### Dependencies:
 
-* for the library:
- * , the only dependency is [Boost Graph](https://www.boost.org/doc/libs/1_75_0/libs/graph/doc/index.html)<br>
-Isn't provided, if not installed => `sudo apt install libboost-all-dev`
+* for the library, the only dependency is Boost. Two libs are used:
+ * [Boost::Graph](https://www.boost.org/doc/libs/1_75_0/libs/graph/doc/index.html)<br>
  * [Boost::histogram](https://www.boost.org/doc/libs/1_75_0/libs/histogram)
+
+If you don't have Boost on your system, the easiest will be => `sudo apt install libboost-all-dev`
 
 * For the demo classifier program:
  * `argh`: command-line parser, from https://github.com/adishavit/argh<br>

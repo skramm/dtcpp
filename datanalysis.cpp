@@ -64,12 +64,12 @@ int main( int argc, const char** argv )
 		std::exit(1);
 	}
 
-//	dataset.printClassHisto( "histo" );
+	dataset.printClassHisto( "histo" );
 
 	dataset.printInfo( std::cout );
 	auto stats = dataset.computeStats<float>( nbBins );
 	std::cout << stats;
-	dataset.generateAttribPlot( "data", stats );
+	dataset.generateAttribPlot( "dataA", stats );
 
 	auto nbOutliers = dataset.tagOutliers( stats );
 	std::cout << "nb outliers=" << nbOutliers << " (" << 100. * nbOutliers / dataset.size() << " %)\n";
@@ -77,6 +77,6 @@ int main( int argc, const char** argv )
 	dataset.printInfo( std::cout );
 	auto stats2 = dataset.computeStats<float>( nbBins );
 	std::cout << stats2;
-	dataset.generateAttribPlot( "data2", stats2 );
+	dataset.generateAttribPlot( "dataB", stats2 );
 
 }

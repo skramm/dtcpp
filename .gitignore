@@ -1,6 +1,9 @@
 *.layout
 *.depend
 *.out
+*.dat
+*.png
+*.plt
+*.csv
+*.dot
 
-
-.Rproj.user

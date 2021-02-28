@@ -2,7 +2,7 @@
 
 SHELL=bash
 
-.PHONY: cleandoc clean cleanall all show doc dot test
+.PHONY: fdoc clean cleanall all show doc dot test
 
 BIN_DIR=build/bin
 OBJ_DIR=build/obj
@@ -87,6 +87,7 @@ clean: cleandoc
 	@-rm *.dat
 	@-rm *.dot
 	@-rm *.png
+	@-rm *.plt
 
 cleanall: clean
 	@-rm $(BIN_DIR)/*

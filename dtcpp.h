@@ -1394,7 +1394,6 @@ struct NodeT
 		s_Counter = 0;
 	}
 	NodeT() { _nodeId = s_Counter++; }
-	NodeT( const NodeT& n ) {  _nodeId = s_Counter++; }
 };
 
  /// Instanciation of static
@@ -2489,7 +2488,7 @@ TrainingTree::p_Pruning()
 	{
 		auto node = _graph[*pit.first];
 		nodeSet.insert( node._nodeId );
-//		if( node._type != NT_Root && node._type != NT_Decision )
+		if( node._type != NT_Root && node._type != NT_Decision )
 		{
 //			auto pe = boost::in_edges( *pit.first, _graph );
 			std::cerr << "node " << node._nodeId << " class=" << node._class << " #=" << node.v_Idx.size() << '\n';
@@ -2539,8 +2538,8 @@ TrainingTree::train( const DataSet& data, const Params params )
 	LOG( 0, "Training done, start pruning" );
 	printInfo( std::cout );
 
-	LOG( 0, "Pruning done" );
 	p_Pruning();
+	LOG( 0, "Pruning done" );
 	printInfo( std::cout );
 }
 

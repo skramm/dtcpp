@@ -41,8 +41,8 @@ For those who intent to dive into the code, you will also need (besides a C++14 
 * `-cl` : means class value is the **Last** value of line (default)
 * `-ll X` : sets log level to 'X'. Available levels: 0,1,2,3
 * `-i` : load the datafile and prints Info on its contents, then exit (no processing)
-* `-f` : do Folding on the provided data
-* `-nb xx` : number of bins for building the histogram analysis (useful only for app `datanalylis`)
+* `-nf x` : do training on 'x' folds of data
+* `-nbh xx` : number of bins for building the histograms (useful only for app `datanalylis`)
 * `-ro` : remove outliers before training
 
 ## Build information

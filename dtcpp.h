@@ -309,8 +309,8 @@ struct Params
 	float removalCoeff = 0.05f;  ///< used to remove close attribute values when searching the best threshold. See removeDuplicates()
 	bool  verbose = true;        ///< to allow logging of some run-time details
 	int   verboseLevel = 0;      ///< verbose Level, related to \ref verbose
-	bool  doFolding = false;
-	uint  nbFolds = 5;
+//	bool  doFolding = false;
+//	int   nbFolds = 5;
 	uint  maxTreeDepth = 12;
 };
 

@@ -22,6 +22,13 @@ int main( int argc, const char** argv )
 	argh::parser cmdl; //({ "-sep"});
 	cmdl.parse(argc, argv, argh::parser::PREFER_PARAM_FOR_UNREG_OPTION );
 
+	if( cmdl.size() < 2 )
+	{
+		std::cerr << "Error, no data file name given !";
+		std::exit(1);
+	}
+	std::string fname = cmdl[1];
+
 	// optional arg: -sep X => X used as datafile field separator
 	auto sepcl = cmdl("sep").str();
 	if( !sepcl.empty() )
@@ -46,15 +53,35 @@ int main( int argc, const char** argv )
 	if( cmdl["cs"] )
 		fparams.classAsString = true;
 
-// optional boolean arg: -i => only prints info about the data set and exit
-	bool noProcess = false;
-	if( cmdl["i"] )
-		noProcess = true;
+	bool doDataAnalysis = false;
+	if( cmdl["da"] )                  // proceed to data analysis
+		doDataAnalysis = true;
 
-// optional arg: -f => evaluate performance on training dataset by doing folds on data
-	bool doFolding = false;
-	if( cmdl["f"] )
-		doFolding = true;
+	uint nbBins = 15;
+	auto histoBins = cmdl("nbh").str();
+	if( !histoBins.empty() )
+	{
+		nbBins = std::stoi( histoBins );
+	}
+	std::cout << " - histograms built on " << nbBins << " bins\n";
+
+
+// optional boolean arg: -i => only prints info about the data set and exit
+	bool noTraining = false;
+	if( cmdl["i"] )
+		noTraining = true;
+
+
+// optional arg: -nf x => evaluate performance on training dataset by doing 'x' folds on data
+
+	int nbFolds = 0;
+	auto str_folds = cmdl("nf").str();
+	if( !str_folds.empty() )
+	{
+		nbFolds = std::stoi( str_folds );
+		assert( nbFolds>0 );
+		std::cout << " - training with " << nbFolds << " on dataset\n";
+	}
 
 	bool doRemoveOutliers = false;
 	if( cmdl["ro"] )
@@ -62,10 +89,6 @@ int main( int argc, const char** argv )
 	std::cout << " - removal of outliers: " << std::boolalpha << doRemoveOutliers << '\n';
 
 	DataSet dataset;
-	std::string fname = "sample_data/tds_1.csv";
-	if( cmdl.size() > 1 )
-		fname = cmdl[1];
-
 	if( !dataset.load( fname, fparams ) )
 	{
 		std::cerr << "Error, unable to load data file: " << fname << '\n';
@@ -74,19 +97,27 @@ int main( int argc, const char** argv )
 	dataset.printInfo( std::cout );
 	dataset.generateClassDistrib( "histo" );
 
-	if( noProcess )
+	auto stats = dataset.computeStats<float>();
+	std::cout << stats;
+	dataset.generateAttribPlot( "dataA", stats );
+
+	if( doRemoveOutliers )
 	{
-		std::cout << "No processing required, exiting\n";
+		dataset.tagOutliers( stats );
+		std::cout << "* outlier tagging: " << dataset.nbOutliers() << '\n';
+		dataset.printInfo( std::cout );
+		auto stats2 = dataset.computeStats<float>();
+		std::cout << stats2;
+		dataset.generateAttribPlot( "dataB", stats2 );
+	}
+
+	if( noTraining )
+	{
+		std::cout << "No training required, exiting\n";
 		std::exit(2);
 	}
 
-	auto stats = dataset.computeStats<float>();
-	std::cout << stats;
-
-	if( doRemoveOutliers )
-		dataset.tagOutliers( stats );
-
-	if( !doFolding )
+	if( nbFolds == 0 )
 	{
 		TrainingTree tt( dataset.getClassIndexMap() );
 		tt.train( dataset, params );
@@ -100,8 +131,7 @@ int main( int argc, const char** argv )
 	{
 		dataset.shuffle();
 
-		uint nbFolds = 5;
-		for( uint i=0; i<nbFolds; i++ )
+		for( uint i=0; i<(uint)nbFolds; i++ )
 		{
 			TrainingTree tt( dataset.getClassIndexMap() );
 			auto p_data_subsets = dataset.getFolds( i, nbFolds );

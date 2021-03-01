@@ -36,7 +36,7 @@ that are freely available on any OS/architecture:
 * `-cf` : means class value is the **First** value of line
 * `-cl` : means class value is the **Last** value of line (default)
 * `-ll X` : sets log level to 'X'. Available levels: 0,1,2,3
-* `-i` : load the datafile and prints Info on its contents, then exit (no processing)
+* `-i` : load the datafile and prints info and stats on its contents, then exit (no training)
 * `-nf x` : do training on 'x' folds of data
 * `-nbh xx` : number of bins for building the histograms
 * `-ro` : remove outliers before training

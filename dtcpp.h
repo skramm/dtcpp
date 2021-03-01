@@ -51,15 +51,18 @@ namespace dtcpp {
 	#define START
 #endif // DEBUG
 
+
 #define LOG( level, msg ) \
-	if( params.verbose && level<=params.verboseLevel ) \
 	{ \
-		std::cout << std::setfill('0') << std::setw(4) << priv::g_Timer.getDuration(level); \
-		priv::spaceLog( level ); \
-		std::cout << " E" << std::setfill('0') << std::setw(4) << priv::logCount()++ << '-' << __FUNCTION__ << "(): " << msg << '\n'; \
+		if( g_params.verbose && level<=g_params.verboseLevel ) \
+		{ \
+			std::cout << std::setfill('0') << std::setw(4) << g_params.timer.getDuration(level); \
+			priv::spaceLog( level ); \
+			std::cout << " E" << std::setfill('0') << std::setw(4) << priv::logCount()++ << '-' << __FUNCTION__ << "(): " << msg << '\n'; \
+		} \
 	}
 
-#define TIMER_START priv::g_Timer.start()
+#define TIMER_START g_params.timer.start()
 
 
 // % % % % % % % % % % % % % %
@@ -73,6 +76,7 @@ uint& logCount()
 	return s_logCount;
 }
 
+//---------------------------------------------------------------------
 /// Used in logging macro, see \ref LOG
 void spaceLog( int n )
 {
@@ -81,6 +85,7 @@ void spaceLog( int n )
 		std::cout << "  ";
 }
 
+//---------------------------------------------------------------------
 /// Holds timing
 /// \todo add level to have a timing PER log level
 struct Timer
@@ -100,8 +105,13 @@ struct Timer
 	std::chrono::high_resolution_clock::time_point ck;
 };
 
-/// Used for logging, to measure duration.
-Timer g_Timer;
+//---------------------------------------------------------------------
+struct Gparams
+{
+	bool  verbose = false;
+	int   verboseLevel = 1;
+	Timer timer; ///< Used for logging, to measure duration.
+};
 
 
 /// Root string used to generated the script that will be used to generate plots of the attribute histograms,
@@ -133,11 +143,12 @@ getString( EN_FileType ft )
 	return s;
 }
 //---------------------------------------------------------------------
+/// Generic function used to open output files
 auto
-openOutputFile( std::string fname, EN_FileType ft )
+openOutputFile( std::string fn, EN_FileType ft, std::string data_fn=std::string() )
 {
 	std::ostringstream oss;
-	oss << "out/" << fname << '.' << getString( ft );
+	oss << "out/" << fn << '.' << getString( ft );
 	auto fname = oss.str();
 	std::ofstream f(fname);
 	if( !f.is_open() )
@@ -153,9 +164,11 @@ openOutputFile( std::string fname, EN_FileType ft )
 
 		std::ostringstream ss;
 		ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %X");
-		f << "# generated on " << ss.str() << "\n\n";
+		f << "# generated on " << ss.str() << "\n";
 	}
-
+	if( !data_fn.empty() )
+		f << "# source data file: " << data_fn << '\n';
+	f << '\n';
 	if( ft == FT_PLT )
 		f << "set terminal pngcairo\n";
 	return f;
@@ -299,6 +312,10 @@ struct EdgeData
 } // namespace priv
 // % % % % % % % % % % % % % %
 
+//---------------------------------------------------------------------
+/// Global parameters
+priv::Gparams g_params;
+
 using ThresholdVal = priv::NamedType<float,struct ThresholdValTag>;
 using ClassVal     = priv::NamedType<int,  struct ClassValTag>;
 
@@ -309,8 +326,8 @@ struct Params
 	float minGiniCoeffForSplitting = 0.05f;
 	uint  minNbPoints = 3;                   ///< minimum nb of points to create a node
 	float removalCoeff = 0.05f;  ///< used to remove close attribute values when searching the best threshold. See removeDuplicates()
-	bool  verbose = true;        ///< to allow logging of some run-time details
-	int   verboseLevel = 0;      ///< verbose Level, related to \ref verbose
+//	bool  verbose = true;        ///< to allow logging of some run-time details
+//	int   verboseLevel = 0;      ///< verbose Level, related to \ref verbose
 //	bool  doFolding = false;
 //	int   nbFolds = 5;
 	uint  maxTreeDepth = 12;
@@ -400,6 +417,9 @@ class DataPoint
 
 		const float& attribVal( size_t idx ) const
 		{
+// TEMP
+			if( idx>=_attrValue.size() )
+				std::cerr << "idx=" << idx << " _attrValue.size()=" << _attrValue.size() << "\n";
 			assert( idx<_attrValue.size() );
 			return _attrValue[idx];
 		}
@@ -526,6 +546,7 @@ class DataSet
 		{}
 		DataSet( size_t n ) : _nbAttribs(n)
 		{ assert( n ); }
+
 		size_t size() const
 		{ return _data.size(); }
 
@@ -569,6 +590,7 @@ class DataSet
 				_classCount[dp.classVal()]++;
 			else
 				_nbNoClassPoints++;
+			_noChange = false;
 		}
 //		template<typename U>
 		DataPoint& getDataPoint( size_t idx )
@@ -607,6 +629,7 @@ class DataSet
 			_classCount.clear();
 			_nbNoClassPoints = 0u;
 			clearOutliers();
+			_noChange = false;
 		}
 		std::pair<DataSet,DataSet> getFolds( uint i, uint nbFolds ) const;
 
@@ -616,7 +639,7 @@ class DataSet
 			std::shuffle(std::begin(_data), std::end(_data), std::random_device() );
 		}
 		template<typename T>
-		DatasetStats<T> computeStats( uint nbBins=15 ) const;
+		DatasetStats<T> computeStats( uint nbBins ) const;
 /// \name Outlier handling
 ///@{
 		template<typename T>
@@ -645,7 +668,7 @@ class DataSet
 
 /// Returns nb of classes in the dataset, \b NOT considering the points without any class assigned
 /// \todo implement recounting if outliers
-		size_t nbClasses( bool includingOutliers=false ) const
+		size_t nbClasses() const
 		{
 			return _classCount.size();
 		}
@@ -654,8 +677,8 @@ class DataSet
 		{
 			ClassIndexMap cim;
 			size_t i = 0;
-			for( const auto& cc: _classCount )
-				cim[cc.first] = i++;
+			for( const auto& cc: _classCount )  // for each class value, fill
+				cim[cc.first] = i++;            // the map with an incremental index
 			return cim;
 		}
 		template<typename HISTO>
@@ -666,10 +689,13 @@ class DataSet
 		{
 			if( val == ClassVal(-1) )
 				return _nbNoClassPoints;
-			if( _classCount.count( val ) )
+			if( _classCount.count( val ) )    // we test first, because it might not be present
 				return _classCount.at(val);
 			return 0u;
 		}
+
+	private:
+		void p_countClasses();
 
 	private:
 		size_t                  _nbAttribs = 0;
@@ -678,6 +704,8 @@ class DataSet
 		uint                    _nbNoClassPoints = 0u;
 		std::vector<bool>       _vIsOutlier;            ///< Will be allocated ONLY if tagOutliers() is called, with En_OR_method::disablePoint
 		size_t                  _nbOutliers;   ///< to avoid recounting them when unneeded
+		std::string             _fname;         ///< file name (saved so it can be printed out in output files)
+		bool                    _noChange = false;
 };
 //using DataSetf = DataSet<float>;
 //using DataSetd = DataSet<double>;
@@ -692,7 +720,13 @@ class DataSet
 */
 template<typename T>
 auto
-saveAttribHisto( size_t i, const std::vector<float>& vat, const AttribStats<T>& atstats, uint nbBins )
+genAttribHisto(
+	size_t                    atIdx,       ///< attribute index
+	const std::vector<float>& vat,
+	const AttribStats<T>&     atstats,
+	uint                      nbBins,      ///< nb bins of the histogram
+	std::string               data_fn      ///< input datafile name
+)
 {
 	char sep = ' ';
 	auto h = boost::histogram::make_histogram(
@@ -702,16 +736,14 @@ saveAttribHisto( size_t i, const std::vector<float>& vat, const AttribStats<T>& 
 			atstats._maxVal
 		)
 	);
-	std::string fname( "attrib_histo_" + std::to_string(i) );
-	auto f = priv::openOutputFile( fname, priv::FT_DAT );
+	std::string fname( "attrib_histo_" + std::to_string(atIdx) );
+	auto f = priv::openOutputFile( fname, priv::FT_DAT, data_fn );
 
 	std::for_each( vat.begin(), vat.end(), std::ref(h) );
 
-	f << "# histogram for attribute " << i << '\n';
+	f << "# histogram for attribute " << atIdx << '\n';
 	for (auto x : indexed(h) )
-	{
 		f << x.index()+1 << sep << x.bin().lower() << sep << x.bin().upper() << sep << *x << '\n';
-	}
 	return h;
 }
 //---------------------------------------------------------------------
@@ -865,6 +897,29 @@ attribIsOutlier( T atval, AttribStats<T> stat, En_OD_method odm, float param )
 	return false; // TEMP
 }
 //---------------------------------------------------------------------
+/// Called after tagging outliers, because some classes might have vanished.
+void
+DataSet::p_countClasses()
+{
+	if( nbOutliers() == 0 && _noChange )  // then, no changes
+		return;
+
+	_nbNoClassPoints = 0;
+	_classCount.clear();
+	for( size_t p=0; p<size(); p++ )
+	{
+		const auto& pt = getDataPoint(p);
+		if( !pointIsOutlier(p) )
+		{
+			if( pt.classVal() == ClassVal(-1) )
+				_nbNoClassPoints++;
+			else
+				_classCount[ pt.classVal() ]++;
+		}
+	}
+	_noChange = true;
+}
+//---------------------------------------------------------------------
 /// Search and tag for outliers in the dataset. The exact action taken depends on \c orm
 /**
 - if orm=replaceWithMean, then the outlier attribute value will have its value replaced by the mean value of the attribute
@@ -906,6 +961,7 @@ DataSet::tagOutliers( const DatasetStats<T>& stats, En_OD_method odm, En_OR_meth
 			}
 		}
 	}
+	p_countClasses();
 }
 
 //---------------------------------------------------------------------
@@ -918,36 +974,45 @@ template<typename T>
 DatasetStats<T>
 DataSet::computeStats( uint nbBins ) const
 {
-	auto fplot = priv::openOutputFile( "plot_attrib_histo", priv::FT_PLT );
+	START;
+	auto fplot = priv::openOutputFile( "plot_attrib_histo", priv::FT_PLT, _fname );
 	fplot << priv::g_root_gnuplot_histo << "\n";
 
 	DatasetStats<T> dstats( nbAttribs() );
-	for( size_t i=0; i<nbAttribs(); i++ )
+	for( size_t atItx=0; atItx<nbAttribs(); atItx++ )
 	{
 		std::vector<float> vat;
 		vat.reserve( size() );               // guarantees we won't have any reallocating
-		for( const auto& point: _data )
-			vat.push_back( point.attribVal(i) );
+		if( nbOutliers() == 0 )
+			for( const auto& point: _data )
+				vat.push_back( point.attribVal(atItx) );
+		else
+			for( size_t ptIdx=0; ptIdx<size(); ptIdx++ )
+			{
+				const auto& point = getDataPoint(ptIdx);
+				if( !pointIsOutlier(ptIdx) )
+					vat.push_back( point.attribVal(atItx) );
+			}
 
 		const auto& atstats = computeAttribStats<T>( vat );
-		dstats.add( i, atstats );
+		dstats.add( atItx, atstats );
 
-		auto histo = saveAttribHisto( i, vat, atstats, nbBins );
+		auto histo = genAttribHisto( atItx, vat, atstats, nbBins, _fname );
 
-		auto v_ccpb = countClassPerBin( i, histo );
-		saveClassCountPerBin( i, v_ccpb );
+		auto v_ccpb = countClassPerBin( atItx, histo );
+		saveClassCountPerBin( atItx, v_ccpb );
 
-		fplot << "set output 'attrib_histo_"<< i << ".png'\n"
+		fplot << "set output 'attrib_histo_"<< atItx << ".png'\n"
 			<< "set multiplot\n"
 			<< "set logscale y\n"
 			<< "set title 'Nb pts per bin'\n"
 			<< "set origin 0,0\n"
 			<< "set size 1,0.5\n"
-			<< "plot 'attrib_histo_" << i << ".dat' using 4:xtic(1) noti\n"
+			<< "plot 'attrib_histo_" << atItx << ".dat' using 4:xtic(1) noti\n"
 			<< "set title 'Ratio Nb classes per bin/nbpts'\n"
 			<< "set origin 0,0.5\n"
 			<< "set size 1,0.5\n"
-			<< "plot 'histo_ccpb_attrib_" << i << ".dat' using 3:xtic(1) noti\n"
+			<< "plot 'histo_ccpb_attrib_" << atItx << ".dat' using 3:xtic(1) noti\n"
 			<< "unset multiplot\n"
 			<< '\n';
 	}
@@ -1033,7 +1098,8 @@ DataSet::generateAttribPlot(
 	const DatasetStats<T>& dss
 ) const
 {
-	auto f1 = priv::openOutputFile( fname, priv::FT_CSV );
+	START;
+	auto f1 = priv::openOutputFile( fname, priv::FT_CSV, _fname );
 	if( _vIsOutlier.size() )
 	{
 		for( size_t i=0; i<size(); i++ )
@@ -1045,7 +1111,7 @@ DataSet::generateAttribPlot(
 			pt.print( f1 );
 	f1 << '\n';
 
-	auto f = priv::openOutputFile( fname, priv::FT_PLT );
+	auto f = priv::openOutputFile( fname, priv::FT_PLT, _fname );
 	f << "set ylabel 'CLASS'"
 		<< "\nset yrange [-0.5:" << nbClasses()-0.5f << ']'
 		<< "\nclass=" << nbAttribs()+1
@@ -1081,6 +1147,7 @@ DataSet::load( std::string fname, const Fparams params )
 		std::cerr << "Unable to open file " << fname << "\n";
 		return false;
 	}
+	_fname = fname;
 	clear();
 
 	std::map<std::string,uint> classStringMap;  // maps string to class Idx used only if classes are given as strings
@@ -1177,7 +1244,8 @@ DataSet::load( std::string fname, const Fparams params )
 void
 DataSet::generateClassDistrib( std::string fname ) const
 {
-	auto fhisto = priv::openOutputFile( fname, priv::FT_DAT );
+	START;
+	auto fhisto = priv::openOutputFile( fname, priv::FT_DAT, _fname );
 
 	fhisto << "# data class histogram file for input file '" <<  fname
 		<< "'\n# class_index occurence_count percentage\n";
@@ -1187,6 +1255,17 @@ DataSet::generateClassDistrib( std::string fname ) const
 		fhisto << cval.first << " "
 			<< cval.second << " " << 100. * cval.second/size()
 			<< '\n';
+
+	auto fplot = priv::openOutputFile( fname, priv::FT_PLT, _fname );
+	fplot << "set output '" << fname << ".png'\n"
+		<< "set title 'Class distribution'\n"
+		<< "set ylabel '% of total points'\n"
+		<< "set xlabel 'Class'\n"
+		<< "set style data histogram\n"
+		<< "set style histogram cluster gap 1\n"
+		<< "set style fill solid\n"
+		<< "set boxwidth 1\n"
+		<< "plot '" << fname << ".dat' using 3:xtic(1) notitle\n";
 }
 
 //---------------------------------------------------------------------
@@ -1214,7 +1293,7 @@ DataSet::printInfo( std::ostream& f, const char* name ) const
 			<< " %)\n";
 		sum += cval.second;
 	}
-	f << " => " << sum << " points with class value\n";
+	f << " => " << sum << " points holding a class value\n";
 }
 //---------------------------------------------------------------------
 //template<typename T>
@@ -1734,9 +1813,13 @@ class TrainingTree
 		void     printInfo( std::ostream& ) const;
 		size_t   maxDepth() const { return _maxDepth; }
 		size_t   nbLeaves() const;
+
+	private:
+		void p_Pruning();
 };
 
 //---------------------------------------------------------------------
+/// Iterates on all nodes and counts the one that are not root, nor "decision" nodes
 inline
 size_t
 TrainingTree::nbLeaves() const
@@ -2390,10 +2473,33 @@ splitNode(
 	s_recDepth--;
 }
 //---------------------------------------------------------------------
+void
+TrainingTree::p_Pruning()
+{
+	START;
+
+	std::set<uint> nodeSet;
+	LOG( 1, "start pruning, nb nodes=" + std::to_string( boost::num_vertices( _graph ) ) );
+
+	for(
+		auto pit = boost::vertices( _graph );
+		pit.first != pit.second;
+		pit.first++
+	)
+	{
+		auto node = _graph[*pit.first];
+		nodeSet.insert( node._nodeId );
+//		if( node._type != NT_Root && node._type != NT_Decision )
+		{
+//			auto pe = boost::in_edges( *pit.first, _graph );
+			std::cerr << "node " << node._nodeId << " class=" << node._class << " #=" << node.v_Idx.size() << '\n';
+		}
+	}
+}
+//---------------------------------------------------------------------
 /// Train tree using data.
 /**
 \return false if failure
-
 */
 //template<typename T>
 void
@@ -2430,7 +2536,11 @@ TrainingTree::train( const DataSet& data, const Params params )
 	_graph[_initialVertex]._type = NT_Root;
 
 	splitNode( _initialVertex, _graph, data, params ); // Call the "split" function (recursive)
-	LOG( 0, "Training done" );
+	LOG( 0, "Training done, start pruning" );
+	printInfo( std::cout );
+
+	LOG( 0, "Pruning done" );
+	p_Pruning();
 	printInfo( std::cout );
 }
 

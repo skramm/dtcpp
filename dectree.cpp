@@ -12,8 +12,8 @@ See doc on https://github.com/skramm/dtcpp
 #include "dtcpp.h"
 #include "argh.h" //  https://github.com/adishavit/argh
 
-//using namespace std;
 using namespace dtcpp;
+
 
 int main( int argc, const char** argv )
 {
@@ -44,23 +44,19 @@ int main( int argc, const char** argv )
 	auto str_loglevel = cmdl("ll").str();       // Log Level
 	if( !str_loglevel.empty() )
 	{
-		params.verboseLevel = std::stoi( str_loglevel );
-		params.verbose = true;
-		std::cout << " - enabling logging with level " << params.verboseLevel << '\n';
+		g_params.verboseLevel = std::stoi( str_loglevel );
+		g_params.verbose = true;
+		std::cout << " - enabling logging with level " << g_params.verboseLevel << '\n';
 	}
 
 	auto str_maxDepth = cmdl("md").str();
 	if( !str_maxDepth.empty() )
-		params.maxTreeDepth = str_sepcl[0];
+		params.maxTreeDepth = std::stoi( str_maxDepth );
 	std::cout << " - max depth for tree=" << params.maxTreeDepth << '\n';
 
 // optional boolean arg: -cs => the class value in the datafile is given as a string value
 	if( cmdl["cs"] )
 		fparams.classAsString = true;
-
-	bool doDataAnalysis = false;
-	if( cmdl["da"] )                  // proceed to data analysis
-		doDataAnalysis = true;
 
 	uint nbBins = 15;
 	auto str_histoBins = cmdl("nbh").str();
@@ -70,12 +66,10 @@ int main( int argc, const char** argv )
 	}
 	std::cout << " - histograms built on " << nbBins << " bins\n";
 
-
 // optional boolean arg: -i => only prints info about the data set and exit
 	bool noTraining = false;
 	if( cmdl["i"] )
 		noTraining = true;
-
 
 // optional arg: -nf x => evaluate performance on training dataset by doing 'x' folds on data
 	int nbFolds = 0;
@@ -99,18 +93,19 @@ int main( int argc, const char** argv )
 		std::exit(1);
 	}
 	dataset.printInfo( std::cout );
-	dataset.generateClassDistrib( "histo" );
+	dataset.generateClassDistrib( "class_distrib_A" );
 
-	auto stats = dataset.computeStats<float>();
+	auto stats = dataset.computeStats<float>( nbBins );
 	std::cout << stats;
 	dataset.generateAttribPlot( "dataA", stats );
+	dataset.generateClassDistrib( "class_distrib_B" );
 
 	if( doRemoveOutliers )
 	{
 		dataset.tagOutliers( stats );
 		std::cout << "* outlier tagging: " << dataset.nbOutliers() << '\n';
 		dataset.printInfo( std::cout );
-		auto stats2 = dataset.computeStats<float>();
+		auto stats2 = dataset.computeStats<float>( nbBins );
 		std::cout << stats2;
 		dataset.generateAttribPlot( "dataB", stats2 );
 	}

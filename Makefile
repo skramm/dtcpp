@@ -10,7 +10,7 @@ OBJ_DIR=build/obj
 
 SRC_FILES = $(wildcard *.cpp)
 
-DOT_FILES = $(wildcard *.dot)
+DOT_FILES = $(wildcard out/*.dot)
 
 PNG_FILES = $(patsubst %.dot,%.png,$(DOT_FILES))
 OBJ_FILES = $(patsubst %.cpp,$(OBJ_DIR)/%,$(SRC_FILES))
@@ -68,12 +68,15 @@ test: build/bin/test_catch
 
 dot: $(PNG_FILES)
 
-%.png:%.dot $(DOT_FILES)
+out/%.png:out/%.dot $(DOT_FILES)
 	dot -Tpng $< >$@
 
 cleandoc:
 	@-rm build/html/search/*
 	@-rm build/html/*
+
+cleanout:
+	@-rm out/*
 
 clean: cleandoc
 	@-rm $(OBJ_DIR)/*

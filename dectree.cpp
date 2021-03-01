@@ -6,7 +6,7 @@ See doc on https://github.com/skramm/dtcpp
 \author S. Kramm - 2021
 */
 
-//#define DEBUG
+#define DEBUG
 //#define DEBUG_START
 
 #include "dtcpp.h"
@@ -122,9 +122,13 @@ int main( int argc, const char** argv )
 		tt.train( dataset, params );
 		auto cm = tt.classify( dataset );
 		std::cout << cm << "\n";
-		tt.printInfo( std::cout );
+		tt.printInfo( std::cout, "Before Pruning" );
 		tt.printDot( "dectree" );
 		cm.printAllScores( std::cout );
+
+		tt.pruning();
+		tt.printInfo( std::cout, "After pruning" );
+		tt.printDot( "dectree_p" );
 	}
 	else
 	{

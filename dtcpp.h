@@ -1338,12 +1338,13 @@ DataSet::print( std::ostream& f, const std::vector<uint>& vIdx ) const
 /// Holds the node type
 enum NodeType
 {
-	 NT_undef
+	 NT_undef = 0
 	 ,NT_Root
 	 ,NT_Decision
 	 ,NT_Final_MD
 	 ,NT_Final_GI_Small
 	 ,NT_Final_SplitTooSmall
+	 ,NT_Merged
 };
 
 inline
@@ -1360,6 +1361,7 @@ getString( NodeType nt )
 		case NT_Final_MD:            s="MD";  break;
 		case NT_Final_GI_Small:      s="MGI"; break;
 		case NT_Final_SplitTooSmall: s="STS"; break;
+		case NT_Merged:              s="ME";  break;
 		default: assert(0);
 	}
 	return std::string(s);
@@ -1388,6 +1390,17 @@ struct NodeT
 			;
 		return f;
 	}
+
+	bool isLeave() const
+	{
+		assert( _type != NT_undef );
+		if( _type == NT_Root )
+			return false;
+		if( _type == NT_Decision )
+			return false;
+		return true;
+	}
+
 /// Reset of node counter \ref s_Counter
 	static void resetNodeId()
 	{
@@ -1408,16 +1421,19 @@ BUT: if we where using \c vectS, adding new nodes may invalidate the current ver
 Thus, we use \c listS
 \todo: actually, maybe we need to use ListS only for ONE of the two containers. Check BGL doc
 to see what these two template parameters are used for.
+
+\note 2021-03-01: changed from \c directedS to \c bidirectionalS: required to be able to get in_edges (see TraingTree::pruning())
 */
 using GraphT = boost::adjacency_list<
 		boost::listS,  // boost::vecS,
 		boost::listS,
-		boost::directedS,
+		boost::bidirectionalS, //boost::directedS,
 		NodeT,
 		priv::EdgeData
 	>;
 
 using vertexT_t = boost::graph_traits<GraphT>::vertex_descriptor;
+using edge_t = boost::graph_traits<GraphT>::edge_descriptor;
 
 //---------------------------------------------------------------------
 // forward declaration, needed for the friend declaration below
@@ -1809,12 +1825,11 @@ class TrainingTree
 		ClassVal        classify( const DataPoint& ) const;
 
 		void     printDot( std::string fname ) const;
-		void     printInfo( std::ostream& ) const;
+		void     printInfo( std::ostream&, const char* msg=0 ) const;
 		size_t   maxDepth() const { return _maxDepth; }
 		size_t   nbLeaves() const;
 
-	private:
-		void p_Pruning();
+		size_t pruning();
 };
 
 //---------------------------------------------------------------------
@@ -1853,9 +1868,14 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 //	COUT << "nb out edges=" << boost::out_degree( v, graph ) << "\n";
 //	std::cout.precision(4);
 	f.precision(3);
-	for( auto pit=boost::out_edges(v, graph); pit.first != pit.second; pit.first++ )
+	for(
+		auto pit=boost::out_edges(v, graph);
+		pit.first != pit.second;
+		pit.first++
+	)
 	{
 		auto target = boost::target( *pit.first, graph );
+		COUT << "node id=" << graph[target]._nodeId << " type=" << (int)graph[target]._type << '\n';
 		assert( graph[target]._type != NT_undef );
 
 		f << graph[target]._nodeId
@@ -1903,20 +1923,34 @@ TrainingTree::printDot( std::string fname ) const
 
 	priv::printNodeChilds( f, _initialVertex, _graph );
 	f << "}\n";
+	f <<" TYPE=" << _graph[_initialVertex]._type << std::endl;
 }
 
 //---------------------------------------------------------------------
 /// Print a DOT file of the tree
 //template<typename T>
 void
-TrainingTree::printInfo( std::ostream& f ) const
+TrainingTree::printInfo( std::ostream& f, const char* msg ) const
 {
-	f << "Training tree info:"
-		<< "\n -nb nodes=" << boost::num_vertices( _graph )
+	f << "Training tree info:";
+	if( msg )
+		f << msg;
+	f << "\n -nb nodes=" << boost::num_vertices( _graph )
 		<< "\n -nb edges=" << boost::num_edges( _graph )
 		<< "\n -max depth=" << maxDepth()
 		<< "\n -nb of leaves=" << nbLeaves()
 		<< '\n';
+
+	for(
+		auto pit = boost::vertices( _graph );     // iterate on
+		pit.first != pit.second;                  // all the vertices
+		pit.first++
+	)
+	{
+		auto v = *pit.first;
+		auto node= _graph[v];
+		f << "Id=" << node._nodeId << " type=" << (int)node._type << "\n";
+	}
 //	f << "Boost printing:\n";
 //	boost::print_graph( _graph );
 }
@@ -2435,7 +2469,8 @@ splitNode(
 	graph[v]._attrIndex = bestAttrib._atIndex;
 	graph[v]._threshold = bestAttrib._threshold.get();
 	graph[v].giniImpurity = -1.f;
-	graph[v]._type = NT_Decision;
+	if( graph[v]._type != NT_Root )   // so the root... stays the root !
+		graph[v]._type = NT_Decision;
 
 // step 3 - different classes here: we create two child nodes and split the dataset
 	auto v1 = boost::add_vertex(graph);
@@ -2472,28 +2507,86 @@ splitNode(
 	s_recDepth--;
 }
 //---------------------------------------------------------------------
-void
-TrainingTree::p_Pruning()
+size_t
+TrainingTree::pruning()
 {
 	START;
 
 	std::set<uint> nodeSet;
 	LOG( 1, "start pruning, nb nodes=" + std::to_string( boost::num_vertices( _graph ) ) );
 
+	size_t iter = 0;
+	size_t nbRemoval = 0;
+	bool removalHappened = false;
+	do{
+		std::cerr << "iter=" << iter++ << " nb vertices=" << boost::num_vertices( _graph ) << std::endl;
+		removalHappened = false;
 	for(
-		auto pit = boost::vertices( _graph );
-		pit.first != pit.second;
+		auto pit = boost::vertices( _graph );     // iterate on
+		pit.first != pit.second;                  // all the vertices
 		pit.first++
 	)
 	{
-		auto node = _graph[*pit.first];
-		nodeSet.insert( node._nodeId );
-		if( node._type != NT_Root && node._type != NT_Decision )
+		auto v1    = *pit.first;
+		auto node1 = _graph[v1];
+		std::cerr << "node1=" << node1._nodeId << " class=" << (int)node1._type << std::endl;
+		nodeSet.insert( node1._nodeId );
+		if( node1.isLeave() ) // but only care about the leaves
 		{
-//			auto pe = boost::in_edges( *pit.first, _graph );
-			std::cerr << "node " << node._nodeId << " class=" << node._class << " #=" << node.v_Idx.size() << '\n';
+			std::cerr << " -is leave" << std::endl;
+			assert( boost::in_degree( v1, _graph )  == 1 );
+			auto pe_in = boost::in_edges( v1, _graph );       // get the ingoing edges (only 1 actually)
+			auto v0 = boost::source( *pe_in.first, _graph );  // get source vertex
+			assert( boost::out_degree( v0, _graph ) == 2 );
+
+			auto pedges = boost::out_edges( v0, _graph );
+			auto eit1 = pedges.first++;
+			auto eit2 = pedges.first;
+
+			edge_t other = *eit1;
+			if( other == *pe_in.first )
+				other = *eit2;
+
+			auto v2 = boost::target( other, _graph );
+			auto node2 = _graph[v2];
+			std::cerr << " - node2=" << node2._nodeId << std::endl;
+			if( nodeSet.find( node2._nodeId ) == nodeSet.end() )  // if not already parsed
+			{
+				nodeSet.insert( node2._nodeId );
+				if( node2.isLeave() )                             // and is a leave of the tree
+					if( node1._class == node2._class )             // if same class !
+					{
+						LOG( 1, "removing nodes " + std::to_string(node1._nodeId) + " and " + std::to_string(node2._nodeId) );
+						auto& node0 = _graph[v0];
+						node0._class = node1._class;  // change status of source node
+						node0._type = NT_Merged;
+						boost::remove_vertex( v1, _graph );
+						boost::remove_vertex( v2, _graph );
+						nbRemoval++;
+						std::cerr << " - nbRemoval=" << nbRemoval << std::endl;
+						removalHappened = true;
+						break;
+					}
+			}
 		}
 	}
+	std::cerr << " - end of loop" << std::endl;
+	}
+	while( removalHappened );
+
+	LOG( 1, "AFTER PRUNING");
+	for(
+		auto pit = boost::vertices( _graph );     // iterate on
+		pit.first != pit.second;                  // all the vertices
+		pit.first++
+	)
+	{
+		auto v = *pit.first;
+		auto node= _graph[v];
+		std::cerr << "Id=" << node._nodeId << " type=" << (int)node._type << "\n";
+	}
+
+	return nbRemoval;
 }
 //---------------------------------------------------------------------
 /// Train tree using data.
@@ -2535,12 +2628,7 @@ TrainingTree::train( const DataSet& data, const Params params )
 	_graph[_initialVertex]._type = NT_Root;
 
 	splitNode( _initialVertex, _graph, data, params ); // Call the "split" function (recursive)
-	LOG( 0, "Training done, start pruning" );
-	printInfo( std::cout );
-
-	p_Pruning();
-	LOG( 0, "Pruning done" );
-	printInfo( std::cout );
+	LOG( 0, "Training done" );
 }
 
 //---------------------------------------------------------------------

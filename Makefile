@@ -26,21 +26,15 @@ endif
 
 
 
-all: $(EXE_FILES)
+all: $(BIN_DIR)/dectree
 	@echo "done"
 
-A: $(BIN_DIR)/dectree
-
-B: $(BIN_DIR)/datanalysis
-
-
-# default run
 run: all
-	$(BIN_DIR)/dectree -f
+	$(BIN_DIR)/dectree sample_data/iris.data -sep "," -cs
 
 # iris dataset
 run2: all
-	$(BIN_DIR)/dectree sample_data/iris.data -sep "," -cs -f
+	$(BIN_DIR)/dectree sample_data/iris.data -sep "," -cs -nf 5
 
 run3: all
 	$(BIN_DIR)/dectree sample_data/winequality-white.csv -sep ";" -cs -ll 2
@@ -78,8 +72,8 @@ dot: $(PNG_FILES)
 	dot -Tpng $< >$@
 
 cleandoc:
-	@-rm html/search/*
-	@-rm html/*
+	@-rm build/html/search/*
+	@-rm build/html/*
 
 clean: cleandoc
 	@-rm $(OBJ_DIR)/*

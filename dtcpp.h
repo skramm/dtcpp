@@ -136,7 +136,9 @@ getString( EN_FileType ft )
 auto
 openOutputFile( std::string fname, EN_FileType ft )
 {
-	fname += std::string(".") + getString( ft );
+	std::ostringstream oss;
+	oss << "out/" << fname << '.' << getString( ft );
+	auto fname = oss.str();
 	std::ofstream f(fname);
 	if( !f.is_open() )
 		throw std::runtime_error( "unable to open file " + fname );
@@ -315,6 +317,7 @@ struct Params
 };
 
 //---------------------------------------------------------------------
+/// Preliminar stuff, WIP
 namespace prelim {
 
 enum DataType
@@ -1392,20 +1395,29 @@ getString( CM_Score n )
 	}
 	return std::string(s);
 }
+
 //---------------------------------------------------------------------
-/// Confusion Matrix,
-/// handles both 2 class and multiclass problems, but usage will be different
+/// Container for the performance scores
+struct Scores
+{
+	std::array<double, CM_SCORE_END> _sScoreValues;
+};
+
+//---------------------------------------------------------------------
+/// Confusion Matrix, handles both 2 class and multiclass problems, but usage will be different
 /**
 
 Instanciated in TrainingTree::classify()
 
-Layout:
-- columns: true class
-- lignes: predicted (classified) class
+- Layout:
+ - columns: true class
+ - lignes: predicted (classified) class
 
-Definitions of performance scores:
-- For 2- class problems, follows definitions from https://en.wikipedia.org/wiki/Confusion_matrix
-- For multiclass, see definitions here: https://stats.stackexchange.com/a/338240/23990
+- To get the associated performance scores, use getScore() (2 versions).
+
+- Definitions of performance scores:
+ - For 2- class problems, follows definitions from https://en.wikipedia.org/wiki/Confusion_matrix
+ - For multiclass, see definitions here: https://stats.stackexchange.com/a/338240/23990
 and here: https://towardsdatascience.com/multi-class-classification-extracting-performance-metrics-from-the-confusion-matrix-b379b427a872
 
 Usage:
@@ -1448,7 +1460,8 @@ struct ConfusionMatrix
 		{
 			li.resize( nbClasses );
 			std::fill( li.begin(), li.end(), 0u );
-			_cmClassIndexMap[ ClassVal(i) ]=i++;
+			_cmClassIndexMap[ ClassVal(i) ] = i;
+			i++;
 		}
 	}
 
@@ -1641,6 +1654,8 @@ ConfusionMatrix::getScore( CM_Score scoreId, ClassVal cval ) const
 	return p_score( scoreId, priv::CM_Counters(TP,FP,TN,FN) );
 }
 //---------------------------------------------------------------------
+/// Prints all the performance scores
+/// \todo replace _cmClassIndexMap with a boost::bimap
 void
 ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 {
@@ -1652,7 +1667,7 @@ ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 	{
 		for( size_t c=0; c<nbClasses(); c++ )
 		{
-			f << " * class " << c << ":\n";
+			f << " * class idx=" << c << " label=" << " TODO: use boost::bimap" << ":\n";
 			for( auto i=0; i<CM_SCORE_END; i++ )
 			{
 				auto eni = static_cast<CM_Score>(i);

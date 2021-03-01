@@ -29,10 +29,10 @@ int main( int argc, const char** argv )
 	}
 	std::string fname = cmdl[1];
 
-	// optional arg: -sep X => X used as datafile field separator
-	auto sepcl = cmdl("sep").str();
-	if( !sepcl.empty() )
-		fparams.sep = sepcl[0];
+// optional arg: -sep X => X used as datafile field separator
+	auto str_sepcl = cmdl("sep").str();
+	if( !str_sepcl.empty() )
+		fparams.sep = str_sepcl[0];
 	std::cout << " - using '" << fparams.sep << "' as datafile field separator\n";
 
 	if( cmdl["cf"] )
@@ -41,13 +41,18 @@ int main( int argc, const char** argv )
 		fparams.classIsfirst = false;
 	std::cout << " - using " << (fparams.classIsfirst ? "first": "last") << " element as class value\n";
 
-	auto loglevel = cmdl("ll").str();       // Log Level
-	if( !loglevel.empty() )
+	auto str_loglevel = cmdl("ll").str();       // Log Level
+	if( !str_loglevel.empty() )
 	{
-		params.verboseLevel = std::stoi( loglevel );
+		params.verboseLevel = std::stoi( str_loglevel );
 		params.verbose = true;
 		std::cout << " - enabling logging with level " << params.verboseLevel << '\n';
 	}
+
+	auto str_maxDepth = cmdl("md").str();
+	if( !str_maxDepth.empty() )
+		params.maxTreeDepth = str_sepcl[0];
+	std::cout << " - max depth for tree=" << params.maxTreeDepth << '\n';
 
 // optional boolean arg: -cs => the class value in the datafile is given as a string value
 	if( cmdl["cs"] )
@@ -58,10 +63,10 @@ int main( int argc, const char** argv )
 		doDataAnalysis = true;
 
 	uint nbBins = 15;
-	auto histoBins = cmdl("nbh").str();
-	if( !histoBins.empty() )
+	auto str_histoBins = cmdl("nbh").str();
+	if( !str_histoBins.empty() )
 	{
-		nbBins = std::stoi( histoBins );
+		nbBins = std::stoi( str_histoBins );
 	}
 	std::cout << " - histograms built on " << nbBins << " bins\n";
 
@@ -73,7 +78,6 @@ int main( int argc, const char** argv )
 
 
 // optional arg: -nf x => evaluate performance on training dataset by doing 'x' folds on data
-
 	int nbFolds = 0;
 	auto str_folds = cmdl("nf").str();
 	if( !str_folds.empty() )

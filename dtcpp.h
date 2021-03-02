@@ -308,6 +308,46 @@ struct EdgeData
 	bool edgeSide;
 };
 
+//---------------------------------------------------------------------
+/// String to floating-point conversion utility, split on ',' or '.'.
+/**
+\note Needed because, with C++14, you can't convert independently of the locale !!!
+
+\note Unfortunately, can't detect erroneous strings such as "12.34,56" because std::stoi doest not
+throw if it sees a decimal separator...
+*/
+double
+my_stod( std::string str )
+{
+	assert( str.size() );                // input must not be empty
+	auto vc = splitString( str, ',' );
+	auto vd = splitString( str, '.' );
+	assert( vc.size() &&  vd.size() ); // that shouln't happen either
+
+	if( vc.size() > 2 || vd.size() > 2 ) // can't have more than one '.' or ','
+		throw std::runtime_error( "unable to convert string -" + str + "- to float" );
+
+	double res =0.;
+	if( vc.size() == 1 && vd.size() == 1 )  // no decimal separator
+		try
+		{
+			res = 1. * std::stoi( str );  // string is an integer
+		}
+		catch( ... )
+		{
+			throw std::runtime_error( "unable to convert string -" + str + "- to float" );
+		}
+	else   // here, we do have a decimal separator
+	{
+		if( vc.size() == 2 )  // comma detected
+			std::swap( vc, vd );
+		auto xi = std::stoi( vd[0] );  // integer value (left of decimal separator)
+		auto xf = std::stoi( vd[1] );  // fractional value (right of decimal separator)
+		res = 1. * xi + 1. * xf / std::pow(10, vd[1].size() );
+	}
+	return res;
+}
+
 // % % % % % % % % % % % % % %
 } // namespace priv
 // % % % % % % % % % % % % % %
@@ -385,7 +425,7 @@ class DataPoint
 			try
 			{
 				for( size_t i=0; i<v_string.size(); i++ )
-					_attrValue.push_back( std::stof( v_string[i] ) );
+					_attrValue.push_back( priv::my_stod( v_string[i] ) );
 			}
 			catch(...)
 			{
@@ -456,11 +496,13 @@ class DataPoint
 struct Fparams
 {
 	char sep = ' ';                   ///< input field separator
+//	char decsep = ".";
 	bool classAsString = false;       ///< class values are given as strings
 	bool dataFilesHoldsClass = true;  ///< set to false to read files holding only attribute values (for classification task)
 	bool classIsfirst = false;        ///< default: class is last element of line, if first, then set this to true
 	bool firstLineHoldsName = false;  ///< unused \todo implement this
 	uint nbBinHistograms = 15;        ///< Nb of bins for the data analysis histograms
+	bool firstLineLabels = false;     ///< first line of data file holds attribute labels
 };
 
 //---------------------------------------------------------------------

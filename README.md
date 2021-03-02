@@ -16,6 +16,7 @@ Naive attempt of a Decision Tree implementation for continuous variables (WIP !!
  * attribute values: only numerical at present
  * class value position: either first or last element of the line
  * field separator character adjustable
+ * decimal character for floating-point values can be either '`.`'' or '`,`', does not matter.
 
 ## Recommended tools
 

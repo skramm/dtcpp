@@ -41,6 +41,9 @@ int main( int argc, const char** argv )
 		fparams.classIsfirst = false;
 	std::cout << " - using " << (fparams.classIsfirst ? "first": "last") << " element as class value\n";
 
+	if( cmdl["fl"] )
+		fparams.firstLineLabels = true;
+
 	auto str_loglevel = cmdl("ll").str();       // Log Level
 	if( !str_loglevel.empty() )
 	{
@@ -53,6 +56,7 @@ int main( int argc, const char** argv )
 	if( !str_maxDepth.empty() )
 		params.maxTreeDepth = std::stoi( str_maxDepth );
 	std::cout << " - max depth for tree=" << params.maxTreeDepth << '\n';
+
 
 // optional boolean arg: -cs => the class value in the datafile is given as a string value
 	if( cmdl["cs"] )

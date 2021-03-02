@@ -209,3 +209,17 @@ TEST_CASE( "removeDuplicates", "[RD]" )
 	}
 }
 //-------------------------------------------------------------------------------------------
+TEST_CASE( "my_stod", "[STOD]" )
+{
+	CHECK_THROWS( priv::my_stod( "abc" ) );
+	CHECK_THROWS( priv::my_stod( "12.34.56" ) );
+	CHECK_THROWS( priv::my_stod( "12,34,56" ) );
+
+	CHECK( priv::my_stod( "1.23" ) == 1.23 );
+	CHECK( priv::my_stod( "1,23" ) == 1.23 );
+
+	CHECK( priv::my_stod( "0.23" ) == 0.23 );
+	CHECK( priv::my_stod( "0,23" ) == 0.23 );
+}
+
+//-------------------------------------------------------------------------------------------

@@ -496,12 +496,10 @@ class DataPoint
 /// Parameters for reading data files
 struct Fparams
 {
-	char sep = ' ';                   ///< input field separator
-//	char decsep = ".";
-	bool classAsString = false;       ///< class values are given as strings
-	bool dataFilesHoldsClass = true;  ///< set to false to read files holding only attribute values (for classification task)
-	bool classIsfirst = false;        ///< default: class is last element of line, if first, then set this to true
-	bool firstLineHoldsName = false;  ///< unused \todo implement this
+	char sep = ' ';                   ///< Input field separator
+	bool classAsString = false;       ///< Class values are given as strings
+	bool dataFilesHoldsClass = true;  ///< Set to false to read files holding only attribute values (for classification task)
+	bool classIsfirst = false;        ///< Default: class is last element of line, if first, then set this to true
 	uint nbBinHistograms = 15;        ///< Nb of bins for the data analysis histograms
 	bool firstLineLabels = false;     ///< first line of data file holds attribute labels
 };
@@ -519,7 +517,7 @@ struct AttribStats
 
 	friend std::ostream& operator << ( std::ostream& f, const AttribStats& st )
 	{
-		f << "min="      << st._minVal
+		f << "min="       << st._minVal
 			<< " max="    << st._maxVal
 			<< " range="  << st._maxVal - st._minVal
 			<< " mean="   << st._meanVal
@@ -587,8 +585,8 @@ class DataSet
 	public:
 		DataSet() : _nbAttribs(0)
 		{}
-		DataSet( size_t n ) : _nbAttribs(n)
-		{ assert( n ); }
+		DataSet( size_t nbAttribs ) : _nbAttribs(nbAttribs)
+		{ assert( nbAttribs ); }
 
 		size_t size() const
 		{ return _data.size(); }
@@ -683,6 +681,7 @@ class DataSet
 		}
 		template<typename T>
 		DatasetStats<T> computeStats( uint nbBins ) const;
+
 /// \name Outlier handling
 ///@{
 		template<typename T>
@@ -707,11 +706,12 @@ class DataSet
 		{
 			return _nbOutliers;
 		}
+		DataSet getSetWithoutOutliers() const;
+
 ///@}
 		size_t nbClasses( const std::vector<uint>& ) const;
 
 /// Returns nb of classes in the dataset, \b NOT considering the points without any class assigned
-/// \todo implement recounting if outliers
 		size_t nbClasses() const
 		{
 			return _classCount.size();
@@ -745,11 +745,11 @@ class DataSet
 	private:
 		size_t                  _nbAttribs = 0;
 		std::vector<DataPoint>  _data;
-		std::map<ClassVal,uint> _classCount;           ///< Holds the number of points for each class value. Does \b NOT count classless points
+		std::map<ClassVal,uint> _classCount;            ///< Holds the number of points for each class value. Does \b NOT count classless points
 		uint                    _nbNoClassPoints = 0u;
 		std::vector<bool>       _vIsOutlier;            ///< Will be allocated ONLY if tagOutliers() is called, with En_OR_method::disablePoint
-		size_t                  _nbOutliers;   ///< to avoid recounting them when unneeded
-		std::string             _fname;         ///< file name (saved so it can be printed out in output files)
+		size_t                  _nbOutliers = 0;        ///< to avoid recounting them when unneeded
+		std::string             _fname;                 ///< file name (saved so it can be printed out in output files)
 		bool                    _noChange = false;
 };
 //using DataSetf = DataSet<float>;
@@ -1079,6 +1079,19 @@ DataSet::nbClasses( const std::vector<uint>& vIdx ) const
 	return classSet.size();
 }
 //---------------------------------------------------------------------
+/// Returns dataset without the outliers (assumes they have been tagged before!)
+DataSet
+DataSet::getSetWithoutOutliers() const
+{
+	DataSet newset( nbAttribs() );
+	newset._data.reserve( size() );   // to avoid reallocation
+	for( size_t i=0; i<size(); i++ )
+		if( !pointIsOutlier(i) )
+			newset._data.push_back( getDataPoint(i) );
+	_noChange = false;
+	return newset;
+}
+//---------------------------------------------------------------------
 /// Returns a pair of two subsets of the data, first is the training data, second is the test data
 /**
 If 100 pts and nbFolds=5, this will return 20 pts in \c ds_test and 80 pts in \c ds_train
@@ -1088,20 +1101,23 @@ and the training set will hold the rest of the points.
 
 The \c index defines which fraction of the points are returned in the test set
 
-\todo Remove outliers from folds !
+If some points have been tagged as outliers, then they will \b not be included in the two returned sets.
 */
 std::pair<DataSet,DataSet>
 DataSet::getFolds( uint index, uint nbFolds ) const
 {
  	DataSet ds_train( nbAttribs() );
  	DataSet ds_test(  nbAttribs() );
-	uint nb = size() / nbFolds;
-	for( uint i=0; i<size(); i++ )
+
+	DataSet ds2 = getSetWithoutOutliers();
+
+	uint nb = ds2.size() / nbFolds;
+	for( uint i=0; i<ds2.size(); i++ )
 	{
 		if( i / nb == index )
-			ds_test.addPoint( getDataPoint(i) );
+			ds_test.addPoint( ds2.getDataPoint(i) );
 		else
-			ds_train.addPoint( getDataPoint(i) );
+			ds_train.addPoint( ds2.getDataPoint(i) );
 	}
 
 	COUT << "ds_test #=" << ds_test.size()
@@ -2562,6 +2578,7 @@ splitNode(
 //---------------------------------------------------------------------
 /// Pruning of the graph: removal of child leaves pair that hold the same class
 /**
+\todo Maybe we should recompute the Gini Impurity coeff when merging ?
 
 Algorithm:
 \verbatim
@@ -2583,7 +2600,6 @@ WHILE( no more removals )
 check each node one by one and find if there is another node of same depth AND same class
 that has the same parent.
 */
-
 size_t
 TrainingTree::pruning()
 {
@@ -2592,80 +2608,60 @@ TrainingTree::pruning()
 	std::set<uint> nodeSet;
 	LOG( 1, "start pruning, nb nodes=" + std::to_string( boost::num_vertices( _graph ) ) );
 
-	size_t iter = 0;
+//	size_t iter = 0;
 	size_t nbRemoval = 0;
 	bool removalHappened = false;
 	do{
 //		std::cerr << "iter=" << iter++ << " nb vertices=" << boost::num_vertices( _graph ) << std::endl;
 		removalHappened = false;
-	for(
-		auto pit = boost::vertices( _graph );     // iterate on
-		pit.first != pit.second;                  // all the vertices
-		pit.first++
-	)
-	{
-		auto v1    = *pit.first;
-		auto node1 = _graph[v1];
-//		std::cerr << "node1=" << node1._nodeId << " class=" << (int)node1._type << std::endl;
-		nodeSet.insert( node1._nodeId );
-		if( node1.isLeave() ) // but only care about the leaves
+		for(
+			auto pit = boost::vertices( _graph );     // iterate on
+			pit.first != pit.second;                  // all the vertices
+			pit.first++
+		)
 		{
-//			std::cerr << " -is leave" << std::endl;
-			assert( boost::in_degree( v1, _graph )  == 1 );
-			auto pe_in = boost::in_edges( v1, _graph );       // get the ingoing edges (only 1 actually)
-			auto v0 = boost::source( *pe_in.first, _graph );  // get source vertex
-			assert( boost::out_degree( v0, _graph ) == 2 );
-
-			auto pedges = boost::out_edges( v0, _graph );
-			auto eit1 = pedges.first++;
-			auto eit2 = pedges.first;
-
-			edge_t other = *eit1;
-			if( other == *pe_in.first )
-				other = *eit2;
-
-			auto v2 = boost::target( other, _graph );
-			auto node2 = _graph[v2];
-//			std::cerr << " - node2=" << node2._nodeId << std::endl;
-			if( nodeSet.find( node2._nodeId ) == nodeSet.end() )  // if not already parsed
+			auto v1    = *pit.first;
+			auto node1 = _graph[v1];
+			nodeSet.insert( node1._nodeId );
+			if( node1.isLeave() )                      // but only care about the leaves
 			{
-				nodeSet.insert( node2._nodeId );
-				if( node2.isLeave() )                             // and is a leave of the tree
-					if( node1._class == node2._class )             // if same class !
-					{
-						LOG( 1, "removing nodes " + std::to_string(node1._nodeId) + " and " + std::to_string(node2._nodeId) );
-						auto& node0 = _graph[v0];
-						node0._class = node1._class;  // change status of source node
-						node0._type = NT_Merged;
-						boost::clear_vertex( v1, _graph );
-						boost::clear_vertex( v2, _graph );
-						boost::remove_vertex( v1, _graph );
-						boost::remove_vertex( v2, _graph );
-						nbRemoval++;
-//						std::cerr << " - nbRemoval=" << nbRemoval << std::endl;
-						removalHappened = true;
-						break;
-					}
+				assert( boost::in_degree( v1, _graph )  == 1 );
+				auto pe_in = boost::in_edges( v1, _graph );       // get the ingoing edges (only 1 actually)
+				auto v0 = boost::source( *pe_in.first, _graph );  // get source vertex
+				assert( boost::out_degree( v0, _graph ) == 2 );
+
+				auto pedges = boost::out_edges( v0, _graph );     // get the out-edges
+				auto eit1 = pedges.first++;
+				auto eit2 = pedges.first;
+
+				edge_t other = *eit1;                         // if the first edge is
+				if( other == *pe_in.first )                   // the one used to get here,
+					other = *eit2;                            // then swap
+
+				auto v2 = boost::target( other, _graph );     // other child
+				auto node2 = _graph[v2];
+				if( nodeSet.find( node2._nodeId ) == nodeSet.end() )  // if not already parsed
+				{
+					nodeSet.insert( node2._nodeId );                  // then, add it to the set of nodes already parsed
+					if( node2.isLeave() )                             // if node is a leave of the tree
+						if( node1._class == node2._class )            // and is same class !
+						{
+							LOG( 1, "removing nodes " + std::to_string(node1._nodeId) + " and " + std::to_string(node2._nodeId) );
+							_graph[v0]._class = node1._class;  // change status of source node
+							_graph[v0]._type  = NT_Merged;
+							boost::clear_vertex(  v1, _graph );
+							boost::clear_vertex(  v2, _graph );
+							boost::remove_vertex( v1, _graph );
+							boost::remove_vertex( v2, _graph );
+							nbRemoval++;
+							removalHappened = true;
+							break;
+						}
+				}
 			}
 		}
 	}
-//	std::cerr << " - end of loop" << std::endl;
-	}
 	while( removalHappened );
-/*
-	LOG( 1, "AFTER PRUNING, nb nodes=" + std::to_string( boost::num_vertices(_graph)) );
-	for(
-		auto pit = boost::vertices( _graph );     // iterate on
-		pit.first != pit.second;                  // all the vertices
-		pit.first++
-	)
-	{
-		auto v = *pit.first;
-		auto node= _graph[v];
-		COUT << "Id=" << node._nodeId << " type=" << (int)node._type << "\n";
-	}
-	COUT << "nbRemoval=" << nbRemoval << '\n';
-*/
 	return nbRemoval;
 }
 //---------------------------------------------------------------------

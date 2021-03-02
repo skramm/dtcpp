@@ -341,9 +341,10 @@ my_stod( std::string str )
 	{
 		if( vc.size() == 2 )  // comma detected
 			std::swap( vc, vd );
-		auto xi = std::stoi( vd[0] );  // integer value (left of decimal separator)
-		auto xf = std::stoi( vd[1] );  // fractional value (right of decimal separator)
-		res = 1. * xi + 1. * xf / std::pow(10, vd[1].size() );
+// below, we use stod() instead of stoi() because the number of digits might be to mush for stoi()
+		auto xi = std::stod( vd[0] );  // integer value (left of decimal separator)
+		auto xf = std::stod( vd[1] );  // fractional value (right of decimal separator)
+		res = xi + xf / std::pow(10, vd[1].size() );
 	}
 	return res;
 }
@@ -687,6 +688,7 @@ class DataSet
 		template<typename T>
 		void tagOutliers( const DatasetStats<T>&, En_OD_method odm=En_OD_method::fixedSigma, En_OR_method orm=En_OR_method::disablePoint, float param=3.f );
 
+/// Returns true if point has been tagged has outlier, see tagOutliers()
 		bool pointIsOutlier( size_t i ) const
 		{
 			if( _vIsOutlier.size() )
@@ -738,6 +740,7 @@ class DataSet
 
 	private:
 		void p_countClasses();
+		void p_parseTokens( std::vector<std::string>&, const Fparams&, std::map<std::string,uint>&, uint&, size_t );
 
 	private:
 		size_t                  _nbAttribs = 0;
@@ -1179,6 +1182,61 @@ DataSet::generateAttribPlot(
 }
 
 //---------------------------------------------------------------------
+/// Helper member function for DataSet::load()
+void
+DataSet::p_parseTokens(
+	std::vector<std::string>&   v_tok,             ///< string tokens read on line
+	const Fparams&              params,            ///< parameters
+	std::map<std::string,uint>& classStringMap,    ///< class to string map, used if class is given as a string
+	uint&                       classIndexCounter, ///< the next index value for classes as strings
+	size_t                      nb_lines           ///< in case of error
+)
+{
+	if( !params.dataFilesHoldsClass )
+		_data.push_back( DataPoint( v_tok ) );
+	else
+	{
+		int classIndex = -1;
+		auto cla = v_tok.back();
+		if( params.classIsfirst )
+			cla = v_tok.front();
+
+		if( !params.classAsString )
+		{
+			try
+			{
+				classIndex = std::stoi( cla );
+			}
+			catch( ... )
+			{
+				throw std::runtime_error( "Unable to convert string '" + cla + "' on line " + std::to_string(nb_lines) + " to an integer value" );
+			}
+		}
+		else
+		{
+			if( classStringMap.find( cla ) == classStringMap.end() )  // if not registered, then
+			{
+				classIndex            = classIndexCounter;
+				classStringMap[ cla ] = classIndexCounter;             // new class, add it
+				classIndexCounter++;
+			}
+			else
+				classIndex = classStringMap[ cla ];
+		}
+		if( classIndex < 0 )
+			_nbNoClassPoints++;
+
+		else
+			_classCount[ ClassVal(classIndex) ]++;
+
+		if( params.classIsfirst )
+			std::rotate( v_tok.begin(), v_tok.begin()+1, v_tok.end() );
+		v_tok.erase( v_tok.end()-1 );   // remove last element (class)
+		_data.push_back( DataPoint( v_tok, ClassVal(classIndex) ) );
+	}
+}
+//---------------------------------------------------------------------
+/// Load data file into memory, returns false on failure
 //template<typename T>
 bool
 DataSet::load( std::string fname, const Fparams params )
@@ -1204,66 +1262,28 @@ DataSet::load( std::string fname, const Fparams params )
 		std::getline( f, temp );
 		nb_lines++;
 
-		if( temp.empty() )          // if empty
-			nb_empty++;
-		else                        // if NOT empty
+		if( !params.firstLineLabels || nb_lines != 1 )
 		{
-			if( temp.at(0) == '#' )  // if comment
-				nb_comment++;
-			else                     // if NOT comment
+			if( temp.empty() )          // if empty
+				nb_empty++;
+			else                        // if NOT empty
 			{
-				auto v_tok = priv::splitString( temp, params.sep );
-				if( v_tok.size() < 2 )
+				if( temp.at(0) == '#' )  // if comment
+					nb_comment++;
+				else                     // if NOT comment
 				{
-					std::cerr << "-Error: only one value on line " << nb_lines
-						<< "\n-Line=" << temp << " \n-length=" << temp.size() << '\n';
-					return false;
-				}
-
-				if( size() == 0 )                    // if this is the first datapoint, then set the nb of attributes
-					setNbAttribs( params.dataFilesHoldsClass ? v_tok.size()-1 : v_tok.size() );
-
-				if( !params.dataFilesHoldsClass )
-					_data.push_back( DataPoint( v_tok ) );
-				else
-				{
-					int classIndex = -1;
-					auto cla = v_tok.back();
-					if( params.classIsfirst )
-						cla = v_tok.front();
-
-					if( !params.classAsString )
+					auto v_tok = priv::splitString( temp, params.sep );
+					if( v_tok.size() < 2 )
 					{
-						try
-						{
-							classIndex = std::stoi( cla );
-						}
-						catch( ... )
-						{
-							throw std::runtime_error( "Unable to convert string '" + cla + "' on line " + std::to_string(nb_lines) + " to an integer value" );
-						}
+						std::cerr << "-Error: only one value on line " << nb_lines
+							<< "\n-Line=" << temp << " \n-length=" << temp.size() << '\n';
+						return false;
 					}
-					else
-					{
-						if( classStringMap.find( cla ) == classStringMap.end() )  // if not registered, then
-						{
-							classIndex            = classIndexCounter;
-							classStringMap[ cla ] = classIndexCounter;             // new class, add it
-							classIndexCounter++;
-						}
-						else
-							classIndex = classStringMap[ cla ];
-					}
-					if( classIndex < 0 )
-						_nbNoClassPoints++;
 
-					else
-						_classCount[ ClassVal(classIndex) ]++;
+					if( size() == 0 )                    // if this is the first datapoint, then set the nb of attributes
+						setNbAttribs( params.dataFilesHoldsClass ? v_tok.size()-1 : v_tok.size() );
 
-					if( params.classIsfirst )
-						std::rotate( v_tok.begin(), v_tok.begin()+1, v_tok.end() );
-					v_tok.erase( v_tok.end()-1 );   // remove last element (class)
-					_data.push_back( DataPoint( v_tok, ClassVal(classIndex) ) );
+					p_parseTokens( v_tok, params, classStringMap, classIndexCounter, nb_lines );
 				}
 			}
 		}
@@ -1957,15 +1977,13 @@ TrainingTree::printDot( std::string fname ) const
 	auto f = priv::openOutputFile( fname, priv::FT_DOT );
 	f << "# file: " << fname << "\n\n"
 		<< "digraph g {\nnode [shape=\"box\"];\n"
+		<< "title [label=\"data file:\\n" << fname << "\",shape=\"note\",labelloc=\"c\"];\n"
 		<< _graph[_initialVertex]._nodeId
 		<< " [label=\"n" << _graph[_initialVertex]._nodeId
 		<< " attr="     << _graph[_initialVertex]._attrIndex
 		<< " thres="    << _graph[_initialVertex]._threshold
 		<< "\\n#"      << _graph[_initialVertex].v_Idx.size()
 		<< "\",color = blue];\n";
-
-	f << std::endl; // TEMP
-	COUT <<"ID=" << _graph[_initialVertex]._nodeId << " TYPE=" << _graph[_initialVertex]._type << std::endl;
 
 	priv::printDotNodeChilds( f, _initialVertex, _graph );
 	f << "}\n";

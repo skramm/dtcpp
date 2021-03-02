@@ -42,6 +42,7 @@ that are freely available on any OS/architecture:
 * `-nbh xx` : number of bins for building the histograms
 * `-ro` : remove outliers before training
 * `-md xx` : max depth for tree
+* `-fl` : First line of input data file holds labels,ignore it
 
 ## Build information
 

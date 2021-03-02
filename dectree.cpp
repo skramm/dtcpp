@@ -41,7 +41,7 @@ int main( int argc, const char** argv )
 		fparams.classIsfirst = false;
 	std::cout << " - using " << (fparams.classIsfirst ? "first": "last") << " element as class value\n";
 
-	if( cmdl["fl"] )
+	if( cmdl["fl"] )                     // at present, we just ignore the first line if true
 		fparams.firstLineLabels = true;
 
 	auto str_loglevel = cmdl("ll").str();       // Log Level

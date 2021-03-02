@@ -40,7 +40,7 @@ See doc on https://github.com/skramm/dtcpp
 namespace dtcpp {
 
 #ifdef DEBUG
-	#define COUT if(1) std::cout << __FUNCTION__ << "(): "
+	#define COUT if(1) std::cout << __FUNCTION__ << "(), line " << __LINE__ << ": "
 #else
 	#define COUT if(0) std::cout
 #endif // DEBUG
@@ -1862,27 +1862,27 @@ namespace priv {
 /// Recursive function used to print the Dot file, prints the current node
 inline
 void
-printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
+printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 {
-//	START;
+	START;
 //	COUT << "nb out edges=" << boost::out_degree( v, graph ) << "\n";
 //	std::cout.precision(4);
 	f.precision(3);
 	for(
-		auto pit=boost::out_edges(v, graph);
+		auto pit=boost::out_edges(vert, graph);
 		pit.first != pit.second;
 		pit.first++
 	)
 	{
 		auto target = boost::target( *pit.first, graph );
-		COUT << "node id=" << graph[target]._nodeId << " type=" << (int)graph[target]._type << '\n';
+		COUT << "target node id=" << graph[target]._nodeId << " type=" << (int)graph[target]._type << '\n';
 		assert( graph[target]._type != NT_undef );
 
 		f << graph[target]._nodeId
 			<< " [label=\"n" << graph[target]._nodeId << ' ';
 		if( graph[target]._type == NT_Decision )
 			f << "attr=" << graph[target]._attrIndex
-				<< " thres=" << graph[target]._threshold << '\n';
+				<< " thres=" << graph[target]._threshold << "\\n";
 		else
 			f << "C" << graph[target]._class
 				<< " GI=" << graph[target].giniImpurity
@@ -1898,8 +1898,8 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 //			default: assert(0);
 		}
 		f << "];\n";
-		f << graph[v]._nodeId << "->" << graph[target]._nodeId  << ";\n";
-		printNodeChilds( f, target, graph );
+		f << graph[vert]._nodeId << "->" << graph[target]._nodeId  << ";\n";
+		printDotNodeChilds( f, target, graph );
 	}
 }
 // % % % % % % % % % % % % % %
@@ -1907,23 +1907,26 @@ printNodeChilds( std::ostream& f, vertexT_t v, const GraphT& graph )
 // % % % % % % % % % % % % % %
 
 //---------------------------------------------------------------------
-/// Print a DOT file of the tree by calling the recursive function \ref printNodeChilds()
+/// Print a DOT file of the tree by calling the recursive function \ref printDotNodeChilds()
 inline
 void
 TrainingTree::printDot( std::string fname ) const
 {
 	auto f = priv::openOutputFile( fname, priv::FT_DOT );
-	f << "digraph g {\nnode [shape=\"box\"];\n";
-	f << _graph[_initialVertex]._nodeId
+	f << "# file: " << fname << "\n\n"
+		<< "digraph g {\nnode [shape=\"box\"];\n"
+		<< _graph[_initialVertex]._nodeId
 		<< " [label=\"n" << _graph[_initialVertex]._nodeId
 		<< " attr="     << _graph[_initialVertex]._attrIndex
 		<< " thres="    << _graph[_initialVertex]._threshold
 		<< "\\n#"      << _graph[_initialVertex].v_Idx.size()
 		<< "\",color = blue];\n";
 
-	priv::printNodeChilds( f, _initialVertex, _graph );
+	f << std::endl; // TEMP
+	COUT <<"ID=" << _graph[_initialVertex]._nodeId << " TYPE=" << _graph[_initialVertex]._type << std::endl;
+
+	priv::printDotNodeChilds( f, _initialVertex, _graph );
 	f << "}\n";
-	f <<" TYPE=" << _graph[_initialVertex]._type << std::endl;
 }
 
 //---------------------------------------------------------------------
@@ -1932,6 +1935,7 @@ TrainingTree::printDot( std::string fname ) const
 void
 TrainingTree::printInfo( std::ostream& f, const char* msg ) const
 {
+	START;
 	f << "Training tree info:";
 	if( msg )
 		f << msg;
@@ -1940,19 +1944,8 @@ TrainingTree::printInfo( std::ostream& f, const char* msg ) const
 		<< "\n -max depth=" << maxDepth()
 		<< "\n -nb of leaves=" << nbLeaves()
 		<< '\n';
-
-	for(
-		auto pit = boost::vertices( _graph );     // iterate on
-		pit.first != pit.second;                  // all the vertices
-		pit.first++
-	)
-	{
-		auto v = *pit.first;
-		auto node= _graph[v];
-		f << "Id=" << node._nodeId << " type=" << (int)node._type << "\n";
-	}
 //	f << "Boost printing:\n";
-//	boost::print_graph( _graph );
+//	boost::print_graph( _graph );  // <= does not work with boost::ListS as container, needs an index attached as dynamic property !
 }
 
 //---------------------------------------------------------------------
@@ -2507,6 +2500,30 @@ splitNode(
 	s_recDepth--;
 }
 //---------------------------------------------------------------------
+/// Pruning of the graph: removal of child leaves pair that hold the same class
+/**
+
+Algorithm:
+\verbatim
+DO
+	iterate through the vertices, until we have a removal:
+		IF vertex it is a leave:
+		THEN
+			go up one step and check other child
+			IF other child is a leave AND has same class
+			THEN
+				Merge the two vertices:
+					tag parent as Leave
+					remove the two childs
+				removal = true
+WHILE( no more removals )
+\endverbatim
+
+\note Could have tried something else:
+check each node one by one and find if there is another node of same depth AND same class
+that has the same parent.
+*/
+
 size_t
 TrainingTree::pruning()
 {
@@ -2519,7 +2536,7 @@ TrainingTree::pruning()
 	size_t nbRemoval = 0;
 	bool removalHappened = false;
 	do{
-		std::cerr << "iter=" << iter++ << " nb vertices=" << boost::num_vertices( _graph ) << std::endl;
+//		std::cerr << "iter=" << iter++ << " nb vertices=" << boost::num_vertices( _graph ) << std::endl;
 		removalHappened = false;
 	for(
 		auto pit = boost::vertices( _graph );     // iterate on
@@ -2529,11 +2546,11 @@ TrainingTree::pruning()
 	{
 		auto v1    = *pit.first;
 		auto node1 = _graph[v1];
-		std::cerr << "node1=" << node1._nodeId << " class=" << (int)node1._type << std::endl;
+//		std::cerr << "node1=" << node1._nodeId << " class=" << (int)node1._type << std::endl;
 		nodeSet.insert( node1._nodeId );
 		if( node1.isLeave() ) // but only care about the leaves
 		{
-			std::cerr << " -is leave" << std::endl;
+//			std::cerr << " -is leave" << std::endl;
 			assert( boost::in_degree( v1, _graph )  == 1 );
 			auto pe_in = boost::in_edges( v1, _graph );       // get the ingoing edges (only 1 actually)
 			auto v0 = boost::source( *pe_in.first, _graph );  // get source vertex
@@ -2549,7 +2566,7 @@ TrainingTree::pruning()
 
 			auto v2 = boost::target( other, _graph );
 			auto node2 = _graph[v2];
-			std::cerr << " - node2=" << node2._nodeId << std::endl;
+//			std::cerr << " - node2=" << node2._nodeId << std::endl;
 			if( nodeSet.find( node2._nodeId ) == nodeSet.end() )  // if not already parsed
 			{
 				nodeSet.insert( node2._nodeId );
@@ -2560,21 +2577,23 @@ TrainingTree::pruning()
 						auto& node0 = _graph[v0];
 						node0._class = node1._class;  // change status of source node
 						node0._type = NT_Merged;
+						boost::clear_vertex( v1, _graph );
+						boost::clear_vertex( v2, _graph );
 						boost::remove_vertex( v1, _graph );
 						boost::remove_vertex( v2, _graph );
 						nbRemoval++;
-						std::cerr << " - nbRemoval=" << nbRemoval << std::endl;
+//						std::cerr << " - nbRemoval=" << nbRemoval << std::endl;
 						removalHappened = true;
 						break;
 					}
 			}
 		}
 	}
-	std::cerr << " - end of loop" << std::endl;
+//	std::cerr << " - end of loop" << std::endl;
 	}
 	while( removalHappened );
-
-	LOG( 1, "AFTER PRUNING");
+/*
+	LOG( 1, "AFTER PRUNING, nb nodes=" + std::to_string( boost::num_vertices(_graph)) );
 	for(
 		auto pit = boost::vertices( _graph );     // iterate on
 		pit.first != pit.second;                  // all the vertices
@@ -2583,9 +2602,10 @@ TrainingTree::pruning()
 	{
 		auto v = *pit.first;
 		auto node= _graph[v];
-		std::cerr << "Id=" << node._nodeId << " type=" << (int)node._type << "\n";
+		COUT << "Id=" << node._nodeId << " type=" << (int)node._type << "\n";
 	}
-
+	COUT << "nbRemoval=" << nbRemoval << '\n';
+*/
 	return nbRemoval;
 }
 //---------------------------------------------------------------------

@@ -6,7 +6,7 @@ See doc on https://github.com/skramm/dtcpp
 \author S. Kramm - 2021
 */
 
-#define DEBUG
+//#define DEBUG
 //#define DEBUG_START
 
 #include "dtcpp.h"

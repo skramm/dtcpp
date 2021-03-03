@@ -252,19 +252,20 @@ TEST_CASE( "pruning", "[pru]" )
 	CHECK( boost::num_edges( g ) == 0 );
 
 	auto pvA = addChildPair( tt._initialVertex, g );
-	auto pvB = addChildPair( pvA.first, g );
-	auto pvC = addChildPair( pvB.first, g );
+	auto pvB1 = addChildPair( pvA.first, g );
+	addChildPair( pvA.second, g );
+	addChildPair( pvB1.first, g );
 
-	CHECK( boost::num_vertices( g ) == 7 );
-	CHECK( boost::num_edges( g ) == 6 );
-
-	CHECK( tt.nbLeaves() == 4 );
-	CHECK( boost::num_vertices( g ) == 7 );
-	CHECK( boost::num_edges( g ) == 6 );
+	CHECK( boost::num_vertices( g ) == 9 );
+	CHECK( boost::num_edges( g ) == 8 );
+	CHECK( tt.nbLeaves() == 5 );
 	tt.printInfo( std::cout );
+	tt.printDot( "test_A" );
 
-	CHECK( tt.pruning() == 2 );
+	CHECK( tt.pruning() == 4 );
+	CHECK( tt.nbLeaves() == 0 );
 	tt.printInfo( std::cout );
+	tt.printDot( "test_B" );
 }
 
 //-------------------------------------------------------------------------------------------

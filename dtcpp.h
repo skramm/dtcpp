@@ -1462,16 +1462,17 @@ struct NodeT
 	ClassVal _class = ClassVal(-1);  ///< Class (only for terminal nodes)
 	size_t   _attrIndex = 0;         ///< Attribute Index that this nodes classifies
 	float    _threshold = 0.f;       ///< Threshold on the attribute value (only for decision nodes)
-	uint     depth = 0;              ///< Depth of the node in the tree
-	float    giniImpurity = 0.f;
+	uint     _depth = 0;              ///< Depth of the node in the tree
+	float    _giniImpurity = 0.f;
 	std::vector<uint> v_Idx;         ///< Data point indexes
 
 	friend std::ostream& operator << ( std::ostream& f, const NodeT& n )
 	{
 		f << "C=" << n._class
+			<< "\ntype=" << getString(n._type)
 			<< "\nattr=" << n._attrIndex
 			<< "\nthres=" << n._threshold
-			<< "\ndepth=" << n.depth
+			<< "\ndepth=" << n._depth
 			<< "\n#v=" << n.v_Idx.size()
 			;
 		return f;
@@ -1981,7 +1982,7 @@ printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 				<< " thres=" << graph[target]._threshold << "\\n";
 		else
 			f << "C" << graph[target]._class
-				<< " GI=" << graph[target].giniImpurity
+				<< " GI=" << graph[target]._giniImpurity
 				<< "\\nSR=" << getString( graph[target]._type );
 
 		f //<< "\\ndepth=" << graph[target].depth
@@ -2143,7 +2144,7 @@ getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
 /// Describes how a node holds different classes, see getNodeContent()
 struct NodeContent
 {
-	double   GiniImpurity = 0.;
+	double   ncGiniImpurity = 0.;
 	ClassVal dominantClass;
 	size_t   datasize = 0u;
 	size_t   nbPtsOtherClasses = 0u;
@@ -2152,7 +2153,7 @@ struct NodeContent
 	friend std::ostream& operator << ( std::ostream& f, const NodeContent& nc )
 	{
 		f << "NodeContent: "
-		<< " GiniImpurity="      << nc.GiniImpurity
+		<< " GiniImpurity="      << nc.ncGiniImpurity
 		<< " dominantClass="     << nc.dominantClass
 		<< " datasize="          << nc.datasize
 		<< " nbPtsOtherClasses=" << nc.nbPtsOtherClasses
@@ -2483,8 +2484,8 @@ addChildPair( vertexT_t v, GraphT& graph, size_t nbElems )
 	auto v1 = boost::add_vertex(graph);
 	auto v2 = boost::add_vertex(graph);
 
-	graph[v1].depth = graph[v].depth+1;
-	graph[v2].depth = graph[v].depth+1;
+	graph[v1]._depth = graph[v]._depth+1;
+	graph[v2]._depth = graph[v]._depth+1;
 
 	auto et = boost::add_edge( v, v1, graph );
 	auto ef = boost::add_edge( v, v2, graph );
@@ -2524,10 +2525,10 @@ splitNode(
 	auto nodeContent = getNodeContent( vIdx, data );
 //	COUT << nodeContent;
 
-	auto giniImpurity = nodeContent.GiniImpurity;
+//	auto giniImpurity = nodeContent.ncGiniImpurity;
 
 	graph[v]._class = nodeContent.dominantClass;
-	graph[v].giniImpurity = giniImpurity;
+	graph[v]._giniImpurity = nodeContent.ncGiniImpurity;
 
 	if( s_recDepth>params.maxTreeDepth )
 	{
@@ -2537,9 +2538,9 @@ splitNode(
 		return;
 	}
 
-	if( giniImpurity < params.minGiniCoeffForSplitting )
+	if( nodeContent.ncGiniImpurity < params.minGiniCoeffForSplitting )
 	{
-		LOG( 1, "dataset is (almost or completely) pure, gini coeff=" << giniImpurity << ", STOP" );
+		LOG( 1, "dataset is (almost or completely) pure, gini coeff=" << nodeContent.ncGiniImpurity << ", STOP" );
 		s_recDepth--;
 		graph[v]._type = NT_Final_GI_Small;
 		return;
@@ -2580,7 +2581,7 @@ splitNode(
 //
 	graph[v]._attrIndex = bestAttrib._atIndex;
 	graph[v]._threshold = bestAttrib._threshold.get();
-	graph[v].giniImpurity = -1.f;
+	graph[v]._giniImpurity = -1.f;
 	if( graph[v]._type != NT_Root )   // so the root... stays the root !
 		graph[v]._type = NT_Decision;
 
@@ -2618,6 +2619,8 @@ splitNode(
 /**
 \todo Maybe we should recompute the Gini Impurity coeff when merging ?
 
+\return The number of removal operations (\b not the number of removed nodes!)
+
 Algorithm:
 \verbatim
 DO
@@ -2643,7 +2646,6 @@ TrainingTree::pruning()
 {
 	START;
 
-	std::set<uint> nodeSet;
 	LOG( 1, "start pruning, nb nodes=" + std::to_string( boost::num_vertices( _graph ) ) );
 
 	size_t iter = 0;
@@ -2652,16 +2654,19 @@ TrainingTree::pruning()
 	do{
 		COUT << "iter=" << iter++ << " nb vertices=" << boost::num_vertices( _graph ) << std::endl;
 		removalHappened = false;
+		std::set<uint> nodeSet;
+
 		for(
-			auto pit = boost::vertices( _graph );     // iterate on
-			pit.first != pit.second;                  // all the vertices
+			auto pit = boost::vertices( _graph );                // iterate on all the vertices
+			pit.first != pit.second && !removalHappened;         // but stop if a removal happened
 			pit.first++
 		)
 		{
 			auto v1    = *pit.first;
 			auto node1 = _graph[v1];
+//			COUT << "current node:" << node1._nodeId << " class=" << node1._class << " depth="<< node1._depth << '\n';
 			nodeSet.insert( node1._nodeId );
-			if( node1.isLeave() )                      // but only care about the leaves
+			if( node1.isLeave() && boost::num_vertices( _graph ) != 1)    // we only care about the leaves (and quit if only 1 node left)
 			{
 				assert( boost::in_degree( v1, _graph )  == 1 );
 				auto pe_in = boost::in_edges( v1, _graph );       // get the ingoing edges (only 1 actually)
@@ -2684,9 +2689,10 @@ TrainingTree::pruning()
 					if( node2.isLeave() )                             // if node is a leave of the tree
 						if( node1._class == node2._class )            // and is same class !
 						{
-							LOG( 1, "removing nodes " + std::to_string(node1._nodeId) + " and " + std::to_string(node2._nodeId) );
+//							LOG( 1, "removing nodes " + std::to_string(node1._nodeId) + " and " + std::to_string(node2._nodeId) );
 							_graph[v0]._class = node1._class;  // change status of source node
-							_graph[v0]._type  = NT_Merged;
+							if( _graph[v0]._type != NT_Root )
+								_graph[v0]._type = NT_Merged;
 							boost::clear_vertex(  v1, _graph );
 							boost::clear_vertex(  v2, _graph );
 							boost::remove_vertex( v1, _graph );
@@ -2738,6 +2744,8 @@ TrainingTree::train( const DataSet& data, const Params params )
 	_graph[_initialVertex].v_Idx = v_idx;
 
 	priv::splitNode( _initialVertex, _graph, data, params ); // Call the "split" function (recursive)
+
+	assert( nbLeaves() > 1 );  // has to be at least 2 leaves
 	LOG( 0, "Training done" );
 }
 
@@ -2748,6 +2756,12 @@ ClassVal
 TrainingTree::classify( const DataPoint& point ) const
 {
 	ClassVal retval{-1};
+	if( !nbLeaves() )
+	{
+		std::cerr << "Error, unable to classify point, tree has no leaves!\n";
+		return retval;
+	}
+
 	vertexT_t v = _initialVertex;   // initialize to first node
 	bool done = false;
 //	uint iter = 0;
@@ -2794,13 +2808,16 @@ TrainingTree::classify( const DataSet& dataset ) const
 //		throw std::runtime_error( "nothing to classify, dataset holds " + std::to_string(_nbClasses) + " classes" );
 
 	ConfusionMatrix confmat( _classIndexMap );
-	for( const auto& datapoint: dataset )
-	{
-		auto cla1 = datapoint.classVal();
-		auto cla2 = classify( datapoint );
-		if( cla1 != ClassVal(-1) )
-			confmat.add( cla1, cla2 );
-	}
+	if( nbLeaves() )
+		for( const auto& datapoint: dataset )
+		{
+			auto cla1 = datapoint.classVal();
+			auto cla2 = classify( datapoint );
+			if( cla1 != ClassVal(-1) )
+				confmat.add( cla1, cla2 );
+		}
+	else
+		std::cerr << "Error, unable to classify dataset, tree has no leaves!\n";
 	return confmat;
 }
 

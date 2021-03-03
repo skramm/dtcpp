@@ -8,10 +8,12 @@
 #define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
 #include "catch.hpp"
 
+#define DEBUG
+#define DEBUG_START
 #define TESTMODE
 #include "dtcpp.h"
 
-#define DEBUG
+
 using namespace dtcpp;
 
 
@@ -224,30 +226,45 @@ TEST_CASE( "my_stod", "[STOD]" )
 }
 
 //-------------------------------------------------------------------------------------------
-void addClass( GraphT& g, std::pair<vertexT_t,vertexT_t>& p )
+std::pair<vertexT_t,vertexT_t>
+addChildPair( vertexT_t v, GraphT& g )
 {
-	g[p.first]._class = ClassVal(5);
-	g[p.second]._class = ClassVal(5);
-	g[p.first]._type = NT_Final_MD;
-	g[p.second]._type = NT_Final_MD;
+	auto pv = priv::addChildPair( v, g, 10 );
+	if( g[v]._type != NT_Root )   // so the root... stays the root !
+		g[v]._type = NT_Decision;
+
+	g[pv.first]._class  = ClassVal(5);
+	g[pv.second]._class = ClassVal(5);
+	g[pv.first]._type   = NT_Final_MD;
+	g[pv.second]._type  = NT_Final_MD;
+	return pv;
 }
+
 //-------------------------------------------------------------------------------------------
 /// test of pruning
 TEST_CASE( "pruning", "[pru]" )
 {
+	g_params.verbose = true;
+	g_params.verboseLevel = 3;
 	TrainingTree tt;
 	auto& g = tt._graph;
-	auto pvA = priv::addChildPair( tt._initialVertex, g, 10 );
-	auto pvB = priv::addChildPair( pvA.first, g, 10 );
-	auto pvC = priv::addChildPair( pvB.first, g, 10 );
-//	auto pvD = priv::addChildPair( pvC.first, g, 10 );
+	CHECK( boost::num_vertices( g ) == 1 );
+	CHECK( boost::num_edges( g ) == 0 );
+
+	auto pvA = addChildPair( tt._initialVertex, g );
+	auto pvB = addChildPair( pvA.first, g );
+	auto pvC = addChildPair( pvB.first, g );
+
 	CHECK( boost::num_vertices( g ) == 7 );
 	CHECK( boost::num_edges( g ) == 6 );
 
-	addClass( g, pvC );
-	CHECK( tt.nbLeaves() == 2 );
+	CHECK( tt.nbLeaves() == 4 );
+	CHECK( boost::num_vertices( g ) == 7 );
+	CHECK( boost::num_edges( g ) == 6 );
+	tt.printInfo( std::cout );
 
 	CHECK( tt.pruning() == 2 );
+	tt.printInfo( std::cout );
 }
 
 //-------------------------------------------------------------------------------------------

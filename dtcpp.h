@@ -62,8 +62,6 @@ namespace dtcpp {
 		} \
 	}
 
-#define TIMER_START g_params.timer.start()
-
 
 // % % % % % % % % % % % % % %
 /// private namespace; not part of API
@@ -112,6 +110,10 @@ struct Gparams
 	bool  verbose = false;
 	int   verboseLevel = 1;
 	Timer timer; ///< Used for logging, to measure duration.
+	Gparams()
+	{
+		timer.start();
+	}
 };
 
 
@@ -1894,7 +1896,10 @@ class TrainingTree
 #ifdef TESTMODE
 /// Constructor 1. Needs to known (at least) the number of classes (so it can define ConfusionMatrix)
 		TrainingTree()
-		{}
+		{
+			_initialVertex = boost::add_vertex(_graph);  // create initial vertex
+			_graph[_initialVertex]._type = NT_Root;
+		}
 #endif
 /// Constructor 2, to be used if class values can not be used as indexes.
 		TrainingTree( const ClassIndexMap& cim )
@@ -2641,11 +2646,11 @@ TrainingTree::pruning()
 	std::set<uint> nodeSet;
 	LOG( 1, "start pruning, nb nodes=" + std::to_string( boost::num_vertices( _graph ) ) );
 
-//	size_t iter = 0;
+	size_t iter = 0;
 	size_t nbRemoval = 0;
 	bool removalHappened = false;
 	do{
-//		std::cerr << "iter=" << iter++ << " nb vertices=" << boost::num_vertices( _graph ) << std::endl;
+		COUT << "iter=" << iter++ << " nb vertices=" << boost::num_vertices( _graph ) << std::endl;
 		removalHappened = false;
 		for(
 			auto pit = boost::vertices( _graph );     // iterate on
@@ -2707,7 +2712,6 @@ void
 TrainingTree::train( const DataSet& data, const Params params )
 {
 	START;
-	TIMER_START;
 	LOG( 0, "Start training" );
 
 	NodeT::resetNodeId();

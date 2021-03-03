@@ -217,6 +217,12 @@ TEST_CASE( "my_stod", "[STOD]" )
 	CHECK_THROWS( priv::my_stod( "12.34.56" ) );
 	CHECK_THROWS( priv::my_stod( "12,34,56" ) );
 
+	CHECK( priv::my_stod( ".23" ) == 0.23 );
+	CHECK( priv::my_stod( ",23" ) == 0.23 );
+
+	CHECK( priv::my_stod( "23." ) == 23. );
+	CHECK( priv::my_stod( "23," ) == 23. );
+
 	CHECK( priv::my_stod( "1.23" ) == 1.23 );
 	CHECK( priv::my_stod( "1,23" ) == 1.23 );
 
@@ -226,8 +232,9 @@ TEST_CASE( "my_stod", "[STOD]" )
 }
 
 //-------------------------------------------------------------------------------------------
+/// Helper function for the pruning test
 std::pair<vertexT_t,vertexT_t>
-addChildPair( vertexT_t v, GraphT& g )
+addChildPairT( vertexT_t v, GraphT& g )
 {
 	auto pv = priv::addChildPair( v, g, 10 );
 	if( g[v]._type != NT_Root )   // so the root... stays the root !
@@ -251,10 +258,10 @@ TEST_CASE( "pruning", "[pru]" )
 	CHECK( boost::num_vertices( g ) == 1 );
 	CHECK( boost::num_edges( g ) == 0 );
 
-	auto pvA = addChildPair( tt._initialVertex, g );
-	auto pvB1 = addChildPair( pvA.first, g );
-	addChildPair( pvA.second, g );
-	addChildPair( pvB1.first, g );
+	auto pvA = addChildPairT( tt._initialVertex, g );
+	auto pvB1 = addChildPairT( pvA.first, g );
+	addChildPairT( pvA.second, g );
+	addChildPairT( pvB1.first, g );
 
 	CHECK( boost::num_vertices( g ) == 9 );
 	CHECK( boost::num_edges( g ) == 8 );

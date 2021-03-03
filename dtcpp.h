@@ -345,9 +345,15 @@ my_stod( std::string str )
 	{
 		if( vc.size() == 2 )  // comma detected
 			std::swap( vc, vd );
-// below, we use stod() instead of stoi() because the number of digits might be to mush for stoi()
-		auto xi = std::stod( vd[0] );  // integer value (left of decimal separator)
-		auto xf = std::stod( vd[1] );  // fractional value (right of decimal separator)
+
+		auto xi = 0.;                 // value left of decimal separator
+		if( vd[0].size() )            // we use stod() instead of stoi() because
+			xi = std::stod( vd[0] );  // the number of digits might be to much for stoi()
+
+		auto xf = 0.;                 // value right of decimal separator
+		if( vd[1].size() )
+			xf = std::stod( vd[1] );
+
 		res = xi + xf / std::pow(10, vd[1].size() );
 	}
 	return res;
@@ -427,15 +433,15 @@ class DataPoint
 		DataPoint( const std::vector<std::string>& v_string )
 		{
 			assert( v_string.size() > 0 );              // at least one attribute
+			for( size_t i=0; i<v_string.size(); i++ )
 			try
 			{
-				for( size_t i=0; i<v_string.size(); i++ )
-					_attrValue.push_back( priv::my_stod( v_string[i] ) );
+				_attrValue.push_back( priv::my_stod( v_string[i] ) );
 			}
 			catch(...)
 			{
 				priv::printVector( std::cerr, v_string, "string conversion error", false );
-				throw std::runtime_error( "unable to convert a string value to float" );
+				throw std::runtime_error( "unable to convert a string value -" + v_string[i] + "- to float" );
 			}
 		}
 
@@ -1373,7 +1379,7 @@ DataSet::printInfo( std::ostream& f, const char* name ) const
 	size_t sum = 0;
 	for( const auto& cval: _classCount )
 	{
-		std::cout << cval.first << ": "
+		f << cval.first << ": "
 			<< cval.second
 			<< " (" << std::setw(4) << 100. * cval.second/size()
 			<< " %)\n";
@@ -1489,14 +1495,20 @@ struct NodeT
 	}
 
 /// Reset of node counter \ref s_Counter
+/**
+\note We start at one because instanciating a \c TrainingTree will already create the root node (index 0).
+Thus, re-training a tree will need to start at index=1
+*/
 	static void resetNodeId()
 	{
-		s_Counter = 0;
+		s_Counter = 1;
 	}
 	NodeT() { _nodeId = s_Counter++; }
+	NodeT( const NodeT& ) = delete;
+	NodeT& operator= ( const NodeT& ) = delete;
 };
 
- /// Instanciation of static
+ /// Instanciation of static counter
  uint NodeT::s_Counter = 0;
 
 //---------------------------------------------------------------------
@@ -1909,6 +1921,7 @@ class TrainingTree
 		{
 			_initialVertex = boost::add_vertex(_graph);  // create initial vertex
 			_graph[_initialVertex]._type = NT_Root;
+			COUT << "_initialVertex id=" << _graph[_initialVertex]._nodeId << '\n';
 		}
 		TrainingTree( const TrainingTree& ) = delete;
 
@@ -1972,7 +1985,6 @@ printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 	)
 	{
 		auto target = boost::target( *pit.first, graph );
-		COUT << "target node id=" << graph[target]._nodeId << " type=" << (int)graph[target]._type << '\n';
 		assert( graph[target]._type != NT_undef );
 
 		f << graph[target]._nodeId
@@ -2496,6 +2508,7 @@ addChildPair( vertexT_t v, GraphT& graph, size_t nbElems )
 
 	graph[v1].v_Idx.reserve( nbElems );
 	graph[v2].v_Idx.reserve( nbElems );
+	COUT << "created nodes " << graph[v1]._nodeId << " and " << graph[v2]._nodeId << '\n';
 	return std::make_pair(v1,v2);
 }
 //---------------------------------------------------------------------
@@ -2513,11 +2526,9 @@ splitNode(
 )
 {
 	START;
-	static uint s_recDepth;
-	s_recDepth++;
 
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
-	LOG( 1, "splitting node " << graph[v]._nodeId << " depth=" << s_recDepth << ", holding " << vIdx.size() << " points" );
+	LOG( 1, "splitting node " << graph[v]._nodeId << " depth=" << graph[v]._depth << ", holding " << vIdx.size() << " points" );
 
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done
@@ -2525,15 +2536,12 @@ splitNode(
 	auto nodeContent = getNodeContent( vIdx, data );
 //	COUT << nodeContent;
 
-//	auto giniImpurity = nodeContent.ncGiniImpurity;
-
 	graph[v]._class = nodeContent.dominantClass;
 	graph[v]._giniImpurity = nodeContent.ncGiniImpurity;
 
-	if( s_recDepth>params.maxTreeDepth )
+	if( graph[v]._depth > params.maxTreeDepth )
 	{
 		LOG( 1, "tree reached max depth (=" << params.maxTreeDepth << "), STOP" );
-		s_recDepth--;
 		graph[v]._type = NT_Final_MD;
 		return;
 	}
@@ -2541,7 +2549,6 @@ splitNode(
 	if( nodeContent.ncGiniImpurity < params.minGiniCoeffForSplitting )
 	{
 		LOG( 1, "dataset is (almost or completely) pure, gini coeff=" << nodeContent.ncGiniImpurity << ", STOP" );
-		s_recDepth--;
 		graph[v]._type = NT_Final_GI_Small;
 		return;
 	}
@@ -2567,7 +2574,6 @@ splitNode(
 			if( aMap.nbUnusedAttribs() == 0 )
 			{
 				LOG( 1, "no more attributes to try, STOP" );
-				s_recDepth--;
 				graph[v]._type = NT_Final_SplitTooSmall;
 				return;
 			}
@@ -2605,8 +2611,6 @@ splitNode(
 
 	if( graph[v2].v_Idx.size() )
 		splitNode( v2, graph, data, params );
-
-	s_recDepth--;
 }
 
 //---------------------------------------------------------------------
@@ -2663,7 +2667,7 @@ TrainingTree::pruning()
 		)
 		{
 			auto v1    = *pit.first;
-			auto node1 = _graph[v1];
+			const auto& node1 = _graph[v1];
 //			COUT << "current node:" << node1._nodeId << " class=" << node1._class << " depth="<< node1._depth << '\n';
 			nodeSet.insert( node1._nodeId );
 			if( node1.isLeave() && boost::num_vertices( _graph ) != 1)    // we only care about the leaves (and quit if only 1 node left)
@@ -2682,7 +2686,7 @@ TrainingTree::pruning()
 					other = *eit2;                            // then swap
 
 				auto v2 = boost::target( other, _graph );     // other child
-				auto node2 = _graph[v2];
+				const auto& node2 = _graph[v2];
 				if( nodeSet.find( node2._nodeId ) == nodeSet.end() )  // if not already parsed
 				{
 					nodeSet.insert( node2._nodeId );                  // then, add it to the set of nodes already parsed
@@ -2729,10 +2733,10 @@ TrainingTree::train( const DataSet& data, const Params params )
 
 	std::vector<uint> v_idx;
 	v_idx.reserve( data.size() );
-	if( data.nbOutliers() )
-	{
-		for( size_t i=0; i<data.size(); i++ )
-			if( !data.pointIsOutlier(i) )
+	if( data.nbOutliers() )                     // if outliers there,
+	{                                           // then we put in the
+		for( size_t i=0; i<data.size(); i++ )   // set of indexes only
+			if( !data.pointIsOutlier(i) )       // the points that are not
 				v_idx.push_back( i );
 	}
 	else
@@ -2742,7 +2746,7 @@ TrainingTree::train( const DataSet& data, const Params params )
 	}
 
 	_graph[_initialVertex].v_Idx = v_idx;
-
+	COUT << "INTIAL ID=" << _graph[_initialVertex]._nodeId << '\n';
 	priv::splitNode( _initialVertex, _graph, data, params ); // Call the "split" function (recursive)
 
 	assert( nbLeaves() > 1 );  // has to be at least 2 leaves

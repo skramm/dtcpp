@@ -106,6 +106,7 @@ struct Timer
 };
 
 //---------------------------------------------------------------------
+/// Some global runtime parameters
 struct Gparams
 {
 	bool  verbose = false;
@@ -123,6 +124,7 @@ std::string g_root_gnuplot_histo =
 	set boxwidth 1\n";
 
 //---------------------------------------------------------------------
+/// Identifier for output file type, used in openOutputFile()
 enum EN_FileType
 {
 	FT_CSV,FT_DAT,FT_HTML,FT_PLT,FT_DOT
@@ -1083,13 +1085,17 @@ DataSet::nbClasses( const std::vector<uint>& vIdx ) const
 DataSet
 DataSet::getSetWithoutOutliers() const
 {
-	DataSet newset( nbAttribs() );
-	newset._data.reserve( size() );   // to avoid reallocation
-	for( size_t i=0; i<size(); i++ )
-		if( !pointIsOutlier(i) )
-			newset._data.push_back( getDataPoint(i) );
-	_noChange = false;
-	return newset;
+	if( nbOutliers() )
+	{
+		DataSet newset( nbAttribs() );
+		newset._data.reserve( size() );   // to avoid reallocation
+		for( size_t i=0; i<size(); i++ )
+			if( !pointIsOutlier(i) )
+				newset._data.push_back( getDataPoint(i) );
+		return newset;
+	}
+	else                           // if no outliers,
+		return DataSet(*this);     // then return a copy
 }
 //---------------------------------------------------------------------
 /// Returns a pair of two subsets of the data, first is the training data, second is the test data
@@ -1875,23 +1881,30 @@ access the Confusion Matrix. It can be generated from a source dataset with:
 class TrainingTree
 {
 	private:
+#ifdef TESTMODE
+	public:
+#endif
 		GraphT        _graph;
 		vertexT_t     _initialVertex;
 		size_t        _maxDepth = 1;  ///< defined by training
-		uint          _nbClasses;
+//		uint          _nbClasses;
 		ClassIndexMap _classIndexMap;  ///< maps class values to index values
 
 	public:
+#ifdef TESTMODE
 /// Constructor 1. Needs to known (at least) the number of classes (so it can define ConfusionMatrix)
-/*		TrainingTree( uint nbClasses )
-			: _nbClasses( nbClasses )
-		{}*/
-
+		TrainingTree()
+		{}
+#endif
 /// Constructor 2, to be used if class values can not be used as indexes.
 		TrainingTree( const ClassIndexMap& cim )
-			: _nbClasses( cim.size() )
-			, _classIndexMap( cim )
-		{}
+//			: _nbClasses( cim.size() )
+			: _classIndexMap( cim )
+		{
+			_initialVertex = boost::add_vertex(_graph);  // create initial vertex
+			_graph[_initialVertex]._type = NT_Root;
+		}
+		TrainingTree( const TrainingTree& ) = delete;
 
 		void clear()
 		{
@@ -2006,7 +2019,7 @@ TrainingTree::printDot( std::string fname ) const
 }
 
 //---------------------------------------------------------------------
-/// Print a DOT file of the tree
+/// Print basic information on the tree
 //template<typename T>
 void
 TrainingTree::printInfo( std::ostream& f, const char* msg ) const
@@ -2451,7 +2464,34 @@ findBestAttribute(
 
 	return *it_mval;
 }
+//---------------------------------------------------------------------
 
+// % % % % % % % % % % % % % %
+namespace priv {
+// % % % % % % % % % % % % % %
+
+//---------------------------------------------------------------------
+/// Helper function for splitNode()
+auto
+addChildPair( vertexT_t v, GraphT& graph, size_t nbElems )
+{
+	auto v1 = boost::add_vertex(graph);
+	auto v2 = boost::add_vertex(graph);
+
+	graph[v1].depth = graph[v].depth+1;
+	graph[v2].depth = graph[v].depth+1;
+
+	auto et = boost::add_edge( v, v1, graph );
+	auto ef = boost::add_edge( v, v2, graph );
+	graph[et.first].edgeSide = true;
+	graph[ef.first].edgeSide = false;
+
+//	COUT << "two nodes added, total nb=" << boost::num_vertices(graph) << "\n";
+
+	graph[v1].v_Idx.reserve( nbElems );
+	graph[v2].v_Idx.reserve( nbElems );
+	return std::make_pair(v1,v2);
+}
 //---------------------------------------------------------------------
 /// Recursive helper function, used by TrainingTree::train()
 /**
@@ -2469,8 +2509,6 @@ splitNode(
 	START;
 	static uint s_recDepth;
 	s_recDepth++;
-
-//	static uint s_nodeId = params.initialVertexId;   // starts at one because the initial node (id=0) is created elsewhere
 
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
 	LOG( 1, "splitting node " << graph[v]._nodeId << " depth=" << s_recDepth << ", holding " << vIdx.size() << " points" );
@@ -2542,21 +2580,10 @@ splitNode(
 		graph[v]._type = NT_Decision;
 
 // step 3 - different classes here: we create two child nodes and split the dataset
-	auto v1 = boost::add_vertex(graph);
-	auto v2 = boost::add_vertex(graph);
+	auto v1v2 = addChildPair( v, graph, vIdx.size() );
+	auto v1 = v1v2.first;
+	auto v2 = v1v2.second;
 
-	graph[v1].depth = graph[v].depth+1;
-	graph[v2].depth = graph[v].depth+1;
-
-	auto et = boost::add_edge( v, v1, graph );
-	auto ef = boost::add_edge( v, v2, graph );
-	graph[et.first].edgeSide = true;
-	graph[ef.first].edgeSide = false;
-
-	COUT << "two nodes added, total nb=" << boost::num_vertices(graph) << "\n";
-
-	graph[v1].v_Idx.reserve( vIdx.size() );
-	graph[v2].v_Idx.reserve( vIdx.size() );
 	for( auto idx: vIdx )           // separate the data points into two sets
 	{
 		auto attrVal = data.getDataPoint( idx ).attribVal( bestAttrib._atIndex );
@@ -2575,6 +2602,12 @@ splitNode(
 
 	s_recDepth--;
 }
+
+//---------------------------------------------------------------------
+// % % % % % % % % % % % % % %
+} // namespace priv
+// % % % % % % % % % % % % % %
+
 //---------------------------------------------------------------------
 /// Pruning of the graph: removal of child leaves pair that hold the same class
 /**
@@ -2684,8 +2717,6 @@ TrainingTree::train( const DataSet& data, const Params params )
 	if( data.size()<2 )
 		throw std::runtime_error( "no enough data points!" );
 
-	_initialVertex = boost::add_vertex(_graph);  // create initial vertex
-
 	std::vector<uint> v_idx;
 	v_idx.reserve( data.size() );
 	if( data.nbOutliers() )
@@ -2701,9 +2732,8 @@ TrainingTree::train( const DataSet& data, const Params params )
 	}
 
 	_graph[_initialVertex].v_Idx = v_idx;
-	_graph[_initialVertex]._type = NT_Root;
 
-	splitNode( _initialVertex, _graph, data, params ); // Call the "split" function (recursive)
+	priv::splitNode( _initialVertex, _graph, data, params ); // Call the "split" function (recursive)
 	LOG( 0, "Training done" );
 }
 
@@ -2756,8 +2786,8 @@ TrainingTree::classify( const DataPoint& point ) const
 ConfusionMatrix
 TrainingTree::classify( const DataSet& dataset ) const
 {
-	if( _nbClasses < 2 )  // if 0 or 1 class, then nothing to classify
-		throw std::runtime_error( "nothing to classify, dataset holds " + std::to_string(_nbClasses) + " classes" );
+//	if( _nbClasses < 2 )  // if 0 or 1 class, then nothing to classify
+//		throw std::runtime_error( "nothing to classify, dataset holds " + std::to_string(_nbClasses) + " classes" );
 
 	ConfusionMatrix confmat( _classIndexMap );
 	for( const auto& datapoint: dataset )

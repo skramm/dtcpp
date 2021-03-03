@@ -221,7 +221,33 @@ TEST_CASE( "my_stod", "[STOD]" )
 	CHECK( priv::my_stod( "0.23" ) == 0.23 );
 	CHECK( priv::my_stod( "0,23" ) == 0.23 );
 	CHECK( priv::my_stod( "0,12345678912" ) == 0.12345678912 );
+}
 
+//-------------------------------------------------------------------------------------------
+void addClass( GraphT& g, std::pair<vertexT_t,vertexT_t>& p )
+{
+	g[p.first]._class = ClassVal(5);
+	g[p.second]._class = ClassVal(5);
+	g[p.first]._type = NT_Final_MD;
+	g[p.second]._type = NT_Final_MD;
+}
+//-------------------------------------------------------------------------------------------
+/// test of pruning
+TEST_CASE( "pruning", "[pru]" )
+{
+	TrainingTree tt;
+	auto& g = tt._graph;
+	auto pvA = priv::addChildPair( tt._initialVertex, g, 10 );
+	auto pvB = priv::addChildPair( pvA.first, g, 10 );
+	auto pvC = priv::addChildPair( pvB.first, g, 10 );
+//	auto pvD = priv::addChildPair( pvC.first, g, 10 );
+	CHECK( boost::num_vertices( g ) == 7 );
+	CHECK( boost::num_edges( g ) == 6 );
+
+	addClass( g, pvC );
+	CHECK( tt.nbLeaves() == 2 );
+
+	CHECK( tt.pruning() == 2 );
 }
 
 //-------------------------------------------------------------------------------------------

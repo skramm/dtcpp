@@ -1717,6 +1717,13 @@ struct ConfusionMatrix
 	}
 	void printAllScores( std::ostream&, const char* msg=0 ) const;
 
+#ifdef TESTMODE
+	void setVal( size_t li, size_t col, uint v )
+	{
+		_mat[li][col] = v;
+	}
+#endif //  TESTMODE
+
 	private:
 		double p_score( CM_Score scoreId, priv::CM_Counters ) const;
 
@@ -1731,9 +1738,9 @@ namespace priv {
 // % % % % % % % % % % % % % %
 void printLine( std::ostream& f, uint w, uint n )
 {
-	n++;
+//	n++;
 	f << '|';
-	for( uint i=0; i<w*n+5; i++ )
+	for( uint i=0; i<=(w+1)*n; i++ )
 		f << '-';
 	f <<"|";
 }
@@ -1756,7 +1763,7 @@ operator << ( std::ostream& f, const ConfusionMatrix& cm )
 
 	f << "  class\n \\/ ";
 	priv::printLine( f, w, nbCl );
-	f << "  # | rate\n";
+	f << "   # | rate\n";
 
 	std::vector<size_t> sumCol( nbCl, 0u );
 	size_t li = 0;

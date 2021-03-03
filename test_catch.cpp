@@ -8,8 +8,8 @@
 #define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
 #include "catch.hpp"
 
-#define DEBUG
-#define DEBUG_START
+//#define DEBUG
+//#define DEBUG_START
 #define TESTMODE
 #include "dtcpp.h"
 
@@ -273,6 +273,20 @@ TEST_CASE( "pruning", "[pru]" )
 	CHECK( tt.nbLeaves() == 0 );
 	tt.printInfo( std::cout );
 	tt.printDot( "test_B" );
+}
+
+//-------------------------------------------------------------------------------------------
+// not a real test, this is just to check confusion matrix formatting
+TEST_CASE( "streaming ConfusionMatrix", "[scm]" )
+{
+	for( int i=2; i<6; i++ )
+	{
+		std::cout << "** mat size=" << i << '\n';
+		ConfusionMatrix cm(i);
+		std::cout << "* empty:\n" << cm;
+		cm.setVal( 0, 0, 123456 );
+		std::cout << "* with a value:\n" << cm;
+	}
 }
 
 //-------------------------------------------------------------------------------------------

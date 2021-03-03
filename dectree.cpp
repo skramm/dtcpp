@@ -133,6 +133,8 @@ int main( int argc, const char** argv )
 		tt.pruning();
 		tt.printInfo( std::cout, "After pruning" );
 		tt.printDot( "dectree_p" );
+		auto cm2 = tt.classify( dataset );
+		std::cout << cm2 << "\n";
 	}
 	else
 	{

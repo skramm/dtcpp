@@ -36,6 +36,9 @@ See doc on https://github.com/skramm/dtcpp
 
 #include <boost/histogram.hpp>
 
+#include <boost/bimap.hpp>
+#include <boost/bimap/vector_of.hpp>
+
 /// All the API and code lies here
 namespace dtcpp {
 
@@ -570,7 +573,12 @@ struct DatasetStats
 };
 //---------------------------------------------------------------------
 /// Used in TrainingTree to map a class value to an index in the \ref ConfusionMatrix
-using ClassIndexMap = std::map<ClassVal,size_t>;
+//using ClassIndexMap = std::map<ClassVal,size_t>;
+using ClassIndexMap = boost::bimap<
+	ClassVal,                            // defaults to boost::bimaps::set_of<ClassVal>
+	size_t
+//	boost::bimaps::vector_of<size_t>
+>;
 
 //---------------------------------------------------------------------
 /// Outlier Detection Method. Related to Dataset::tagOutliers()
@@ -732,7 +740,8 @@ class DataSet
 			ClassIndexMap cim;
 			size_t i = 0;
 			for( const auto& cc: _classCount )  // for each class value, fill
-				cim[cc.first] = i++;            // the map with an incremental index
+//				cim[cc.first] = i++;            // the map with an incremental index
+				cim.insert( ClassIndexMap::value_type( cc.first, i++ ) );            // the map with an incremental index
 			return cim;
 		}
 		template<typename HISTO>
@@ -1708,8 +1717,8 @@ struct ConfusionMatrix
 		auto li  = static_cast<size_t>( predictedVal.get() );
 		if( _cmClassIndexMap.size() )  /// \todo this is now always true
 		{
-			col = _cmClassIndexMap.at( trueVal );
-			li  = _cmClassIndexMap.at( predictedVal );
+			col = _cmClassIndexMap.left.at( trueVal );
+			li  = _cmClassIndexMap.left.at( predictedVal );
 		}
 
 		assert( li < _mat.size() && col < _mat.size() );
@@ -1758,7 +1767,7 @@ operator << ( std::ostream& f, const ConfusionMatrix& cm )
 	f << std::setfill(' ');
 	f << "ConfusionMatrix:\nPredicted \\ True class =>\n ||   ";
 
-	for( const auto & pci: cm._cmClassIndexMap )
+	for( const auto & pci: cm._cmClassIndexMap.left )
 		f << std::setw(w) << pci.first << " ";
 
 	f << "  class\n \\/ ";
@@ -1767,7 +1776,7 @@ operator << ( std::ostream& f, const ConfusionMatrix& cm )
 
 	std::vector<size_t> sumCol( nbCl, 0u );
 	size_t li = 0;
-	for( const auto & pci: cm._cmClassIndexMap )
+	for( const auto & pci: cm._cmClassIndexMap.left )
 	{
 		f << std::setw(3) << pci.first << " | ";
 
@@ -1855,19 +1864,18 @@ ConfusionMatrix::getScore( CM_Score scoreId, ClassVal cval ) const
 }
 //---------------------------------------------------------------------
 /// Prints all the performance scores
-/// \todo replace _cmClassIndexMap with a boost::bimap
 void
 ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 {
 	f << "Performance scores";
 	if( msg )
 		f << " - " << msg;
-	f << '\n';
+	f << ":\n";
 	if( nbClasses() > 2 )
 	{
 		for( size_t c=0; c<nbClasses(); c++ )
 		{
-			f << " * class idx=" << c << " label=" << " TODO: use boost::bimap" << ":\n";
+			f << " * class label=" <<_cmClassIndexMap.right.at(c) << ":\n";
 			for( auto i=0; i<CM_SCORE_END; i++ )
 			{
 				auto eni = static_cast<CM_Score>(i);

@@ -55,9 +55,11 @@ that are freely available on any OS/architecture:
 ### Dependencies:
 
 * Boost. If you don't have Boost on your system, the easiest will be => `sudo apt install libboost-all-dev`<br>
-Theses two libs are used:
+The following libs are used:
  * [Boost::Graph](https://www.boost.org/doc/libs/1_75_0/libs/graph/doc/index.html)<br>
  * [Boost::histogram](https://www.boost.org/doc/libs/1_75_0/libs/histogram)
+ * [Boost::bimap](https://www.boost.org/doc/libs/1_75_0/libs/bimap/)
+
 
  * `argh`: command-line parser, from https://github.com/adishavit/argh<br>
 (version 1.3.1 included for conveniency)

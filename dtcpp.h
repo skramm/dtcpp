@@ -177,7 +177,7 @@ openOutputFile( std::string fn, EN_FileType ft, std::string data_fn=std::string(
 		f << "# source data file: " << data_fn << '\n';
 	f << '\n';
 	if( ft == FT_PLT )
-		f << "set terminal pngcairo\n";
+		f << "set terminal pngcairo size 600,600\n";
 	return f;
 }
 
@@ -789,7 +789,8 @@ genAttribHisto(
 	const std::vector<float>& vat,
 	const AttribStats<T>&     atstats,
 	uint                      nbBins,      ///< nb bins of the histogram
-	std::string               data_fn      ///< input datafile name
+	std::string               data_fn,     ///< input datafile name
+	size_t                    nbPts
 )
 {
 	char sep = ' ';
@@ -807,7 +808,7 @@ genAttribHisto(
 
 	f << "# histogram for attribute " << atIdx << '\n';
 	for (auto x : indexed(h) )
-		f << x.index()+1 << sep << x.bin().lower() << sep << x.bin().upper() << sep << *x << '\n';
+		f << x.index()+1 << sep << x.bin().lower() << sep << x.bin().upper() << sep << *x << sep << 100. * *x/nbPts <<  '\n';
 	return h;
 }
 //---------------------------------------------------------------------
@@ -929,7 +930,7 @@ values lower than the "low" threshold, and one for values above the "high" thres
 	{
 		f << i << sep << v_ccpb[i].first << sep;
 		if( v_ccpb[i].second  )
-			f << 1.0 * v_ccpb[i].first / v_ccpb[i].second;
+			f << 1. * v_ccpb[i].first / v_ccpb[i].second;
 		else
 			f << '0';
 		f << '\n';
@@ -1040,7 +1041,9 @@ DataSet::computeStats( uint nbBins ) const
 {
 	START;
 	auto fplot = priv::openOutputFile( "plot_attrib_histo", priv::FT_PLT, _fname );
-	fplot << priv::g_root_gnuplot_histo << "\n";
+	fplot << priv::g_root_gnuplot_histo
+		<< "\nset xtic rotate by -70"
+		<< "\nset grid\n";
 
 	DatasetStats<T> dstats( nbAttribs() );
 	for( size_t atItx=0; atItx<nbAttribs(); atItx++ )
@@ -1061,22 +1064,28 @@ DataSet::computeStats( uint nbBins ) const
 		const auto& atstats = computeAttribStats<T>( vat );
 		dstats.add( atItx, atstats );
 
-		auto histo = genAttribHisto( atItx, vat, atstats, nbBins, _fname );
+		auto histo = genAttribHisto( atItx, vat, atstats, nbBins, _fname, size() );
 
 		auto v_ccpb = countClassPerBin( atItx, histo );
 		saveClassCountPerBin( atItx, v_ccpb );
 
 		fplot << "set output 'attrib_histo_"<< atItx << ".png'\n"
-			<< "set multiplot\n"
+			<< "unset label\n"
+			<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n"
+			<< "set label 'attribute " << atItx << "' at screen 0.8, screen .98\n"
+			<< "set multiplot layout 2,1\n"
 			<< "set logscale y\n"
-			<< "set title 'Nb pts per bin'\n"
-			<< "set origin 0,0\n"
-			<< "set size 1,0.5\n"
-			<< "plot 'attrib_histo_" << atItx << ".dat' using 4:xtic(1) noti\n"
-			<< "set title 'Ratio Nb classes per bin/nbpts'\n"
-			<< "set origin 0,0.5\n"
-			<< "set size 1,0.5\n"
-			<< "plot 'histo_ccpb_attrib_" << atItx << ".dat' using 3:xtic(1) noti\n"
+			<< "set title '% of pts'\n"
+//			<< "set origin 0,0\n"
+//			<< "set size 1,0.5\n"
+//			<< "plot 'attrib_histo_" << atItx << ".dat' using 4:xtic(1) noti\n"
+			<< "plot 'attrib_histo_" << atItx << ".dat' using 5:xtic(sprintf(\"%.1e\",column(2))) noti\n"
+			<< "set title 'Nb classes/nbpts of bin'\n"
+//			<< "set origin 0,0.5\n"
+//			<< "set size 1,0.5\n"
+			<< "set xtics format ''\n"
+			<< "plot 'histo_ccpb_attrib_" << atItx << ".dat' using 3 noti\n"
+//			<< "plot 'histo_ccpb_attrib_" << atItx << ".dat' using 3:xtic(1) noti\n"
 			<< "unset multiplot\n"
 			<< '\n';
 	}
@@ -1208,7 +1217,8 @@ DataSet::generateAttribPlot(
 		auto st = dss.get(i);
 		f << "set output '" << fname << '_' << i << ".png'\n"
 			<< "unset arrow\n"
-			<< "unset label\n";
+			<< "unset label\n"
+			<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n";
 		priv::addVerticalLine( f, "mean",       0.8, st._meanVal,               "red" );
 		priv::addVerticalLine( f, "mean-sigma", 0.7, st._meanVal-st._stddevVal, "blue" );
 		priv::addVerticalLine( f, "mean+sigma", 0.7, st._meanVal+st._stddevVal, "blue" );
@@ -1342,6 +1352,7 @@ DataSet::load( std::string fname, const Fparams params )
 	return true;
 }
 //---------------------------------------------------------------------
+/// Generates both data files and Gnuplot script of the class distribution among the dataset
 void
 DataSet::generateClassDistrib( std::string fname ) const
 {
@@ -1349,9 +1360,10 @@ DataSet::generateClassDistrib( std::string fname ) const
 	auto fhisto = priv::openOutputFile( fname, priv::FT_DAT, _fname );
 
 	fhisto << "# data class histogram file for input file '" <<  fname
-		<< "'\n# class_index occurence_count percentage\n";
-	fhisto << "-1 " << getClassCount( ClassVal(-1) ) << ' '
+		<< "'\n# class_index occurence_count percentage\n"
+		<< "NC " << getClassCount( ClassVal(-1) ) << ' '
 		<< 100. * getClassCount( ClassVal(-1) ) / size() << '\n';
+
 	for( const auto& cval: _classCount )
 		fhisto << cval.first << " "
 			<< cval.second << " " << 100. * cval.second/size()
@@ -1360,6 +1372,7 @@ DataSet::generateClassDistrib( std::string fname ) const
 	auto fplot = priv::openOutputFile( fname, priv::FT_PLT, _fname );
 	fplot << "set output '" << fname << ".png'\n"
 		<< "set title 'Class distribution'\n"
+		<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n"
 		<< "set ylabel '% of total points'\n"
 		<< "set xlabel 'Class'\n"
 		<< "set style data histogram\n"

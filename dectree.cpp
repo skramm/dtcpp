@@ -96,13 +96,12 @@ int main( int argc, const char** argv )
 		std::cerr << "Error, unable to load data file: " << fname << '\n';
 		std::exit(1);
 	}
-	dataset.printInfo( std::cout );
-	dataset.generateClassDistrib( "class_distrib_A" );
 
+	dataset.printInfo( std::cout );
 	auto stats = dataset.computeStats<float>( nbBins );
 	std::cout << stats;
 	dataset.generateAttribPlot( "dataA", stats );
-	dataset.generateClassDistrib( "class_distrib_B" );
+	dataset.generateClassDistrib( "class_distribution" );
 
 	if( doRemoveOutliers )
 	{

@@ -11,6 +11,16 @@ Naive attempt of a Decision Tree implementation for continuous variables (WIP !!
 
 
 ## Features
+
+This sofware can train a decision tree using some input data.
+The tree can the be used to classify some other data.
+During the training step, it also analyses the input data and produces different output data files and plots.
+ * a histogram of the classes found,
+ * for each attribute, a histogram of the attribute values
+ * for each attribute, a plot of the value vs. output class, also whowing the mean, meadian, and standard deviation value
+ * a plot of the tree
+
+
 * input dataset format: csv style
  * class values: string or numerical (integer values)
  * attribute values: only numerical at present
@@ -45,6 +55,11 @@ that are freely available on any OS/architecture:
 * `-fl` : First line of input data file holds labels,ignore it
 
 ## Build information
+
+This software is build from 2 files only:
+ * dtcpp.h : header that hold all the useful code
+ * dtcpp.cpp : basically only a command-line parser, then calls the code from the header
+
 
 ### Needed tools
 

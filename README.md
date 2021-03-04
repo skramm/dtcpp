@@ -21,12 +21,36 @@ During the training step, it also analyses the input data and produces different
  * a plot of the tree
 
 
-* input dataset format: csv style
+* Input dataset format: csv style
  * class values: string or numerical (integer values)
  * attribute values: only numerical at present
  * class value position: either first or last element of the line
  * field separator character adjustable
  * decimal character for floating-point values can be either '`.`'' or '`,`', does not matter.
+
+### Training algorithm
+
+The algorithm is more or less based on C4.5: https://en.wikipedia.org/wiki/C4.5_algorithm
+At each step, it searches for the best attribute to use and best trheshold on that attribute
+so that a split will maximize the Gini Impurity coefficient:
+https://en.wikipedia.org/wiki/Decision_tree_learning#Gini_impurity
+
+### Performance scores
+
+See https://en.wikipedia.org/wiki/Confusion_matrix for definitions.
+
+* For two-class algorithms, the following scores are computed:
+True Positive Rate (recall), True Negative Rate, Positive Predictive Value (precision),
+Accuracy, Balanced Accuracy and F1-score<br>
+see
+* For multiclass tasks, only Macro recall and precision are computed at present
+
+### Sources:
+
+* https://www.kdnuggets.com/2020/01/decision-tree-algorithm-explained.html
+* https://en.wikipedia.org/wiki/Decision_tree_learning
+* https://en.wikipedia.org/wiki/C4.5_algorithm
+* https://en.wikipedia.org/wiki/Information_gain_in_decision_trees
 
 ## Recommended tools
 

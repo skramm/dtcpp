@@ -127,7 +127,10 @@ int main( int argc, const char** argv )
 		std::cout << cm << "\n";
 		tt.printInfo( std::cout, "Before Pruning" );
 		tt.printDot( "dectree" );
-		cm.printAllScores( std::cout );
+		if( dataset.nbClasses() == 2 )
+			cm.printAllScores( std::cout );
+		else
+			cm.printAverageScores( std::cout );
 
 		tt.pruning();
 		tt.printInfo( std::cout, "After pruning" );

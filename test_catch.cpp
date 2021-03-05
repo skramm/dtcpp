@@ -124,9 +124,9 @@ TEST_CASE( "confusion matrix", "[cmat]" )
 		{ 3 /* FN */, 4 /* TN */ }
 	};
 	ConfusionMatrix m2( v2 );
-	CHECK( m2.getScore( CM_TPR ) == 0.25 );
-	CHECK( m2.getScore( CM_TNR ) == 2./3 );
-	CHECK( m2.getScore( CM_ACC ) == 0.5 );
+	CHECK( m2.getScore( PerfScore::TPR ) == 0.25 );
+	CHECK( m2.getScore( PerfScore::TNR ) == 2./3 );
+	CHECK( m2.getScore( PerfScore::ACC ) == 0.5 );
 
 // a sample confusion matrix (column: real class, lines, predicted class)
 	std::vector<std::vector<uint>> v4{
@@ -136,7 +136,7 @@ TEST_CASE( "confusion matrix", "[cmat]" )
 		{ 8, 1, 2, 1 },
 	};
 	ConfusionMatrix m4( v4 );
-	CHECK( m4.getScore( CM_TPR, ClassVal(0) ) == 0. );
+	CHECK( m4.getScore( PerfScore::TPR, ClassVal(0) ) == 0. ); // TODO
 }
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "maj vote", "[majv]" )
@@ -255,6 +255,10 @@ TEST_CASE( "pruning", "[pru]" )
 	g_params.verboseLevel = 3;
 	TrainingTree tt;
 	auto& g = tt._graph;
+	CHECK( boost::num_vertices( g ) == 1 );
+	CHECK( boost::num_edges( g ) == 0 );
+
+	tt.clear();
 	CHECK( boost::num_vertices( g ) == 1 );
 	CHECK( boost::num_edges( g ) == 0 );
 

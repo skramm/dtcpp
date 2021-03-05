@@ -573,11 +573,9 @@ struct DatasetStats
 };
 //---------------------------------------------------------------------
 /// Used in TrainingTree to map a class value to an index in the \ref ConfusionMatrix
-//using ClassIndexMap = std::map<ClassVal,size_t>;
 using ClassIndexMap = boost::bimap<
-	ClassVal,                            // defaults to boost::bimaps::set_of<ClassVal>
-	size_t
-//	boost::bimaps::vector_of<size_t>
+	ClassVal,     // defaults to boost::bimaps::set_of<ClassVal>
+	size_t        // defaults to boost::bimaps::set_of<size_t>
 >;
 
 //---------------------------------------------------------------------
@@ -1689,6 +1687,7 @@ struct ConfusionMatrix
 	}
 
 #ifdef TESTMODE
+/// Constructor only for testing
 	ConfusionMatrix( size_t nbClasses )
 	{
 		assert( nbClasses>1 );
@@ -1698,7 +1697,7 @@ struct ConfusionMatrix
 		{
 			li.resize( nbClasses );
 			std::fill( li.begin(), li.end(), 0u );
-			_cmClassIndexMap[ ClassVal(i) ] = i;
+			_cmClassIndexMap.insert( ClassIndexMap::value_type(  ClassVal(i), i ) );
 			i++;
 		}
 	}
@@ -2015,27 +2014,25 @@ class TrainingTree
 
 	public:
 #ifdef TESTMODE
-/// Constructor 1. Needs to known (at least) the number of classes (so it can define ConfusionMatrix)
+/// Constructor 1, only for testing
 		TrainingTree()
 		{
-			_initialVertex = boost::add_vertex(_graph);  // create initial vertex
-			_graph[_initialVertex]._type = NT_Root;
+			clear();
 		}
 #endif
 /// Constructor 2, to be used if class values can not be used as indexes.
 		TrainingTree( const ClassIndexMap& cim )
-//			: _nbClasses( cim.size() )
 			: _classIndexMap( cim )
 		{
-			_initialVertex = boost::add_vertex(_graph);  // create initial vertex
-			_graph[_initialVertex]._type = NT_Root;
-			COUT << "_initialVertex id=" << _graph[_initialVertex]._nodeId << '\n';
+			clear();
 		}
 		TrainingTree( const TrainingTree& ) = delete;
 
 		void clear()
 		{
 			_graph.clear();
+			_initialVertex = boost::add_vertex(_graph);  // create initial vertex
+			_graph[_initialVertex]._type = NT_Root;
 		}
 
 		void     train( const DataSet&, Params params=Params() );
@@ -2801,7 +2798,6 @@ TrainingTree::pruning()
 					if( node2.isLeave() )                             // if node is a leave of the tree
 						if( node1._class == node2._class )            // and is same class !
 						{
-//							LOG( 1, "removing nodes " + std::to_string(node1._nodeId) + " and " + std::to_string(node2._nodeId) );
 							_graph[v0]._class = node1._class;  // change status of source node
 							if( _graph[v0]._type != NT_Root )
 								_graph[v0]._type = NT_Merged;

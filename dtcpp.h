@@ -1583,63 +1583,64 @@ class CM_Counters
 
 //---------------------------------------------------------------------
 /// Performance score of classification, see ConfusionMatrix for definitions
-enum CM_Score
+enum class PerfScore
 {
-	CM_TPR=0    ///< True Positive Rate (recall)
-	,CM_TNR     ///< True Negative Rate
-	,CM_PPV     ///< Positive Predictive Value  (precision)
-	,CM_ACC     ///< Accuracy
-	,CM_BACC    ///< Balanced Accuracy
-	,CM_F1      ///< F1-score, see https://en.wikipedia.org/wiki/F-score
+	TPR=0    ///< True Positive Rate (recall)
+	,TNR     ///< True Negative Rate
+	,PPV     ///< Positive Predictive Value  (precision)
+	,ACC     ///< Accuracy
+	,BACC    ///< Balanced Accuracy
+	,F1      ///< F1-score, see https://en.wikipedia.org/wiki/F-score
 
-	,CM_SCORE_END  ///< only used to iterate
+	,SCORE_END  ///< only used to iterate
 };
 
 //---------------------------------------------------------------------
 /// Multiclass performance score
-enum class CM_Score_MC
+enum class PerfScore_MC
 {
 	PRECIS_M,    ///< Macro Precision
 	RECALL_M     ///< Macro Recall
 };
 //---------------------------------------------------------------------
 std::string
-getString( CM_Score n )
+getString( PerfScore n )
 {
 	const char* s = nullptr;
 	switch( n )
 	{
-		case CM_TPR:  s="TPR (recall)";  break;
-		case CM_TNR:  s="TNR";  break;
-		case CM_PPV:  s="PPV (prec)";  break;
-		case CM_ACC:  s="ACC";  break;
-		case CM_BACC: s="BACC"; break;
-		case CM_F1:   s="F1";   break;
+		case PerfScore::TPR:  s="TPR (recall)";  break;
+		case PerfScore::TNR:  s="TNR";  break;
+		case PerfScore::PPV:  s="PPV (prec)";  break;
+		case PerfScore::ACC:  s="ACC";  break;
+		case PerfScore::BACC: s="BACC"; break;
+		case PerfScore::F1:   s="F1";   break;
 		default: assert(0);
 	}
 	return std::string(s);
 }
 //---------------------------------------------------------------------
 std::string
-getString( CM_Score_MC n )
+getString( PerfScore_MC n )
 {
 	const char* s = nullptr;
 	switch( n )
 	{
-		case CM_Score_MC::RECALL_M: s="Recall";  break;
-		case CM_Score_MC::PRECIS_M: s="Precision";  break;
+		case PerfScore_MC::RECALL_M: s="(macro) Recall";  break;
+		case PerfScore_MC::PRECIS_M: s="(macro) Precision";  break;
 		default: assert(0);
 	}
 	return std::string(s);
 }
 
 //---------------------------------------------------------------------
+#if 0
 /// Container for the performance scores
 struct Scores
 {
-	std::array<double, CM_SCORE_END> _sScoreValues;
+	std::array<double, static_cast<int>(PerfScore::SCORE_END)> _sScoreValues;
 };
-
+#endif
 //---------------------------------------------------------------------
 /// Confusion Matrix, handles both 2 class and multiclass problems, but usage will be different
 /**
@@ -1661,12 +1662,12 @@ Usage:
 
 For 2-class problem, you get (for example) the "True Positive Rate" metric like this:
 \code
-	auto score = cmat.getScore( CM_TPR );
+	auto score = cmat.getScore( TPR );
 \endcode
 
 For multiclass situations, you need to add for what class you are requesting this.
 \code
-	auto score = cmat.getScore( CM_TPR, ClassValue );
+	auto score = cmat.getScore( TPR, ClassValue );
 \endcode
 
 */
@@ -1718,9 +1719,9 @@ struct ConfusionMatrix
         return _mat.size();
 	}
 
-    double getScore( CM_Score, ClassVal ) const;
-    double getScore( CM_Score ) const;
-	double getScore_MC( CM_Score_MC scoreId ) const;
+    double getScore( PerfScore, ClassVal ) const;
+    double getScore( PerfScore ) const;
+	double getScore_MC( PerfScore_MC scoreId ) const;
 
 /// Returns total number of values in matrix
 	size_t nbValues() const
@@ -1767,7 +1768,7 @@ struct ConfusionMatrix
 #endif //  TESTMODE
 
 	private:
-		double p_score( CM_Score scoreId, priv::CM_Counters ) const;
+		double p_score( PerfScore scoreId, priv::CM_Counters ) const;
 
 	private:
 		std::vector<std::vector<uint>> _mat;
@@ -1840,19 +1841,19 @@ operator << ( std::ostream& f, const ConfusionMatrix& cm )
 /// Private, compute scores for both 2-class and multi-class confusion matrices
 /// (for a given class).
 double
-ConfusionMatrix::p_score( CM_Score scoreId, priv::CM_Counters cmc ) const
+ConfusionMatrix::p_score( PerfScore scoreId, priv::CM_Counters cmc ) const
 {
 	auto TPR = cmc.tp / ( cmc.tp + cmc.fn );
 	auto TNR = cmc.tn / ( cmc.tn + cmc.fp );
 	double scoreVal = 0.;
 	switch( scoreId )
 	{
-		case CM_TPR:  scoreVal =  TPR; break;
-		case CM_TNR:  scoreVal =  TNR; break;
-		case CM_PPV:  scoreVal =  cmc.tp / ( cmc.tp + cmc.fp ); break;
-		case CM_ACC:  scoreVal = (cmc.tp + cmc.tn)/nbValues();  break;
-		case CM_BACC: scoreVal = (TPR + TNR ) / 2.; break;
-		case CM_F1:   scoreVal = 2.* cmc.tp / ( 2.* cmc.tp + cmc.fp + cmc.fn ); break;
+		case PerfScore::TPR:  scoreVal =  TPR; break;
+		case PerfScore::TNR:  scoreVal =  TNR; break;
+		case PerfScore::PPV:  scoreVal =  cmc.tp / ( cmc.tp + cmc.fp ); break;
+		case PerfScore::ACC:  scoreVal = (cmc.tp + cmc.tn)/nbValues();  break;
+		case PerfScore::BACC: scoreVal = (TPR + TNR ) / 2.; break;
+		case PerfScore::F1:   scoreVal = 2.* cmc.tp / ( 2.* cmc.tp + cmc.fp + cmc.fn ); break;
 		default: assert(0);
 	}
 	return scoreVal;
@@ -1860,7 +1861,7 @@ ConfusionMatrix::p_score( CM_Score scoreId, priv::CM_Counters cmc ) const
 //---------------------------------------------------------------------
 /// Computes performance scores. Used for 2-class situations
 double
-ConfusionMatrix::getScore( CM_Score scoreId ) const
+ConfusionMatrix::getScore( PerfScore scoreId ) const
 {
 	assert( nbValues() > 1 );
 	assert( nbClasses() == 2 );
@@ -1875,7 +1876,7 @@ ConfusionMatrix::getScore( CM_Score scoreId ) const
 //---------------------------------------------------------------------
 /// Computes and return a performance score. Used for multi-class situations
 double
-ConfusionMatrix::getScore( CM_Score scoreId, ClassVal cval ) const
+ConfusionMatrix::getScore( PerfScore scoreId, ClassVal cval ) const
 {
 	assert( nbValues() > 2 );
 	assert( nbClasses() > 2 );
@@ -1912,7 +1913,7 @@ prec = \frac{1}{nbC} \cdot \sum_i \frac{tp_i}{tp_i + fp_i}
 \todo something fishy here...
 */
 double
-ConfusionMatrix::getScore_MC( CM_Score_MC scoreId ) const
+ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
 {
 	assert( nbValues() > 2 );
 	assert( nbClasses() > 2 );
@@ -1920,12 +1921,12 @@ ConfusionMatrix::getScore_MC( CM_Score_MC scoreId ) const
 	auto sum = 0.;
 	switch( scoreId )
 	{
-		case CM_Score_MC::PRECIS_M:
+		case PerfScore_MC::PRECIS_M:
 			for( size_t i=0; i<nbClasses(); i++ )
 				sum += _mat[i][i] / std::accumulate( std::begin(_mat[i]), std::end(_mat[i]), 0. );
 		break;
 
-		case CM_Score_MC::RECALL_M:
+		case PerfScore_MC::RECALL_M:
 			for( size_t i=0; i<nbClasses(); i++ )
 			{
 				auto sum_col = 0.;
@@ -1940,6 +1941,7 @@ ConfusionMatrix::getScore_MC( CM_Score_MC scoreId ) const
 }
 
 //---------------------------------------------------------------------
+/// This will probably be expanded
 void
 ConfusionMatrix::printAverageScores( std::ostream& f, const char* msg ) const
 {
@@ -1948,8 +1950,8 @@ ConfusionMatrix::printAverageScores( std::ostream& f, const char* msg ) const
 		f << " - " << msg;
 	f << ":\n";
 
-	f << " - " << getString(CM_Score_MC::PRECIS_M) << "=" << getScore_MC( CM_Score_MC::PRECIS_M ) << '\n';
-	f << " - " << getString(CM_Score_MC::RECALL_M) << "=" << getScore_MC( CM_Score_MC::RECALL_M ) << '\n';
+	f << " - " << getString(PerfScore_MC::PRECIS_M) << "=" << getScore_MC( PerfScore_MC::PRECIS_M ) << '\n';
+	f << " - " << getString(PerfScore_MC::RECALL_M) << "=" << getScore_MC( PerfScore_MC::RECALL_M ) << '\n';
 }
 
 //---------------------------------------------------------------------
@@ -1957,6 +1959,7 @@ ConfusionMatrix::printAverageScores( std::ostream& f, const char* msg ) const
 void
 ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 {
+	constexpr auto maxenum = static_cast<int>(PerfScore::SCORE_END);
 	f << "Performance scores";
 	if( msg )
 		f << " - " << msg;
@@ -1966,18 +1969,18 @@ ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 		for( size_t c=0; c<nbClasses(); c++ )
 		{
 			f << " * class label=" <<_cmClassIndexMap.right.at(c) << ":\n";
-			for( auto i=0; i<CM_SCORE_END; i++ )
+			for( auto i=0; i<maxenum; i++ )
 			{
-				auto eni = static_cast<CM_Score>(i);
+				auto eni = static_cast<PerfScore>(i);
 				f << "   - " << getString( eni ) << " = " << getScore( eni, ClassVal(c) ) << '\n';
 			}
 		}
 	}
 	else
 	{
-		for( auto i=0; i<CM_SCORE_END; i++ )
+		for( auto i=0; i<maxenum; i++ )
 		{
-			auto eni = static_cast<CM_Score>(i);
+			auto eni = static_cast<PerfScore>(i);
 			f << " - " << getString( eni ) << " = " << getScore( eni ) << '\n';
 		}
 	}

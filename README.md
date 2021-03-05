@@ -13,7 +13,7 @@ Naive attempt of a Decision Tree implementation for continuous variables (WIP !!
 ## Features
 
 This sofware can train a decision tree using some input data.
-The tree can the be used to classify some other data.
+The tree can then be used to classify some other data.
 During the training step, it also analyses the input data and produces different output data files and plots.
  * a histogram of the classes found,
  * for each attribute, a histogram of the attribute values
@@ -76,7 +76,7 @@ that are freely available on any OS/architecture:
 * `-nbh xx` : number of bins for building the histograms
 * `-ro` : remove outliers before training
 * `-md xx` : max depth for tree
-* `-fl` : First line of input data file holds labels,ignore it
+* `-fl` : First line of input data file holds labels, ignore it
 
 ## Build information
 
@@ -100,11 +100,11 @@ The following libs are used:
  * [Boost::bimap](https://www.boost.org/doc/libs/1_75_0/libs/bimap/)
 
 
- * `argh`: command-line parser, from https://github.com/adishavit/argh<br>
+* `argh`: command-line parser, from https://github.com/adishavit/argh<br>
 (version 1.3.1 included for conveniency)
 
-For the test build:
- * Catch2: https://github.com/catchorg/Catch2/
+For the test build only:
+* Catch2: https://github.com/catchorg/Catch2/
 (tested with catch 2.13.4)
 
 

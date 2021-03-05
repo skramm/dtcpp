@@ -1803,7 +1803,7 @@ operator << ( std::ostream& f, const ConfusionMatrix& cm )
 	for( const auto & pci: cm._cmClassIndexMap.left )
 		f << std::setw(w) << pci.first << " ";
 
-	f << "  class\n \\/ ";
+	f << "   class\n \\/ ";
 	priv::printLine( f, w, nbCl );
 	f << "   # | rate\n";
 
@@ -1908,8 +1908,6 @@ prec = \frac{1}{nbC} \cdot \sum_i \frac{tp_i}{tp_i + fp_i}
 \qquad
 \text{recall} = \frac{1}{nbC} \cdot \sum_i \frac{tp_i}{tp_i + fn_i}
 \f]
-
-\todo something fishy here...
 */
 double
 ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
@@ -1922,8 +1920,12 @@ ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
 	{
 		case PerfScore_MC::PRECIS_M:
 			for( size_t i=0; i<nbClasses(); i++ )
-				sum += _mat[i][i] / std::accumulate( std::begin(_mat[i]), std::end(_mat[i]), 0. );
-		break;
+			{
+				auto sum_li = std::accumulate( std::begin(_mat[i]), std::end(_mat[i]), 0. );
+				if( sum_li > 0 )
+					sum += _mat[i][i] / std::accumulate( std::begin(_mat[i]), std::end(_mat[i]), 0. );
+			}
+			break;
 
 		case PerfScore_MC::RECALL_M:
 			for( size_t i=0; i<nbClasses(); i++ )
@@ -1931,9 +1933,11 @@ ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
 				auto sum_col = 0.;
 				for( size_t li=0; li<nbClasses(); li++ )
 					sum_col += _mat[li][i];
-				sum += _mat[i][i] / sum_col;
+				if( sum_col > 0 )
+					sum += _mat[i][i] / sum_col;
 			}
 		break;
+
 		default : assert(0);
 	}
 	return sum / nbClasses();
@@ -2002,14 +2006,16 @@ access the Confusion Matrix. It can be generated from a source dataset with:
 //template<typename T>
 class TrainingTree
 {
+
+	friend void splitNode( vertexT_t, GraphT&, DataSet&, const Params& );
+
 	private:
 #ifdef TESTMODE
 	public:
 #endif
 		GraphT        _graph;
 		vertexT_t     _initialVertex;
-		size_t        _maxDepth = 1;  ///< defined by training
-//		uint          _nbClasses;
+		uint          _maxDepth = 1;  ///< defined by training
 		ClassIndexMap _classIndexMap;  ///< maps class values to index values
 
 	public:
@@ -2035,13 +2041,13 @@ class TrainingTree
 			_graph[_initialVertex]._type = NT_Root;
 		}
 
-		void     train( const DataSet&, Params params=Params() );
+		void     train( DataSet&, Params params=Params() );
 		ConfusionMatrix classify( const DataSet& ) const;
 		ClassVal        classify( const DataPoint& ) const;
 
 		void     printDot( std::string fname ) const;
 		void     printInfo( std::ostream&, const char* msg=0 ) const;
-		size_t   maxDepth() const { return _maxDepth; }
+		uint     maxDepth() const { return _maxDepth; }
 		size_t   nbLeaves() const;
 
 		size_t pruning();
@@ -2627,7 +2633,8 @@ splitNode(
 	vertexT_t         v,         ///< current node id
 	GraphT&           graph,     ///< graph
 	const DataSet&    data,      ///< dataset
-	const Params&     params     ///< parameters
+	const Params&     params,    ///< parameters
+	uint&             maxDepth   ///< maxDepth
 )
 {
 	START;
@@ -2639,7 +2646,6 @@ splitNode(
 // if not, then we are done
 
 	auto nodeContent = getNodeContent( vIdx, data );
-//	COUT << nodeContent;
 
 	graph[v]._class = nodeContent.dominantClass;
 	graph[v]._giniImpurity = nodeContent.ncGiniImpurity;
@@ -2700,6 +2706,7 @@ splitNode(
 	auto v1v2 = addChildPair( v, graph, vIdx.size() );
 	auto v1 = v1v2.first;
 	auto v2 = v1v2.second;
+	maxDepth = std::max( maxDepth, graph[v1]._depth );
 
 	for( auto idx: vIdx )           // separate the data points into two sets
 	{
@@ -2712,10 +2719,10 @@ splitNode(
 	COUT << "after split: v1:"<< graph[v1].v_Idx.size() << " points, v2:"<< graph[v2].v_Idx.size() << " points\n";
 
 	if( graph[v1].v_Idx.size() )
-		splitNode( v1, graph, data, params );
+		splitNode( v1, graph, data, params, maxDepth );
 
 	if( graph[v2].v_Idx.size() )
-		splitNode( v2, graph, data, params );
+		splitNode( v2, graph, data, params, maxDepth );
 }
 
 //---------------------------------------------------------------------
@@ -2823,7 +2830,7 @@ TrainingTree::pruning()
 */
 //template<typename T>
 void
-TrainingTree::train( const DataSet& data, const Params params )
+TrainingTree::train( DataSet& data, const Params params )
 {
 	START;
 	LOG( 0, "Start training" );
@@ -2851,7 +2858,7 @@ TrainingTree::train( const DataSet& data, const Params params )
 
 	_graph[_initialVertex].v_Idx = v_idx;
 	COUT << "INTIAL ID=" << _graph[_initialVertex]._nodeId << '\n';
-	priv::splitNode( _initialVertex, _graph, data, params ); // Call the "split" function (recursive)
+	priv::splitNode( _initialVertex, _graph, data, params, _maxDepth ); // Call the "split" function (recursive)
 
 	assert( nbLeaves() > 1 );  // has to be at least 2 leaves
 	LOG( 0, "Training done" );

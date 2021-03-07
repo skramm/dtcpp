@@ -39,57 +39,62 @@ using namespace dtcpp;
 
 using PairAtvalClass = std::pair<float,ClassVal>;
 
-struct MyHistogram;
-//---------------------------------------------------------------------
-/// A histogram bin for MyHistogram, holds an occurrence counter and a class counter
-template<typename T>
-struct MyBin
-{
-	friend struct MyHistogram;
-
-	private:
-		std::map<ClassVal,size_t> _mClassCounter;
-		float                     _startValue;
-		float                     _endValue;
-		std::vector<size_t>       _vIdxPt;      ///< indexes of the points in original dataset
-
-	public:
-		MyBin( float v1, float v2 )
-			: _startValue(v1), _endValue(v2)
-		{
-			assert( v1 < v2 );
-		}
-		MyBin()
-		{}
-
-	/// A bin can be split if more then 1 classes and more than 2 points
-		bool isSplittable() const
-		{
-			if( _vIdxPt.size() > 2 && _mClassCounter.size() > 1 )
-				return true;
-			return false;
-		}
-		size_t size()      const { return _vIdxPt.size(); }
-		size_t nbClasses() const { return _mClassCounter.size(); }
-		std::pair<T,T> getBorders() const
-		{
-			return std::make_pair( _startValue, _endValue );
-		}
-};
-
 
 //---------------------------------------------------------------------
 /// Variable bin-size histogram
-struct MyHistogram
+template<typename U>
+struct VBS_Histogram
 {
+//---------------------------------------------------------------------
+	/// Inner class, a histogram bin for VBS_Histogram, holds an occurrence counter and a class counter
+	template<typename T>
+	struct HBin
+	{
+		friend struct VBS_Histogram;
+
+		private:
+			std::map<ClassVal,size_t> _mClassCounter;
+			T                         _startValue;
+			T                         _endValue;
+			std::vector<size_t>       _vIdxPt;      ///< indexes of the points in original dataset
+
+		public:
+			HBin( float v1, float v2 )
+				: _startValue(v1), _endValue(v2)
+			{
+				assert( v1 < v2 );
+			}
+			HBin()
+			{}
+
+		/// A bin can be split if more then 1 classes and more than 2 points
+			bool isSplittable() const
+			{
+				if( _vIdxPt.size() > 2 && _mClassCounter.size() > 1 )
+					return true;
+				return false;
+			}
+			size_t size()      const { return _vIdxPt.size(); }
+			size_t nbClasses() const { return _mClassCounter.size(); }
+			std::pair<T,T> getBorders() const
+			{
+				return std::make_pair( _startValue, _endValue );
+			}
+			friend std::ostream& operator << ( std::ostream& f, const HBin& b )
+			{
+				f << "Bin: " << b.size() << " pts, " << b.nbClasses() << " classes, range=" << b._startValue << "-" << b._endValue << '\n';
+				return f;
+			}
+	};
+
 	private:
 		const std::vector<PairAtvalClass>* p_src = 0;  ///< pointer on source data
-		std::list<MyBin<float>> _lBins;
+		std::list<HBin<float>> _lBins;
 		double _step;
 		double _vmin;
 
 	public:
-		MyHistogram( const std::vector<PairAtvalClass>& src, size_t nbBins, float vmin, float vmax )
+		VBS_Histogram( const std::vector<PairAtvalClass>& src, size_t nbBins, float vmin, float vmax )
 			: p_src( &src )
 			, _vmin(vmin)
 		{
@@ -111,8 +116,9 @@ struct MyHistogram
 		auto end()   { return _lBins.end();   }
 
 		size_t nbBins() const { return _lBins.size(); }
-
-		void print( std::ostream& ) const;
+		void mergeSearch();
+		void splitSearch();
+		void print( std::ostream&, const char* msg=0 ) const;
 		PairAtvalClass getPoint(size_t idx) const
 		{
 			assert( p_src );
@@ -123,8 +129,9 @@ struct MyHistogram
 };
 
 //---------------------------------------------------------------------
+template<typename T>
 void
-MyHistogram::assignToBin( const PairAtvalClass& pac, size_t idx )
+VBS_Histogram<T>::assignToBin( const PairAtvalClass& pac, size_t idx )
 {
 	bool keepOn = true;
 
@@ -143,21 +150,23 @@ MyHistogram::assignToBin( const PairAtvalClass& pac, size_t idx )
 }
 
 //---------------------------------------------------------------------
+template<typename T>
 void
-MyHistogram::print( std::ostream& f ) const
+VBS_Histogram<T>::print( std::ostream& f, const char* msg ) const
 {
-	f << "HISTOGRAM, nb bins=" << nbBins()
-		<< " v0=" << _vmin << " step=" << _step
-		<< '\n';
+	f << "HISTOGRAM - ";
+	if( msg )
+		f << msg;
+	f << ", nb bins=" << nbBins() << " v0=" << _vmin << '\n';
 	size_t i=0;
 	for( const auto& bin: _lBins )
-	{
-		f << "bin " << i++ << " nb pts=" << bin.size() << " nb classes=" << bin.nbClasses() << '\n';
-	}
+		f << "bin " << i++ << ": " << bin;
 }
 //---------------------------------------------------------------------
+/// Attempt to split a bin, returns true if a split occured
+template<typename T>
 bool
-MyHistogram::splitBin( decltype( _lBins.begin() ) it )
+VBS_Histogram<T>::splitBin( decltype( _lBins.begin() ) it )
 {
 	START;
 
@@ -170,13 +179,11 @@ MyHistogram::splitBin( decltype( _lBins.begin() ) it )
 	if( bin.isSplittable() )
 	{
 		cout << " -splittable, bin has " << bin.size() << " pts and " << bin.nbClasses() << " classes\n";
-//		auto v1 = bin._startValue;
-//		auto v2 = v1 + _step;
 		auto start2 = ( bin._startValue + bin._endValue ) / 2.;
 		cout << "old thres: " << bin._startValue << " - " << bin._endValue << '\n';
 		cout << "new thres: " << bin._startValue << " - " << start2 << " - " << bin._endValue << '\n';
 
-		MyBin<float> newBin( start2, bin._endValue );
+		VBS_Histogram::HBin<float> newBin( start2, bin._endValue );
 
 		std::vector<size_t> newvec;  // new vector of indexes for the current bin
 		newvec.reserve( bin.size() );
@@ -202,8 +209,8 @@ MyHistogram::splitBin( decltype( _lBins.begin() ) it )
 		_lBins.insert( it_next, newBin );
 
 		COUT << "current bin: " << bin.size() << " pts, new bin:" << newBin.size() << " pts\n";
-		auto b1 = splitBin( it );
-		auto b2 = splitBin( std::next(it) );
+		splitBin( it );
+		splitBin( std::next(it) );
 
 		retval = true;
 	}
@@ -215,7 +222,85 @@ MyHistogram::splitBin( decltype( _lBins.begin() ) it )
 }
 
 //---------------------------------------------------------------------
-MyHistogram
+/// Searches for any splits
+template<typename T>
+void
+VBS_Histogram<T>::splitSearch()
+{
+	COUT << "Start splitting, nb bins=" << nbBins() << '\n';
+
+	int iter1 = 0;
+	bool splitOccured = false;
+	do
+	{
+		COUT << "iter1 " << iter1++ << '\n';
+		splitOccured = false;
+		int iter2 = 0;
+		auto it = _lBins.begin();
+		do
+		{
+			COUT << "iter2 " << iter2++ << '\n';
+			splitOccured = splitBin( it );
+			it = std::next(it);
+		}
+		while( !splitOccured && it != std::end(_lBins) );
+	}
+	while( splitOccured );
+}
+//---------------------------------------------------------------------
+/// Searches for any potential merges (adjacent bins holding same class)
+template<typename T>
+void
+VBS_Histogram<T>::mergeSearch()
+{
+	COUT << "Start merge search, nb bins=" << nbBins() << '\n';
+	bool mergeOccurred = false;
+	do
+	{
+		COUT << "LOOP1 start, nb bins=" << nbBins() << '\n';
+		auto it = _lBins.begin();
+		mergeOccurred = false;
+		do
+		{
+			COUT << "LOOP2 start, nb bins=" << nbBins() << '\n';
+			if( std::next(it) != std::end(_lBins) ) // if there is a next bin
+			{
+				auto& b1 = *it;
+				auto& b2 = *std::next(it);
+				std::cout << "b1: " << b1;
+				std::cout << "b2: " << b2;
+
+				if( b1.nbClasses() == 1 && b2.nbClasses() == 1 )
+				{
+					auto itc1 = b1._mClassCounter.begin();
+					auto itc2 = b2._mClassCounter.begin();
+					COUT << "classes: " << itc1->first << "-" << itc2->first  << '\n';
+//					COUT << "classes: " << *itc1 << "-" << *itc2->first  << '\n';
+					if( itc1->first  == itc2->first  )                        // if they hold the same class
+					{
+						COUT << "same class, merging bins\n";
+						b1._vIdxPt.insert(                        // then copy the points from b2 into b1
+							b1._vIdxPt.end(),
+							b2._vIdxPt.begin(),
+							b2._vIdxPt.end()
+						);
+						b1._endValue = b2._endValue;
+						mergeOccurred = true;
+						_lBins.erase( it );
+					}
+				}
+			}
+			if( !mergeOccurred )
+				it = std::next(it);
+		}
+		while( !mergeOccurred && it != std::end(_lBins) );
+	}
+	while( mergeOccurred );
+
+}
+//---------------------------------------------------------------------
+template<typename T>
+VBS_Histogram<T>
 buildHistogram(
 	const std::vector<PairAtvalClass>& v_pac,   ///< input vector of pairs (attribute value,class)
 	size_t                             nbBins   ///< initial nb of bins
@@ -238,7 +323,7 @@ buildHistogram(
 	auto val_min = *itmin;
 	auto val_max = *itmax;    // sets min and max values
 
-	MyHistogram histo( v_pac, nbBins, val_min.first, val_max.first );
+	VBS_Histogram<T> histo( v_pac, nbBins, val_min.first, val_max.first );
 
 	for( size_t i=0; i<v_pac.size(); i++ )
 		histo.assignToBin( v_pac[i], i );
@@ -254,31 +339,18 @@ getThresholds( const std::vector<PairAtvalClass>& v_pac, int nbBins )
 {
 	START;
 // Step 1 - build histogram, even spaced
-	auto histo = buildHistogram( v_pac, nbBins );
-	histo.print( std::cout );
+	auto histo = buildHistogram<float>( v_pac, nbBins );
+	histo.print( std::cout, "AFTER BUILD" );
 
 // Step 2 - split bins (that need to be split)
-	COUT << "Start splitting, nb bins=" << histo.nbBins() << '\n';
+	histo.splitSearch();
+	histo.print( std::cout, "AFTER SPLIT" );
 
-	int iter1 = 0;
-	bool splitOccured = false;
-	do
-	{
-		COUT << "iter1 " << iter1++ << '\n';
-		splitOccured = false;
-		int iter2 = 0;
-		auto it = histo.begin();
-		do
-		{
-			COUT << "iter2 " << iter2++ << '\n';
-			splitOccured = histo.splitBin( it );
-			it = std::next(it);
-		}
-		while( !splitOccured && it != std::end(histo) );
-	}
-	while( splitOccured );
+// Step 3 - merge adjacent bins holding same class
+	histo.mergeSearch();
+	histo.print( std::cout, "AFTER MERGE" );
 
-// Step 3 - build thresholds from bins
+// Step 4 - build thresholds from bins
 	std::vector<float> vThres( histo.nbBins()-1 );
 
 	size_t i=0;
@@ -296,7 +368,7 @@ int main()
 {
 	auto c1 = ClassVal(1);
 	auto c2 = ClassVal(2);
-	auto c3 = ClassVal(3);
+//	auto c3 = ClassVal(3);
 	std::vector<PairAtvalClass> vpac{
 		{ 0., c1 },
 		{ 0.5, c1 },

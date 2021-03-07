@@ -30,6 +30,19 @@
 					<Add option="-s" />
 				</Linker>
 			</Target>
+			<Target title="temp1">
+				<Option output="build/bin/dectree" prefix_auto="0" extension_auto="1" />
+				<Option object_output="build/obj/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-O2" />
+					<Add option="-std=gnu++14" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+				</Linker>
+			</Target>
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
@@ -52,6 +65,10 @@
 		</Unit>
 		<Unit filename="../sample_data/readme.md">
 			<Option target="&lt;{~None~}&gt;" />
+		</Unit>
+		<Unit filename="../temp1.cpp">
+			<Option target="test" />
+			<Option target="temp1" />
 		</Unit>
 		<Unit filename="../test_catch.cpp">
 			<Option target="test" />

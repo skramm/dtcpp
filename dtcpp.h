@@ -2394,6 +2394,7 @@ struct AttributeData
 	}
 };
 
+
 //---------------------------------------------------------------------
 /// Compute best threshold for attribute \c atIdx, using the Gini Impurity, for the subset of data given by \c v_dpidx.
 /**
@@ -2418,8 +2419,8 @@ computeBestThreshold(
 	START;
 //	LOG(3, "Searching best threshold for attrib=" << atIdx );
 
+#if 1
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
-
 	std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
 	for( size_t i=0; i<v_dpidx.size(); i++ )
 		v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
@@ -2437,7 +2438,16 @@ computeBestThreshold(
 	std::vector<float> v_thresVal( v_attribVal.size()-1 ); // if 10 values, then only 9 thresholds
 	for( uint i=0; i<v_thresVal.size(); i++ )
 		v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
+#else
+	std::vector<PairAtvalClass> v_pac( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
+	for( size_t i=0; i<v_dpidx.size(); i++ )
+		v_pac[i] = std::make_pair(
+			data.getDataPoint( v_dpidx[i] ).attribVal( atIdx ),
+			data.getDataPoint( v_dpidx[i] ).classVal()
+		);
+	auto v_thresVal = getThresholds( v_pac );
 
+#endif
 	LOG(3, "Searching best threshold for attrib=" << atIdx << " among " << v_thresVal.size() << " thresholds, based on " << v_dpidx.size() << " pts" );
 
 // step 2: compute IG for each threshold value

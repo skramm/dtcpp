@@ -7,8 +7,8 @@
 		<Option compiler="gcc" />
 		<Build>
 			<Target title="main">
-				<Option output="build/bin/dectree" prefix_auto="0" extension_auto="1" />
-				<Option object_output="build/obj/" />
+				<Option output="../build/bin/dectree" prefix_auto="0" extension_auto="1" />
+				<Option object_output="../build/obj/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Compiler>
@@ -19,8 +19,8 @@
 				</Linker>
 			</Target>
 			<Target title="test">
-				<Option output="build/bin/test_catch" prefix_auto="0" extension_auto="1" />
-				<Option object_output="build/obj/" />
+				<Option output="../build/bin/test_catch" prefix_auto="0" extension_auto="1" />
+				<Option object_output="../build/obj/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Compiler>
@@ -31,8 +31,8 @@
 				</Linker>
 			</Target>
 			<Target title="temp1">
-				<Option output="build/bin/dectree" prefix_auto="0" extension_auto="1" />
-				<Option object_output="build/obj/" />
+				<Option output="../build/bin/temp1" prefix_auto="0" extension_auto="1" />
+				<Option object_output="../build/obj/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Compiler>

@@ -1780,11 +1780,9 @@ namespace priv {
 // % % % % % % % % % % % % % %
 void printLine( std::ostream& f, uint w, uint n )
 {
-//	n++;
-	f << '|';
-	for( uint i=0; i<=(w+1)*n; i++ )
-		f << '-';
-	f <<"|";
+	f << '|'
+		<< std::string( (w+1)*n+1, '-' )
+		<< '|';
 }
 // % % % % % % % % % % % % % %
 } // namespace priv

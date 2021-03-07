@@ -1,7 +1,10 @@
 
 //#include <boost/histogram.hpp>
 #define DEBUG
+#define DEBUG_START
+
 #include "dtcpp.h"
+#include <algorithm>
 #include <iostream>
 #include <map>
 #include <list>
@@ -34,29 +37,44 @@ h( make_pair( .23, 3 );
 using namespace std;
 using namespace dtcpp;
 
-//using namespace boost::histogram;
 using PairAtvalClass = std::pair<float,ClassVal>;
 
 struct MyHistogram;
 //---------------------------------------------------------------------
 /// A histogram bin for MyHistogram, holds an occurrence counter and a class counter
+template<typename T>
 struct MyBin
 {
 	friend struct MyHistogram;
 
-	std::map<ClassVal,size_t> _mClassCounter;
-	float                     _startValue;
-	std::vector<size_t>       _vIdxPt;      ///< indexes of the points in original dataset
+	private:
+		std::map<ClassVal,size_t> _mClassCounter;
+		float                     _startValue;
+		float                     _endValue;
+		std::vector<size_t>       _vIdxPt;      ///< indexes of the points in original dataset
 
-/// A bin can be split if more then 1 classes and more than 2 points
-	bool isSplittable() const
-	{
-		if( _vIdxPt.size() > 2 && _mClassCounter.size() > 1 )
-			return true;
-		return false;
-	}
-	size_t size()      const { return _vIdxPt.size(); }
-	size_t nbClasses() const { return _mClassCounter.size(); }
+	public:
+		MyBin( float v1, float v2 )
+			: _startValue(v1), _endValue(v2)
+		{
+			assert( v1 < v2 );
+		}
+		MyBin()
+		{}
+
+	/// A bin can be split if more then 1 classes and more than 2 points
+		bool isSplittable() const
+		{
+			if( _vIdxPt.size() > 2 && _mClassCounter.size() > 1 )
+				return true;
+			return false;
+		}
+		size_t size()      const { return _vIdxPt.size(); }
+		size_t nbClasses() const { return _mClassCounter.size(); }
+		std::pair<T,T> getBorders() const
+		{
+			return std::make_pair( _startValue, _endValue );
+		}
 };
 
 
@@ -66,7 +84,7 @@ struct MyHistogram
 {
 	private:
 		const std::vector<PairAtvalClass>* p_src = 0;  ///< pointer on source data
-		std::list<MyBin> _lBins;
+		std::list<MyBin<float>> _lBins;
 		double _step;
 		double _vmin;
 
@@ -75,13 +93,16 @@ struct MyHistogram
 			: p_src( &src )
 			, _vmin(vmin)
 		{
-			_step = (vmax - vmin) / nbBins;
-//			COUT << "STEP=" << _step << '\n';
+			auto step = (vmax - vmin) / nbBins;
 			_lBins.resize( nbBins );
 
 			int i = 0;
 			for( auto& b: _lBins )
-				b._startValue = vmin + i++ * _step;
+			{
+				b._startValue = vmin + i     * step;
+				b._endValue   = vmin + (i+1) * step;
+				i++;
+			}
 		}
 
 		const auto begin() const { return _lBins.begin(); }
@@ -105,37 +126,19 @@ struct MyHistogram
 void
 MyHistogram::assignToBin( const PairAtvalClass& pac, size_t idx )
 {
-	bool match = true;
-	auto it_prev = _lBins.begin();
-	COUT << "searching bin for val=" << pac.first << '\n';
-	for( auto it=_lBins.begin(); it!=_lBins.end() && match; it++ )    // iterate the bins, except the last one
-	{
-		match = false;
-		auto& bin = *it;
-//		COUT << "trying thres "<< bin._startValue << '\n';
-		if( pac.first >= bin._startValue )
-		{
-			match = true;
-//			std::cout << "higher !\n";
-		}
+	bool keepOn = true;
 
-		if( match == false )
+	COUT << "searching bin for val=" << pac.first << '\n';
+	for( auto it=_lBins.begin(); it!=_lBins.end() && keepOn; it++ )    // iterate on the bins
+	{
+		keepOn = true;
+		auto& bin = *it;
+		if( pac.first >= bin._startValue && pac.first < bin._endValue )
 		{
-//			COUT << "FOUND!\n";
-			auto& bin_prev = *it_prev;
-			bin_prev._vIdxPt.push_back( idx );
-			bin_prev._mClassCounter[pac.second]++;
+			bin._vIdxPt.push_back( idx );
+			bin._mClassCounter[pac.second]++;
+			keepOn = false;
 		}
-		else
-		{
-			if( std::next(it)==_lBins.end() )  // for values going in last bin
-			{
-//				COUT << "FOUND LAST!\n";
-				bin._vIdxPt.push_back( idx );
-				bin._mClassCounter[pac.second]++;
-			}
-		}
-		it_prev = it;
 	}
 }
 
@@ -156,21 +159,24 @@ MyHistogram::print( std::ostream& f ) const
 bool
 MyHistogram::splitBin( decltype( _lBins.begin() ) it )
 {
+	START;
+
+	static int depth;
+
 	bool retval = false;
 	auto& bin = *it;                // current bin
 	auto it_next = std::next(it);  // next one (will insert before this one)
-	cout << "-start split bin at " << bin._startValue << '\n';
+	COUT<< "depth=" << depth++ << " start split bin with thres=" << bin._startValue << '\n';
 	if( bin.isSplittable() )
 	{
-		cout << " -splittable, bin has " << bin.size() << " pts\n";
-		auto v1 = bin._startValue;
-		auto v2 = v1 + _step;
-		auto start2 = (v1+v2) / 2.;
-		cout << "old thres: " << v1 << " - " << v2 << '\n';
-		cout << "new thres: " << v1 << " - " << start2 << " - " << v2 << '\n';
+		cout << " -splittable, bin has " << bin.size() << " pts and " << bin.nbClasses() << " classes\n";
+//		auto v1 = bin._startValue;
+//		auto v2 = v1 + _step;
+		auto start2 = ( bin._startValue + bin._endValue ) / 2.;
+		cout << "old thres: " << bin._startValue << " - " << bin._endValue << '\n';
+		cout << "new thres: " << bin._startValue << " - " << start2 << " - " << bin._endValue << '\n';
 
-		MyBin newBin;
-		newBin._startValue = start2;
+		MyBin<float> newBin( start2, bin._endValue );
 
 		std::vector<size_t> newvec;  // new vector of indexes for the current bin
 		newvec.reserve( bin.size() );
@@ -178,7 +184,7 @@ MyHistogram::splitBin( decltype( _lBins.begin() ) it )
 
 		for( const auto idx: bin._vIdxPt )  // parse the points
 		{
-			COUT << "checling point " << idx << '\n';
+			COUT << "checking point " << idx << '\n';
 			auto pt = getPoint(idx);        // and distribute them in
 			if( pt.first >= start2 )           // the two bins
 			{
@@ -192,8 +198,10 @@ MyHistogram::splitBin( decltype( _lBins.begin() ) it )
 			}
 		}
 		bin._vIdxPt = newvec;        // copy new vector of indexes for current bin
+		bin._endValue = start2;
 		_lBins.insert( it_next, newBin );
 
+		COUT << "current bin: " << bin.size() << " pts, new bin:" << newBin.size() << " pts\n";
 		auto b1 = splitBin( it );
 		auto b2 = splitBin( std::next(it) );
 
@@ -202,6 +210,7 @@ MyHistogram::splitBin( decltype( _lBins.begin() ) it )
 	else
 		cout << " -NOT splittable!\n";
 
+	depth--;
 	return retval;
 }
 
@@ -212,6 +221,8 @@ buildHistogram(
 	size_t                             nbBins   ///< initial nb of bins
 )
 {
+	START;
+
 	auto it_mm = std::minmax_element(
 		v_pac.begin(),
 		v_pac.end(),
@@ -227,16 +238,10 @@ buildHistogram(
 	auto val_min = *itmin;
 	auto val_max = *itmax;    // sets min and max values
 
-	cout << "min=" << val_min.first << "-" << val_min.second << '\n';
-	cout << "max=" << val_max.first << "-" << val_max.second << '\n';
-
 	MyHistogram histo( v_pac, nbBins, val_min.first, val_max.first );
 
 	for( size_t i=0; i<v_pac.size(); i++ )
 		histo.assignToBin( v_pac[i], i );
-
-//	for( const auto& p: v_pac )
-//		histo.assignToBin( p );
 
 	return histo;
 }
@@ -247,19 +252,20 @@ buildHistogram(
 std::vector<float>
 getThresholds( const std::vector<PairAtvalClass>& v_pac, int nbBins )
 {
+	START;
+// Step 1 - build histogram, even spaced
 	auto histo = buildHistogram( v_pac, nbBins );
-
 	histo.print( std::cout );
-	cout << "Start splitting, nb bins=" << histo.nbBins();
 
-	for( auto it=histo.begin(); it!=histo.end(); it++ )
+// Step 2 - split bins (that need to be split)
+	COUT << "Start splitting, nb bins=" << histo.nbBins() << '\n';
 
-	bool splitOccured = false;
 	int iter1 = 0;
-
+	bool splitOccured = false;
 	do
 	{
 		COUT << "iter1 " << iter1++ << '\n';
+		splitOccured = false;
 		int iter2 = 0;
 		auto it = histo.begin();
 		do
@@ -268,14 +274,24 @@ getThresholds( const std::vector<PairAtvalClass>& v_pac, int nbBins )
 			splitOccured = histo.splitBin( it );
 			it = std::next(it);
 		}
-		while( !splitOccured && it != std::end(it); );
+		while( !splitOccured && it != std::end(histo) );
 	}
 	while( splitOccured );
 
-	std::vector<float> ret;
-	return ret;
+// Step 3 - build thresholds from bins
+	std::vector<float> vThres( histo.nbBins()-1 );
+
+	size_t i=0;
+	for( auto it=histo.begin(); it != histo.end(); it++ )
+	{
+		if( std::next(it) !=  histo.end() )
+			vThres[i++] = it->getBorders().second;
+	}
+
+	return vThres;
 }
 
+//---------------------------------------------------------------------
 int main()
 {
 	auto c1 = ClassVal(1);
@@ -289,11 +305,9 @@ int main()
 		{ 0.8, c2 },
 		{ 3,   c2 },
 	};
-/*	vpac.push_back( std::make_pair( 0., ClassVal(1) ) );
-	vpac.push_back( std::make_pair( 0.6, ClassVal(1) ) );
-	vpac.push_back( std::make_pair( 0.7, ClassVal(1) ) );
-	vpac.push_back( std::make_pair(   3, ClassVal(2) ) );*/
 	auto vThres = getThresholds( vpac, 3 );
+	priv::printVector( std::cout, vThres );
+
 	std::cout << "Done !\n";
 }
-
+//---------------------------------------------------------------------

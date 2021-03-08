@@ -2,6 +2,7 @@
 //#include <boost/histogram.hpp>
 #define DEBUG
 #define DEBUG_START
+#define BIN_PRINT_POINTS
 
 #include "dtcpp.h"
 #include <algorithm>
@@ -11,7 +12,6 @@
 #include <cmath>
 
 /**
-https://www.boost.org/doc/libs/1_70_0/libs/histogram/doc/html/histogram/guide.html#histogram.guide.expert
 
   /\
   |
@@ -31,8 +31,6 @@ h( make_pair( .21, 2 );
 h( make_pair( .22, 2 );
 h( make_pair( .23, 3 );
 
-
-
 */
 using namespace std;
 using namespace dtcpp;
@@ -41,12 +39,12 @@ using PairAtvalClass = std::pair<float,ClassVal>;
 
 
 //---------------------------------------------------------------------
-/// Variable bin-size histogram
+/// Variable bin-size histogram, argument type is the floating-point type (\c float or \c double)
 template<typename U>
 struct VBS_Histogram
 {
 //---------------------------------------------------------------------
-	/// Inner class, a histogram bin for VBS_Histogram, holds an occurrence counter and a class counter
+/// Inner class, a histogram bin for VBS_Histogram, holds an occurrence counter and a class counter
 	template<typename T>
 	struct HBin
 	{
@@ -83,51 +81,73 @@ struct VBS_Histogram
 			friend std::ostream& operator << ( std::ostream& f, const HBin& b )
 			{
 				f << "Bin: " << b.size() << " pts, " << b.nbClasses() << " classes, range=" << b._startValue << "-" << b._endValue << '\n';
+#ifdef BIN_PRINT_POINTS
+				f << " points: ";
+					priv::printVector( f, b._vIdxPt );
+#endif // BIN_PRINT_POINTS
 				return f;
 			}
 	};
 
 	private:
 		const std::vector<PairAtvalClass>* p_src = 0;  ///< pointer on source data
-		std::list<HBin<float>> _lBins;
-		double _step;
-		double _vmin;
+		std::list<HBin<U>> _lBins;                     ///< list of bins
 
 	public:
-		VBS_Histogram( const std::vector<PairAtvalClass>& src, size_t nbBins, float vmin, float vmax )
-			: p_src( &src )
-			, _vmin(vmin)
-		{
-			auto step = (vmax - vmin) / nbBins;
-			_lBins.resize( nbBins );
-
-			int i = 0;
-			for( auto& b: _lBins )
-			{
-				b._startValue = vmin + i     * step;
-				b._endValue   = vmin + (i+1) * step;
-				i++;
-			}
-		}
+		VBS_Histogram( const std::vector<PairAtvalClass>& src, size_t nbBins );
 
 		const auto begin() const { return _lBins.begin(); }
 		const auto end()   const { return _lBins.end();   }
-		auto begin() { return _lBins.begin(); }
-		auto end()   { return _lBins.end();   }
 
 		size_t nbBins() const { return _lBins.size(); }
 		void mergeSearch();
 		void splitSearch();
 		void print( std::ostream&, const char* msg=0 ) const;
-		PairAtvalClass getPoint(size_t idx) const
-		{
-			assert( p_src );
-			return p_src->at(idx);
-		}
-		bool splitBin( decltype( _lBins.begin() ) );
+
+	private:
 		void assignToBin( const PairAtvalClass& pac, size_t idx );
+		bool splitBin( decltype( _lBins.begin() ) );
 };
 
+//---------------------------------------------------------------------
+/// Constructor, creates bins evenly spaced
+template<typename T>
+VBS_Histogram<T>::VBS_Histogram( const std::vector<PairAtvalClass>& v_pac, size_t nbBins )
+	: p_src( &v_pac )
+{
+	assert( v_pac.size() );
+	auto it_mm = std::minmax_element(
+		v_pac.begin(),
+		v_pac.end(),
+		[]                                                          // lambda
+		( const auto& p1, const auto& p2 )
+		{
+			return p1.first < p2.first;
+		}
+	);
+
+	auto itmin = it_mm.first;
+	auto itmax = it_mm.second;
+	auto val_min = *itmin;
+	auto val_max = *itmax;    // sets min and max values
+
+	auto vmin = val_min.first;
+	auto vmax = val_max.first;
+
+	auto step = (vmax - vmin) / nbBins;
+	_lBins.resize( nbBins );
+
+	int i = 0;
+	for( auto& bin: _lBins )
+	{
+		bin._startValue = vmin + i     * step;
+		bin._endValue   = vmin + (i+1) * step;
+		i++;
+	}
+
+	for( size_t i=0; i<v_pac.size(); i++ )
+		assignToBin( v_pac[i], i );
+}
 //---------------------------------------------------------------------
 template<typename T>
 void
@@ -147,6 +167,13 @@ VBS_Histogram<T>::assignToBin( const PairAtvalClass& pac, size_t idx )
 			keepOn = false;
 		}
 	}
+
+	if( keepOn )  // needed for the value used to compute the histogram range:
+	{             // if point did not fit in any of the other bins, then we put it in the last bin
+		auto& bin = _lBins.back();
+		bin._vIdxPt.push_back( idx );
+		bin._mClassCounter[pac.second]++;
+	}
 }
 
 //---------------------------------------------------------------------
@@ -157,7 +184,7 @@ VBS_Histogram<T>::print( std::ostream& f, const char* msg ) const
 	f << "HISTOGRAM - ";
 	if( msg )
 		f << msg;
-	f << ", nb bins=" << nbBins() << " v0=" << _vmin << '\n';
+	f << ", nb bins=" << nbBins() << '\n';
 	size_t i=0;
 	for( const auto& bin: _lBins )
 		f << "bin " << i++ << ": " << bin;
@@ -170,6 +197,7 @@ VBS_Histogram<T>::splitBin( decltype( _lBins.begin() ) it )
 {
 	START;
 
+	assert( p_src );
 	static int depth;
 
 	bool retval = false;
@@ -192,7 +220,7 @@ VBS_Histogram<T>::splitBin( decltype( _lBins.begin() ) it )
 		for( const auto idx: bin._vIdxPt )  // parse the points
 		{
 			COUT << "checking point " << idx << '\n';
-			auto pt = getPoint(idx);        // and distribute them in
+			auto pt = p_src->at(idx);        // and distribute them in
 			if( pt.first >= start2 )           // the two bins
 			{
 				newBin._mClassCounter[ pt.second ]++;
@@ -299,50 +327,19 @@ VBS_Histogram<T>::mergeSearch()
 
 }
 //---------------------------------------------------------------------
-template<typename T>
-VBS_Histogram<T>
-buildHistogram(
-	const std::vector<PairAtvalClass>& v_pac,   ///< input vector of pairs (attribute value,class)
-	size_t                             nbBins   ///< initial nb of bins
-)
-{
-	START;
-
-	auto it_mm = std::minmax_element(
-		v_pac.begin(),
-		v_pac.end(),
-		[]                                                          // lambda
-		( const auto& p1, const auto& p2 )
-		{
-			return p1.first < p2.first;
-		}
-	);
-
-	auto itmin = it_mm.first;
-	auto itmax = it_mm.second;
-	auto val_min = *itmin;
-	auto val_max = *itmax;    // sets min and max values
-
-	VBS_Histogram<T> histo( v_pac, nbBins, val_min.first, val_max.first );
-
-	for( size_t i=0; i<v_pac.size(); i++ )
-		histo.assignToBin( v_pac[i], i );
-
-	return histo;
-}
-
-//---------------------------------------------------------------------
 /// Input:  a vector or pairs, size=nb of points in data set
 /// first value: the attribute value, second: the class value
 std::vector<float>
 getThresholds( const std::vector<PairAtvalClass>& v_pac, int nbBins )
 {
 	START;
-// Step 1 - build histogram, even spaced
-	auto histo = buildHistogram<float>( v_pac, nbBins );
+
+// Step 1 - build initial histogram, evenly spaced
+	VBS_Histogram<float> histo( v_pac, nbBins );
+
 	histo.print( std::cout, "AFTER BUILD" );
 
-// Step 2 - split bins (that need to be split)
+// Step 2 - split bins that need to be splitted
 	histo.splitSearch();
 	histo.print( std::cout, "AFTER SPLIT" );
 
@@ -378,7 +375,7 @@ int main()
 		{ 3,   c2 },
 	};
 	auto vThres = getThresholds( vpac, 3 );
-	priv::printVector( std::cout, vThres );
+	priv::printVector( std::cout, vThres, "threshold values" );
 
 	std::cout << "Done !\n";
 }

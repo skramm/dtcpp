@@ -240,7 +240,8 @@ printVector( std::ostream& f, const std::vector<T>& vec, const char* msg=0, bool
 		else
 			f << "-";
 	}
-	f << '\n';
+	if( !vec.empty() )
+		f << '\n';
 }
 /// General utility function
 template<typename K, typename V>

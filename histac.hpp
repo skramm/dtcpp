@@ -49,9 +49,12 @@ struct VBS_Histogram
 		/// A bin can be split if more then 1 classes and more than 2 points
 			bool isSplittable() const
 			{
-				if( _vIdxPt.size() > 2 && _mClassCounter.size() > 1 )
-					return true;
-				return false;
+				if( _vIdxPt.size() < 2 )  // not enough points
+					return false;
+
+				if( _mClassCounter.size() < 2 )  // single class, no need to split
+					return false;
+				return true;
 			}
 			size_t size()      const { return _vIdxPt.size(); }
 			size_t nbClasses() const { return _mClassCounter.size(); }
@@ -87,7 +90,7 @@ struct VBS_Histogram
 
 	private:
 		void assignToBin( const std::pair<U,KEY>& pac, size_t idx );
-		bool splitBin( decltype( _lBins.begin() ) );
+		bool splitBin( decltype( _lBins.begin() ), char side );
 };
 
 //---------------------------------------------------------------------
@@ -175,7 +178,7 @@ VBS_Histogram<T,KEY>::print( std::ostream& f, const char* msg ) const
 /// \todo don't create bin if no points to store in it !
 template<typename T,typename KEY>
 bool
-VBS_Histogram<T,KEY>::splitBin( decltype( _lBins.begin() ) it )
+VBS_Histogram<T,KEY>::splitBin( decltype( _lBins.begin() ) it, char side )
 {
 	assert( p_src );
 	static int depth;
@@ -183,47 +186,55 @@ VBS_Histogram<T,KEY>::splitBin( decltype( _lBins.begin() ) it )
 	bool retval = false;
 	auto& bin = *it;                // current bin
 	auto it_next = std::next(it);  // next one (will insert before this one)
-	COUT<< "depth=" << depth++ << " start split bin " << bin << '\n';
+	COUT << side << ": depth=" << depth++ << " start split bin " << bin << '\n';
 	if( bin.isSplittable() )
 	{
 		std::cout << "  => splittable\n";
-		auto start2 = ( bin._startValue + bin._endValue ) / 2.;
+		auto midValue = ( bin._startValue + bin._endValue ) / 2.;
 		std::cout << "  -old thres: " << bin._startValue << " - " << bin._endValue << '\n';
-		std::cout << "  -new thres: " << bin._startValue << " - " << start2 << " - " << bin._endValue << '\n';
+		std::cout << "  -new thres: " << bin._startValue << " - " << midValue << " - " << bin._endValue << '\n';
 
-		VBS_Histogram::HBin<T> newBin( start2, bin._endValue );
+		std::vector<size_t> vec1;  // new vector of indexes for the current bin
+		std::vector<size_t> vec2;  // new vector of indexes for the new bin
+		vec1.reserve( bin.size() );
+		vec2.reserve( bin.size() );
 
-		std::vector<size_t> newvec;  // new vector of indexes for the current bin
-		newvec.reserve( bin.size() );
-		bin._mClassCounter.clear();     // reset class counter
+		std::map<KEY,size_t> mapCount1;
+		std::map<KEY,size_t> mapCount2;
 
 		for( const auto idx: bin._vIdxPt )  // parse the points
 		{
-//			COUT << "checking point " << idx << '\n';
 			auto pt = p_src->at(idx);        // and distribute them in
-			if( pt.first >= start2 )           // the two bins
+			if( pt.first >= midValue )         // the two bins
 			{
-				newBin._mClassCounter[ pt.second ]++;
-				newBin._vIdxPt.push_back( idx );
+				vec2.push_back( idx );
+				mapCount2[ pt.second ]++;
 			}
 			else
 			{
-				newvec.push_back( idx );
-				bin._mClassCounter[ pt.second ]++;
+				vec1.push_back( idx );
+				mapCount1[ pt.second ]++;
 			}
 		}
-		bin._vIdxPt = newvec;        // copy new vector of indexes for current bin
-		bin._endValue = start2;
-		_lBins.insert( it_next, newBin );
 
-		COUT << "current bin: now " << bin.size() << " pts, new bin:" << newBin.size() << " pts\n";
-		splitBin( it );
-		splitBin( std::next(it) );
+		VBS_Histogram::HBin<T> newBin( midValue, bin._endValue );
+		bin._endValue = midValue;
+
+		bin._vIdxPt           = std::move(vec1);
+		bin._mClassCounter    = std::move(mapCount1);
+		newBin._vIdxPt        = std::move(vec2);
+		newBin._mClassCounter = std::move(mapCount2);
+
+		_lBins.insert( it_next, newBin );
+		if( bin.size() )
+			splitBin( it, 'A' );
+		if( newBin.size() )
+			splitBin( std::next(it), 'B' );
 
 		retval = true;
 	}
-	else
-		std::cout << " => NOT splittable!\n";
+//	else
+//		std::cout << " => NOT splittable!\n";
 
 	depth--;
 	return retval;
@@ -247,7 +258,7 @@ VBS_Histogram<T,KEY>::splitSearch()
 		do
 		{
 			COUT << "iter1 " << iter1 << " iter2 " << iter2++ << '\n';
-			splitOccured = splitBin( it );
+			splitOccured = splitBin( it, '0' );
 			it = std::next(it);
 		}
 		while( !splitOccured && it != std::end(_lBins) );
@@ -293,14 +304,14 @@ VBS_Histogram<T,KEY>::mergeSearch()
 						);
 						b1._endValue = b2._endValue;
 						mergeOccurred = true;
-//						_lBins.erase( it );
 						_lBins.erase( std::next(it) );
 					}
 				}
-				if( b2.size() == 0 )
+				if( b2.size() == 0 )  // if next bin is empty, then merge it
 				{
 					COUT << "bin2 is empty, removing\n";
 					mergeOccurred = true;
+					b1._endValue = b2._endValue;
 					_lBins.erase( std::next(it) );
 				}
 			}

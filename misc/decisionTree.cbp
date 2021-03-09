@@ -61,6 +61,7 @@
 		</Unit>
 		<Unit filename="../dtcpp.h" />
 		<Unit filename="../histac.hpp" />
+		<Unit filename="../private.hpp" />
 		<Unit filename="../run_demo.sh">
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>

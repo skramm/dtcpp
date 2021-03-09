@@ -53,7 +53,7 @@ show:
 	@echo "PLOT_IN_FILES=$(PLOT_IN_FILES)"
 
 
-$(OBJ_DIR)/%.o: %.cpp dtcpp.h
+$(OBJ_DIR)/%.o: %.cpp dtcpp.h histac.hpp
 	$(CXX) -Wall -std=gnu++14 $(CFLAGS) -fexceptions -O2 -Iother/ -c $< -o $@
 
 $(BIN_DIR)/%:$(OBJ_DIR)/%.o

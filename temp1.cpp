@@ -39,41 +39,6 @@ using namespace dtcpp;
 
 using PairAtvalClass = std::pair<float,ClassVal>;
 
-//---------------------------------------------------------------------
-/// Input:  a vector or pairs, size=nb of points in data set
-/// first value: the attribute value, second: the class value
-std::vector<float>
-getThresholds( const std::vector<PairAtvalClass>& v_pac, int nbBins )
-{
-	START;
-
-// Step 1 - build initial histogram, evenly spaced
-	histac::VBS_Histogram<float,ClassVal> histo( v_pac, nbBins );
-
-	histo.print( std::cout, "AFTER BUILD" );
-
-// Step 2 - split bins that need to be splitted
-	histo.splitSearch();
-	histo.print( std::cout, "AFTER SPLIT" );
-
-// Step 3 - merge adjacent bins holding same class
-	histo.mergeSearch();
-	histo.print( std::cout, "AFTER MERGE" );
-
-// Step 4 - build thresholds from bins
-	std::vector<float> vThres( histo.nbBins()-1 );
-
-	size_t i=0;
-	for( auto it=histo.begin(); it != histo.end(); it++ )
-	{
-		if( std::next(it) !=  histo.end() )
-			vThres[i++] = it->getBorders().second;
-	}
-
-	return vThres;
-}
-//---------------------------------------------------------------------
-
 
 //---------------------------------------------------------------------
 int main()
@@ -91,7 +56,7 @@ int main()
 		{ 3,   c2 },
 	};
 #else
-	int nbpts = 500;
+	int nbpts = 200;
 	std::vector<PairAtvalClass> vpac;
 	for( auto i=0; i<nbpts; i++ )
 	{
@@ -105,7 +70,7 @@ int main()
 	}
 
 #endif
-	auto vThres = getThresholds( vpac, 10 );
+	auto vThres = getThresholds<float,ClassVal>( vpac, 10 );
 	priv::printVector( std::cout, vThres, "threshold values" );
 
 	std::cout << "Done !\n";

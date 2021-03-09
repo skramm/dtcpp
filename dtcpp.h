@@ -32,12 +32,12 @@ See doc on https://github.com/skramm/dtcpp
 #include <chrono>
 
 #include <boost/graph/adjacency_list.hpp>
-//#include <boost/graph/graph_utility.hpp> // needed only for print_graph();
-
 #include <boost/histogram.hpp>
-
 #include <boost/bimap.hpp>
 #include <boost/bimap/vector_of.hpp>
+
+#include "private.hpp"
+#include "histac.hpp"
 
 /// All the API and code lies here
 namespace dtcpp {
@@ -222,40 +222,6 @@ private:
 //template<typename U>
 //class DataSet;
 
-//---------------------------------------------------------------------
-/// General utility function
-template<typename T>
-void
-printVector( std::ostream& f, const std::vector<T>& vec, const char* msg=0, bool lineBreak=false )
-{
-	f << "Vector: ";
-	if( msg )
-		f << msg;
-	f << " #=" << vec.size() << ":\n";
-	for( const auto& elem : vec )
-	{
-		f << elem;
-		if( lineBreak )
-			f << '\n';
-		else
-			f << "-";
-	}
-	if( !vec.empty() )
-		f << '\n';
-}
-/// General utility function
-template<typename K, typename V>
-void
-printMap( std::ostream& f, const std::map<K,V>& m, const char* msg=0 )
-{
-	f << "Map: ";
-	if( msg )
-		f << msg;
-	f << " #=" << m.size() << ":\n";
-	for( const auto& elem : m )
-		f << " -" << elem.first << "-" << elem.second << '\n';
-	f << "\n";
-}
 
 //-------------------------------------------------------------------
 /// Remove multiple spaces AND TABS in string, allows only one, except if in first position
@@ -444,7 +410,7 @@ class DataPoint
 			}
 			catch(...)
 			{
-				priv::printVector( std::cerr, v_string, "string conversion error", false );
+				::priv::printVector( std::cerr, v_string, "string conversion error", false );
 				throw std::runtime_error( "unable to convert a string value -" + v_string[i] + "- to float" );
 			}
 		}
@@ -2418,7 +2384,7 @@ computeBestThreshold(
 	START;
 //	LOG(3, "Searching best threshold for attrib=" << atIdx );
 
-#if 1
+#if 0
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
 	std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
 	for( size_t i=0; i<v_dpidx.size(); i++ )
@@ -2438,13 +2404,14 @@ computeBestThreshold(
 	for( uint i=0; i<v_thresVal.size(); i++ )
 		v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
 #else
+	using PairAtvalClass = std::pair<float,ClassVal>;
 	std::vector<PairAtvalClass> v_pac( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
 	for( size_t i=0; i<v_dpidx.size(); i++ )
 		v_pac[i] = std::make_pair(
 			data.getDataPoint( v_dpidx[i] ).attribVal( atIdx ),
 			data.getDataPoint( v_dpidx[i] ).classVal()
 		);
-	auto v_thresVal = getThresholds( v_pac );
+	auto v_thresVal = getThresholds<float,ClassVal>( v_pac, 15 );
 
 #endif
 	LOG(3, "Searching best threshold for attrib=" << atIdx << " among " << v_thresVal.size() << " thresholds, based on " << v_dpidx.size() << " pts" );

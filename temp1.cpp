@@ -39,7 +39,6 @@ using namespace dtcpp;
 
 using PairAtvalClass = std::pair<float,ClassVal>;
 
-
 //---------------------------------------------------------------------
 /// Input:  a vector or pairs, size=nb of points in data set
 /// first value: the attribute value, second: the class value
@@ -73,10 +72,13 @@ getThresholds( const std::vector<PairAtvalClass>& v_pac, int nbBins )
 
 	return vThres;
 }
+//---------------------------------------------------------------------
+
 
 //---------------------------------------------------------------------
 int main()
 {
+#if 0
 	auto c1 = ClassVal(1);
 	auto c2 = ClassVal(2);
 //	auto c3 = ClassVal(3);
@@ -88,7 +90,22 @@ int main()
 		{ 0.8, c2 },
 		{ 3,   c2 },
 	};
-	auto vThres = getThresholds( vpac, 3 );
+#else
+	int nbpts = 500;
+	std::vector<PairAtvalClass> vpac;
+	for( auto i=0; i<nbpts; i++ )
+	{
+		vpac.push_back(
+			std::make_pair(
+				(float)100. * std::rand()/RAND_MAX,
+				ClassVal( 4. * std::rand()/RAND_MAX )
+			)
+		);
+
+	}
+
+#endif
+	auto vThres = getThresholds( vpac, 10 );
 	priv::printVector( std::cout, vThres, "threshold values" );
 
 	std::cout << "Done !\n";

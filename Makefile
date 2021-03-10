@@ -28,6 +28,15 @@ ifeq ($(NDEBUG),Y)
 	CFLAGS += -DNDEBUG
 endif
 
+#----------------------------------------------
+ifeq "$(DEBUG)" ""
+	NDEBUG=N
+endif
+
+ifeq ($(DEBUG),Y)
+	CFLAGS += -DDEBUG
+endif
+
 
 
 all: $(BIN_DIR)/dectree
@@ -41,7 +50,7 @@ run2: all
 	$(BIN_DIR)/dectree sample_data/iris.data -sep "," -cs -nf 5
 
 run3: all
-	$(BIN_DIR)/dectree sample_data/winequality-white.csv -sep ";" -cs -ll 2
+	$(BIN_DIR)/dectree sample_data/winequality-white.csv -sep ";" -cs -ll 0
 
 
 show:

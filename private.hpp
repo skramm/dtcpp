@@ -8,9 +8,21 @@
 #define PRIVATE_HG
 
 #include <iostream>
-#include <map>
+//#include <map>
 //#include <list>
 #include <vector>
+
+#ifdef DEBUG
+	#define COUT if(1) std::cout << __FUNCTION__ << "(), line " << __LINE__ << ": "
+#else
+	#define COUT if(0) std::cout
+#endif // DEBUG
+
+#ifdef DEBUG_START
+	#define START if(1) std::cout << "* Start: " << __FUNCTION__ << "()\n"
+#else
+	#define START
+#endif // DEBUG
 
 // % % % % % % % % % % % % % %
 /// private namespace; not part of API

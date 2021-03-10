@@ -12,15 +12,7 @@
 #include <cassert>
 #include <algorithm>
 
-#ifndef COUT
-#define COUT std::cout
-#endif
-
-#define DEBUG
-
-//#ifdef DEBUG
 #include "private.hpp"
-//#endif
 
 namespace histac {
 
@@ -70,7 +62,7 @@ struct VBS_Histogram
 			}
 			friend std::ostream& operator << ( std::ostream& f, const HBin& b )
 			{
-				f << "Bin: " << b.size() << " pts, " << b.nbClasses() << " classes, range=" << b._startValue << "-" << b._endValue << ' ';
+				f << b.size() << " pts, " << b.nbClasses() << " classes, range=" << b._startValue << "-" << b._endValue << ' ';
 #ifdef BIN_PRINT_POINTS
 				f << " points: ";
 					priv::printVector( f, b._vIdxPt );
@@ -190,14 +182,15 @@ bool
 VBS_Histogram<T,KEY>::splitBin( decltype( _lBins.begin() ) it, char side )
 {
 	assert( p_src );
-	static size_t depth;
+	static size_t depth_sb;
+	depth_sb++;
 
 	bool retval = false;
 	auto& bin = *it;                // current bin
 	auto it_next = std::next(it);  // next one (will insert before this one)
-	COUT << side << ": depth=" << depth++ << " start split " << bin << '\n';
+	COUT << side << ": depth=" << depth_sb << " start split " << bin << '\n';
 
-	if( depth >= _maxDepth )
+	if( depth_sb >= _maxDepth )
 	{
 /*		priv::printVector( std::cout, bin._vIdxPt, "BEFORE points" );
 		for( const auto idx: bin._vIdxPt )
@@ -213,7 +206,8 @@ VBS_Histogram<T,KEY>::splitBin( decltype( _lBins.begin() ) it, char side )
 			}
 		);
 		auto domClass = it->first;
-		COUT << "domClass=" << domClass << "\n";
+		auto nbDomClass = bin._mClassCounter.count( domClass );
+		COUT << "domClass=" << domClass << ", #=" << nbDomClass << " (" << 100.*nbDomClass/bin._mClassCounter.size() << ")\n";
 
 		std::vector<size_t> vec1;
 		vec1.reserve( bin.size() );
@@ -229,15 +223,14 @@ VBS_Histogram<T,KEY>::splitBin( decltype( _lBins.begin() ) it, char side )
 		for( const auto idx: bin._vIdxPt )
 			std::cout << idx << ": " <<p_src->at(idx).first << "-" << p_src->at(idx).second << "\n";
 */
+		depth_sb--;
 		return retval;
 	}
 
 	if( bin.isSplittable() )
 	{
-		std::cout << "  => splittable\n";
 		auto midValue = ( bin._startValue + bin._endValue ) / 2.;
-		std::cout << "  -old thres: " << bin._startValue << " - " << bin._endValue << '\n';
-		std::cout << "  -new thres: " << bin._startValue << " - " << midValue << " - " << bin._endValue << '\n';
+		std::cout << " => splittable, new thres: " << bin._startValue << " - " << midValue << " - " << bin._endValue << '\n';
 
 		std::vector<size_t> vec1;  // new vector of indexes for the current bin
 		std::vector<size_t> vec2;  // new vector of indexes for the new bin
@@ -283,7 +276,7 @@ VBS_Histogram<T,KEY>::splitBin( decltype( _lBins.begin() ) it, char side )
 //	else
 //		std::cout << " => NOT splittable!\n";
 
-	depth--;
+	depth_sb--;
 	return retval;
 }
 
@@ -384,15 +377,15 @@ getThresholds( const std::vector<std::pair<T,KEY>>& v_pac, int nbBins )
 // Step 1 - build initial histogram, evenly spaced
 	histac::VBS_Histogram<T,KEY> histo( v_pac, nbBins );
 
-	histo.print( std::cout, "AFTER BUILD" );
+//	histo.print( std::cout, "AFTER BUILD" );
 
 // Step 2 - split bins that need to be splitted
 	histo.splitSearch();
-	histo.print( std::cout, "AFTER SPLIT" );
+//	histo.print( std::cout, "AFTER SPLIT" );
 
 // Step 3 - merge adjacent bins holding same class
 	histo.mergeSearch();
-	histo.print( std::cout, "AFTER MERGE" );
+//	histo.print( std::cout, "AFTER MERGE" );
 
 // Step 4 - build thresholds from bins
 	std::vector<float> vThres( histo.nbBins()-1 );

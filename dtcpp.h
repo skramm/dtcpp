@@ -41,7 +41,7 @@ See doc on https://github.com/skramm/dtcpp
 
 /// All the API and code lies here
 namespace dtcpp {
-
+/*
 #ifdef DEBUG
 	#define COUT if(1) std::cout << __FUNCTION__ << "(), line " << __LINE__ << ": "
 #else
@@ -53,7 +53,7 @@ namespace dtcpp {
 #else
 	#define START
 #endif // DEBUG
-
+*/
 
 #define LOG( level, msg ) \
 	{ \
@@ -1364,9 +1364,12 @@ DataSet::printInfo( std::ostream& f, const char* name ) const
 
 	f << "\nClasses frequency:\n";
 	size_t sum = 0;
+	size_t c = 0;
+	f << " # : label Nb  %\n-----------------------------\n";
+
 	for( const auto& cval: _classCount )
 	{
-		f << cval.first << ": "
+		f << ++c << ": " <<  cval.first << ": "
 			<< cval.second
 			<< " (" << std::setw(4) << 100. * cval.second/size()
 			<< " %)\n";

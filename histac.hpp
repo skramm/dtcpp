@@ -206,8 +206,9 @@ VBS_Histogram<T,KEY>::splitBin( decltype( _lBins.begin() ) it, char side )
 			}
 		);
 		auto domClass = it->first;
-		auto nbDomClass = bin._mClassCounter.count( domClass );
+		auto nbDomClass = it->second;
 		COUT << "domClass=" << domClass << ", #=" << nbDomClass << " (" << 100.*nbDomClass/bin._mClassCounter.size() << ")\n";
+		::priv::printMap( std::cout, bin._mClassCounter, "bin class map" );
 
 		std::vector<size_t> vec1;
 		vec1.reserve( bin.size() );

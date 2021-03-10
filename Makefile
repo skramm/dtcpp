@@ -100,14 +100,16 @@ cleandoc:
 
 cleanout:
 	@-rm out/*
+	@-rm stdout
 
 clean: cleandoc
 	@-rm $(OBJ_DIR)/*
 	@-rm build/*
-	@-rm *.dat
-	@-rm *.dot
-	@-rm *.png
-	@-rm *.plt
 
-cleanall: clean
+#	@-rm *.dat
+#	@-rm *.dot
+#	@-rm *.png
+#	@-rm *.plt
+
+cleanall: clean cleanout
 	@-rm $(BIN_DIR)/*

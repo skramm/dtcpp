@@ -119,15 +119,6 @@ struct Gparams
 	}
 };
 
-
-/// Root string used to generated the script that will be used to generate plots of the attribute histograms,
-/// see DataSet::computeStats()
-std::string g_root_gnuplot_histo =
-	"set style data histogram\n \
-	set style histogram cluster gap 1\n \
-	set style fill solid\n \
-	set boxwidth 1\n";
-
 //---------------------------------------------------------------------
 /// Identifier for output file type, used in openOutputFile()
 enum EN_FileType
@@ -1006,9 +997,12 @@ DataSet::computeStats( uint nbBins ) const
 {
 	START;
 	auto fplot = priv::openOutputFile( "plot_attrib_histo", priv::FT_PLT, _fname );
-	fplot << priv::g_root_gnuplot_histo
-		<< "\nset xtic rotate by -70"
-		<< "\nset grid\n";
+	fplot << "set style data histogram\n"
+		<< "set style histogram cluster gap 1\n"
+		<< "set style fill solid\n"
+		<< "set boxwidth 1\n"
+		<< "set xtic rotate by -70\n"
+		<< "set grid\n";
 
 	DatasetStats<T> dstats( nbAttribs() );
 	for( size_t atItx=0; atItx<nbAttribs(); atItx++ )
@@ -1564,11 +1558,12 @@ enum class PerfScore
 };
 
 //---------------------------------------------------------------------
-/// Multiclass performance score
+/// Multiclass performance score, see ConfusionMatrix::getScore_MC()
 enum class PerfScore_MC
 {
 	PRECIS_M,    ///< Macro Precision
-	RECALL_M     ///< Macro Recall
+	RECALL_M,    ///< Macro Recall
+	PREC_REC_m   ///< Mico precision-recall (is the same)
 };
 //---------------------------------------------------------------------
 std::string
@@ -1596,6 +1591,7 @@ getString( PerfScore_MC n )
 	{
 		case PerfScore_MC::RECALL_M: s="(macro) Recall";  break;
 		case PerfScore_MC::PRECIS_M: s="(macro) Precision";  break;
+		case PerfScore_MC::PREC_REC_m: s="(micro) Precision/Recall";  break;
 		default: assert(0);
 	}
 	return std::string(s);
@@ -1868,14 +1864,10 @@ ConfusionMatrix::getScore( PerfScore scoreId, ClassVal cval ) const
 //---------------------------------------------------------------------
 /// Computes and return a single performance score (identified by \c scoreId) for a multiclass task.
 /**
-- Reference: Sokolova paper:<br>
-Sokolova, M., & Lapalme, G. (2009). A systematic analysis of performance measures for classification tasks. Information Processing and Management, 45, p. 427-437
+- Reference:
+Sokolova, M., & Lapalme, G. (2009), "A systematic analysis of performance measures for classification tasks". Information Processing and Management, 45, p. 427-437
 
-\f[
-prec = \frac{1}{nbC} \cdot \sum_i \frac{tp_i}{tp_i + fp_i}
-\qquad
-\text{recall} = \frac{1}{nbC} \cdot \sum_i \frac{tp_i}{tp_i + fn_i}
-\f]
+\image html Sokolova_2009_table.png
 */
 double
 ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
@@ -1886,16 +1878,17 @@ ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
 	auto sum = 0.;
 	switch( scoreId )
 	{
-		case PerfScore_MC::PRECIS_M:
+		case PerfScore_MC::PRECIS_M:                   // macro precision
 			for( size_t i=0; i<nbClasses(); i++ )
 			{
 				auto sum_li = std::accumulate( std::begin(_mat[i]), std::end(_mat[i]), 0. );
 				if( sum_li > 0 )
 					sum += _mat[i][i] / std::accumulate( std::begin(_mat[i]), std::end(_mat[i]), 0. );
 			}
+			sum /= nbClasses();
 			break;
 
-		case PerfScore_MC::RECALL_M:
+		case PerfScore_MC::RECALL_M:                  // macro recall
 			for( size_t i=0; i<nbClasses(); i++ )
 			{
 				auto sum_col = 0.;
@@ -1904,11 +1897,18 @@ ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
 				if( sum_col > 0 )
 					sum += _mat[i][i] / sum_col;
 			}
+			sum /= nbClasses();
+		break;
+
+		case PerfScore_MC::PREC_REC_m:                  // micro precision-recall
+			for( size_t i=0; i<nbClasses(); i++ )
+				sum += _mat[i][i];
+			sum /= nbValues();
 		break;
 
 		default : assert(0);
 	}
-	return sum / nbClasses();
+	return sum;
 }
 
 //---------------------------------------------------------------------
@@ -2414,6 +2414,7 @@ computeBestThreshold(
 			data.getDataPoint( v_dpidx[i] ).attribVal( atIdx ),
 			data.getDataPoint( v_dpidx[i] ).classVal()
 		);
+	std::cout << "Compute Thresholds for attrib " << atIdx << '\n';
 	auto v_thresVal = getThresholds<float,ClassVal>( v_pac, 15 );
 
 #endif

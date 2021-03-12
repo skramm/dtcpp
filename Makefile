@@ -30,11 +30,20 @@ endif
 
 #----------------------------------------------
 ifeq "$(DEBUG)" ""
-	NDEBUG=N
+	DEBUG=N
 endif
 
 ifeq ($(DEBUG),Y)
 	CFLAGS += -DDEBUG
+endif
+
+#----------------------------------------------
+ifeq "$(DEBUGS)" ""
+	DEBUGS=N
+endif
+
+ifeq ($(DEBUGS),Y)
+	CFLAGS += -DDEBUG_START
 endif
 
 

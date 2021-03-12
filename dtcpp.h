@@ -547,7 +547,7 @@ enum class En_OD_method
 /// Outlier Removal Method. Related to Dataset::tagOutliers()
 enum class En_OR_method
 {
- 	disablePoint       ///< tag the point as disabled
+ 	disablePoint       ///< tag the point as disabled, it will NOT be used for training
  	,replaceWithMean   ///< replace attribute value by its mean value
 };
 
@@ -763,7 +763,7 @@ genAttribHisto(
 	std::for_each( vat.begin(), vat.end(), std::ref(h) );
 
 	f << "# histogram for attribute " << atIdx << '\n';
-	for (auto x : indexed(h) )
+	for( const auto& x: boost::histogram::indexed(h) )
 		f << x.index()+1 << sep << x.bin().lower() << sep << x.bin().upper() << sep << *x << sep << 100. * *x/nbPts <<  '\n';
 	return h;
 }

@@ -18,6 +18,7 @@ using namespace dtcpp;
 
 int main( int argc, const char** argv )
 {
+	std::cout << argv[0] << ": build on " << __DATE__ << " with boost " << BOOST_VERSION << '\n';
 	Fparams fparams;
 	Params  params;
 	argh::parser cmdl; //({ "-sep"});
@@ -25,7 +26,7 @@ int main( int argc, const char** argv )
 
 	if( cmdl.size() < 2 )
 	{
-		std::cerr << "Error, no data file name given !";
+		std::cerr << "Error, no data file name given !\n";
 		std::exit(1);
 	}
 	std::string fname = cmdl[1];

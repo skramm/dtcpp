@@ -9,6 +9,20 @@ Naive attempt of a Decision Tree implementation for continuous variables (WIP !!
 
 ## WORK IN PROGRESS, NO RELEASES YET !
 
+## current status
+make run => failure:
+```
+...
+Compute Thresholds for attrib 1
+BEFORE split: Nb bins=15 nb pts=54
+AFTER split: Nb bins=75 nb pts=49
+Nb merges = 1
+AFTER merging: Nb bins=1 nb pts=49
+terminate called after throwing an instance of 'std::out_of_range'
+  what():  vector::_M_range_check: __n (which is 0) >= this->size() (which is 0)
+Makefile:55: recipe for target 'run' failed
+make: *** [run] Aborted (core dumped)
+```
 
 ## Features
 

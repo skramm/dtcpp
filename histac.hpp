@@ -308,6 +308,7 @@ template<typename T,typename KEY>
 void
 VBS_Histogram<T,KEY>::splitSearch()
 {
+	START;
 	COUT << "\n* Start splitting, nb bins=" << nbBins() << '\n';
 
 	size_t iter1 = 0;
@@ -334,8 +335,12 @@ template<typename T,typename KEY>
 size_t
 VBS_Histogram<T,KEY>::mergeSearch()
 {
+	START;
 	COUT << "\n* Start merge search, nb bins=" << nbBins() << '\n';
 	size_t countNbMerge = 0;
+
+	if( nbBins() < 2 )
+		return 0;
 
 	size_t iter1 = 0;
 	bool mergeOccurred = false;
@@ -407,6 +412,7 @@ getThresholds( const std::vector<std::pair<T,KEY>>& v_pac, int nbBins )
 {
 	START;
 // Step 1 - build initial histogram, evenly spaced
+	COUT << "build histogram from vector size=" << v_pac.size() << '\n';
 	histac::VBS_Histogram<T,KEY> histo( v_pac, nbBins );
 
 //	histo.print( std::cout, "AFTER BUILD" );

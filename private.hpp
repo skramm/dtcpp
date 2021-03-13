@@ -13,7 +13,7 @@
 #include <vector>
 
 #ifdef DEBUG
-	#define COUT if(1) std::cout << __FUNCTION__ << "(), line " << __LINE__ << ": "
+	#define COUT if(1) std::cout << __FUNCTION__ << "(), l." << __LINE__ << ": "
 #else
 	#define COUT if(0) std::cout
 #endif // DEBUG

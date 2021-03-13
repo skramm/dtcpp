@@ -29,20 +29,24 @@ struct VBS_Histogram
 	{
 		friend struct VBS_Histogram;
 
+		static int sBinIdCounter;
 		private:
 			std::map<KEY,size_t> _mClassCounter;  ///< number of pts per class
 			T                    _startValue;     ///< bin left border
 			T                    _endValue;       ///< bin right border
 			std::vector<size_t>  _vIdxPt;         ///< indexes of the points in original dataset
+// TEMP
+			int _binId=0;
 
 		public:
 			HBin( T v1, T v2 )
 				: _startValue(v1), _endValue(v2)
 			{
 				assert( v1 < v2 );
+				_binId = sBinIdCounter++;
 			}
 			HBin()
-			{}
+			{_binId = sBinIdCounter++;}
 
 		/// A bin can be split if more then 1 classes and more than 2 points
 			bool isSplittable() const
@@ -62,7 +66,8 @@ struct VBS_Histogram
 			}
 			friend std::ostream& operator << ( std::ostream& f, const HBin& b )
 			{
-				f << std::setprecision(10) << std::scientific;
+				f << std::setprecision(10) << std::scientific
+				<< "Id=" << b._binId << ' ';
 				f << b.size() << " pts, " << b.nbClasses() << " classes, range=" << b._startValue << "-" << b._endValue << ' ';
 #ifdef BIN_PRINT_POINTS
 				f << " points: ";
@@ -74,10 +79,12 @@ struct VBS_Histogram
 	};
 
 	private:
-		const std::vector<std::pair<U,KEY>>* p_src = 0;  ///< pointer on source data
-		std::list<HBin<U>> _lBins;                       ///< list of bins
-		size_t             _maxDepth = 12;
-		size_t             _nbPts=0;                     ///< Total nb of points. \warning Can be different than the input vector size
+		const std::vector<std::pair<U,KEY>>* p_src = 0;    ///< pointer on source data
+		std::list<HBin<U>>   _lBins;                       ///< list of bins
+		size_t               _maxDepth = 12;
+		size_t               _nbPts=0;                     ///< Total nb of points. \warning Can be different than the input vector size
+		std::map<KEY,size_t> _mCCount;                     ///< nb of points per class, for the whole histogram
+
 	public:
 		VBS_Histogram( const std::vector<std::pair<U,KEY>>& src, size_t nbBins );
 
@@ -89,12 +96,16 @@ struct VBS_Histogram
 		size_t mergeSearch();
 		void splitSearch();
 		void print( std::ostream&, const char* msg=0 ) const;
+		void printInfo( std::ostream&, const char* msg=0 ) const;
 
 	private:
 		void p_assignToBin( const std::pair<U,KEY>& pac, size_t idx );
 		bool p_splitBin( decltype( _lBins.begin() ), char side );
 };
 
+template<typename U,typename KEY>
+template<typename T>
+int VBS_Histogram<U,KEY>::HBin<T>::sBinIdCounter=0;
 //---------------------------------------------------------------------
 /// Constructor, creates bins evenly spaced
 template<typename T,typename KEY>
@@ -153,6 +164,7 @@ VBS_Histogram<T,KEY>::p_assignToBin( const std::pair<T,KEY>& pac, size_t idx )
 			bin._vIdxPt.push_back( idx );
 			bin._mClassCounter[pac.second]++;
 			keepOn = false;
+			_mCCount[pac.second]++;
 		}
 	}
 
@@ -161,18 +173,35 @@ VBS_Histogram<T,KEY>::p_assignToBin( const std::pair<T,KEY>& pac, size_t idx )
 		auto& bin = _lBins.back();
 		bin._vIdxPt.push_back( idx );
 		bin._mClassCounter[pac.second]++;
+		_mCCount[pac.second]++;
 	}
 }
 
 //---------------------------------------------------------------------
 template<typename T,typename KEY>
 void
-VBS_Histogram<T,KEY>::print( std::ostream& f, const char* msg ) const
+VBS_Histogram<T,KEY>::printInfo( std::ostream& f, const char* msg ) const
 {
 	f << "HISTOGRAM - ";
 	if( msg )
 		f << msg;
-	f << ", nb bins=" << nbBins() << '\n';
+	f << "\n - nb bins=" << nbBins()
+		<< "\n - nb pts=" << nbPts()
+		<< "\n - nb classes=" << _mCCount.size()
+		<< '\n';
+}
+//---------------------------------------------------------------------
+template<typename T,typename KEY>
+void
+VBS_Histogram<T,KEY>::print( std::ostream& f, const char* msg ) const
+{
+	printInfo( f, msg );
+
+	f << " * Classes:\n";
+	for( const auto& cla: _mCCount )
+		f << " Class " << cla.first << ": " << cla.second << " pts\n";
+
+	f << " * Bins:\n";
 	size_t i=0;
 	for( const auto& bin: _lBins )
 		f << "bin " << i++ << ": " << bin << '\n';
@@ -187,6 +216,8 @@ Steps:
  # if not check if splittable
  # if ok, check if the computed middle point respects the order constraint
  # if yes, split the bin into two bins, add assigns attributes
+
+ \tod check what happens when max depth is reached: is dominant class relevant??? (tip: probably not)
 */
 template<typename T,typename KEY>
 bool
@@ -336,7 +367,9 @@ size_t
 VBS_Histogram<T,KEY>::mergeSearch()
 {
 	START;
-	COUT << "\n* Start merge search, nb bins=" << nbBins() << '\n';
+	COUT << "\n* Start merge search, nb bins=" << nbBins() << " nb pts=" << nbPts() << '\n';
+	print( std::cout );
+
 	size_t countNbMerge = 0;
 
 	if( nbBins() < 2 )
@@ -351,13 +384,13 @@ VBS_Histogram<T,KEY>::mergeSearch()
 		size_t iter2 = 0;
 		do
 		{
-//			COUT << "-Iter1 " << iter1 << " iter2 " << iter2++ << '\n';
+			COUT << "-Iter1 " << iter1 << " iter2 " << iter2++ << '\n';
 			if( std::next(it) != std::end(_lBins) ) // if there is a next bin
 			{
 				auto& b1 = *it;
 				auto& b2 = *std::next(it);
-//				std::cout << " - b1: " << b1 << '\n';
-//				std::cout << " - b2: " << b2 << '\n';
+				std::cout << " - b1: " << b1 << '\n';
+				std::cout << " - b2: " << b2 << '\n';
 
 				if( b1.nbClasses() == 1 && b2.nbClasses() == 1 )  // if the 2 bins only hold 1 class
 				{
@@ -365,7 +398,7 @@ VBS_Histogram<T,KEY>::mergeSearch()
 					auto itc2 = b2._mClassCounter.begin();
 					if( itc1->first  == itc2->first  )             // if they hold the same class
 					{
-//						COUT << "same class (" << itc1->first  << "), merging bins\n";
+						COUT << "same class (" << itc1->first  << "), merging bins\n";
 						b1._vIdxPt.insert(                        // then copy the points from b2 into b1
 							b1._vIdxPt.end(),
 							b2._vIdxPt.begin(),
@@ -373,6 +406,7 @@ VBS_Histogram<T,KEY>::mergeSearch()
 						);
 						b1._endValue = b2._endValue;
 						mergeOccurred = true;
+						countNbMerge++;
 						_lBins.erase( std::next(it) );
 					}
 				}
@@ -380,16 +414,16 @@ VBS_Histogram<T,KEY>::mergeSearch()
 				{
 					if( b2.size() == 0 )  // if next bin is empty, then merge it
 					{
-//						COUT << "bin2 is empty, removing\n";
-						mergeOccurred = true;
+						COUT << "bin2 is empty, removing\n";
 						b1._endValue = b2._endValue;
+						mergeOccurred = true;
+						countNbMerge++;
 						_lBins.erase( std::next(it) );
 					}
 				}
 			}
 			if( !mergeOccurred )
 			{
-				countNbMerge++;
 				it = std::next(it);
 			}
 		}
@@ -429,6 +463,7 @@ getThresholds( const std::vector<std::pair<T,KEY>>& v_pac, int nbBins )
 //	histo.print( std::cout, "AFTER MERGE" );
 	std::cout << "AFTER merging: Nb bins=" << histo.nbBins() << " nb pts=" << histo.nbPts() << '\n';
 
+	assert( histo.nbBins() > 1 );
 // Step 4 - build thresholds from bins
 	std::vector<float> vThres( histo.nbBins()-1 );
 

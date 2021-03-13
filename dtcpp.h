@@ -22,11 +22,11 @@ See doc on https://github.com/skramm/dtcpp
 #ifndef DTCPP_HG
 #define DTCPP_HG
 
-#include <iostream>
+//#include <iostream>
 #include <fstream>
-#include <vector>
+//#include <vector>
 #include <numeric>
-#include <algorithm>
+//#include <algorithm>
 #include <random>
 #include <iomanip>
 #include <chrono>
@@ -36,7 +36,7 @@ See doc on https://github.com/skramm/dtcpp
 #include <boost/bimap.hpp>
 #include <boost/bimap/vector_of.hpp>
 
-#include "private.hpp"
+//#include "private.hpp"
 #include "histac.hpp"
 
 /// All the API and code lies here
@@ -2373,6 +2373,9 @@ Details:
 - for details, see
  - https://en.wikipedia.org/wiki/Information_gain_in_decision_trees
  - https://towardsdatascience.com/under-the-hood-decision-tree-454f8581684e
+
+ \todo problem: for a given attribute here, we might have (after processing the histogram of attribute values) all the points having same class.
+ Thus, unable to find a threshold. How do we manage that
 */
 //template<typename T>
 AttributeData
@@ -2414,7 +2417,7 @@ computeBestThreshold(
 			data.getDataPoint( v_dpidx[i] ).attribVal( atIdx ),
 			data.getDataPoint( v_dpidx[i] ).classVal()
 		);
-	std::cout << "Compute Thresholds for attrib " << atIdx << '\n';
+	COUT << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
 	auto v_thresVal = getThresholds<float,ClassVal>( v_pac, 15 );
 
 #endif
@@ -2656,7 +2659,7 @@ splitNode(
 
 		aMap.setAsUsed( bestAttrib._atIndex );
 	// before splitting, make sure that one of the childs will not have an insufficient number of points
-		auto n1= bestAttrib._nbPtsLessThan;
+		auto n1 = bestAttrib._nbPtsLessThan;
 		auto n2 = vIdx.size() - n1;
 		if( n1 < params.minNbPoints || n2 < params.minNbPoints )
 		{

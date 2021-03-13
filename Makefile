@@ -52,7 +52,7 @@ all: $(BIN_DIR)/dectree
 	@echo "done"
 
 run: all
-	$(BIN_DIR)/dectree sample_data/iris.data -sep "," -cs
+	$(BIN_DIR)/dectree sample_data/iris.data -sep "," -cs -ll 4
 
 # iris dataset
 run2: all

@@ -7,10 +7,10 @@
 #ifndef PRIVATE_HG
 #define PRIVATE_HG
 
-#include <iostream>
+//#include <iostream>
 //#include <map>
 //#include <list>
-#include <vector>
+//#include <vector>
 
 #ifdef DEBUG
 	#define COUT if(1) std::cout << __FUNCTION__ << "(), l." << __LINE__ << ": "

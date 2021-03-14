@@ -2334,13 +2334,14 @@ removeDuplicates( std::vector<float>& vec, const Params& params )
 }
 
 //---------------------------------------------------------------------
-/// Holds all the data relative to an attribute to be able to select it.
+/// Holds all the data relative to an attribute to be able to select it, see computeBestThreshold()
 struct AttributeData
 {
 	uint         _atIndex = 0u;         ///< Absolute attribute index
 	float        _gain  = 0.f;          ///< Information gain, will be used to select which attribute we use
 	ThresholdVal _threshold;            ///< Threshold value, will be set by training and used to classify
 	uint         _nbPtsLessThan = 0u;   ///< Nb of points that are less than the threshold
+	bool         _unable = false;       ///< will be set to \c true if unable to find a good threshold
 
 	AttributeData()
 	{}
@@ -2418,7 +2419,15 @@ computeBestThreshold(
 			data.getDataPoint( v_dpidx[i] ).classVal()
 		);
 	COUT << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
-	auto v_thresVal = getThresholds<float,ClassVal>( v_pac, 15 );
+
+	auto pair_vb = getThresholds<float,ClassVal>( v_pac, 15 );
+	const auto& v_thresVal = pair_vb.first;
+	if( pair_vb.second == false )
+	{
+		AttributeData atd;
+		atd._unable = true;
+		return atd;
+	}
 
 #endif
 	LOG(3, "Searching best threshold for attrib=" << atIdx << " among " << v_thresVal.size() << " thresholds, based on " << v_dpidx.size() << " pts" );
@@ -2508,6 +2517,10 @@ struct AttribMap
 		{
 			return _attribMap;
 		}
+		std::map<uint,bool>& getMap()
+		{
+			return _attribMap;
+		}
 /// Set attribute \c idx as used, so we will not use it again
 /// \todo maybe add some checking here...
 		void setAsUsed( uint idx )
@@ -2545,7 +2558,7 @@ findBestAttribute(
 	const std::vector<uint>& vIdx,   ///< indexes of data points we need to consider
 	const DataSet&           data,   ///< whole dataset
 	const Params&            params, ///< parameters
-	const AttribMap&         atMap   ///< Search will be limited to the attributes defined here
+	AttribMap&               atMap   ///< Search will be limited to the attributes defined here
 )
 {
 	START;
@@ -2557,9 +2570,16 @@ findBestAttribute(
 
 // step 1 - compute best IG/threshold for each attribute, only for the considered points
 	std::vector<AttributeData> v_IG;
-	for( const auto atIdx: atMap.getMap() )
+	for( auto& atIdx: atMap.getMap() )  // iterate on all the remaining attributes available
 		if( atIdx.second == false )
-			v_IG.push_back( computeBestThreshold( atIdx.first, vIdx, data, giniCoeff.first, params ) );
+		{
+			auto best = computeBestThreshold( atIdx.first, vIdx, data, giniCoeff.first, params );
+			if( best._unable )        // this means we couldn't find a threshold, so
+				atIdx.second = true;  // we forget this one and will switch to the next attribute
+			else
+				v_IG.push_back( best );
+		}
+	assert( v_IG.size() );
 
 // step 3 - get the one with max gain value
 	auto it_mval = std::max_element(

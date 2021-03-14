@@ -458,7 +458,7 @@ VBS_Histogram<T,KEY>::mergeSearch()
 /// Input:  a vector or pairs, size=nb of points in data set
 /// first value: the attribute value, second: the class value
 template<typename T,typename KEY>
-std::vector<float>
+std::pair<std::vector<float>,bool>
 getThresholds( const std::vector<std::pair<T,KEY>>& v_pac, int nbBins )
 {
 	START;
@@ -480,7 +480,14 @@ getThresholds( const std::vector<std::pair<T,KEY>>& v_pac, int nbBins )
 
 	histo.printInfo( std::cout, "AFTER merge" );
 
-	assert( histo.nbBins() > 1 );
+// if the split operations made the histrogram have only one class, then
+// we can't provide a threshold, we just return an empty vector and set
+// the flag to false
+/// \todo maybe we can do that BEFORE the merging operation?
+//	assert( histo.nbBins() > 1 );
+	if( histo.nbBins() < 2 )
+		return std::make_pair( std::vector<float>(), false );
+
 // Step 4 - build thresholds from bins
 	std::vector<float> vThres( histo.nbBins()-1 );
 
@@ -491,7 +498,7 @@ getThresholds( const std::vector<std::pair<T,KEY>>& v_pac, int nbBins )
 			vThres[i++] = it->getBorders().second;
 	}
 
-	return vThres;
+	return std::make_pair( vThres, true );
 }
 //---------------------------------------------------------------------
 

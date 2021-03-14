@@ -254,7 +254,7 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 		);
 		auto domClass = it->first;
 		auto nbDomClass = it->second;
-		COUT << "domClass=" << domClass << ", #=" << nbDomClass << " (" << 100.*nbDomClass/bin._mClassCounter.size() << ")\n";
+		COUT << "domClass=" << domClass << ", #=" << nbDomClass << " (" << 100.*nbDomClass/bin._mClassCounter.size() << "%)\n";
 //		::priv::printMap( std::cout, bin._mClassCounter, "bin class map" );
 
 		_nbPts -= bin.size();
@@ -469,16 +469,16 @@ getThresholds( const std::vector<std::pair<T,KEY>>& v_pac, int nbBins )
 //	histo.print( std::cout, "AFTER BUILD" );
 
 // Step 2 - split bins that need to be splitted
-	histo.printInfo( std::cout, "BEFORE split" );
+	histo.print( std::cout, "BEFORE split" );
 
 	histo.splitSearch();
-	histo.printInfo( std::cout, "AFTER split" );
+	histo.print( std::cout, "AFTER split" );
 
 // Step 3 - merge adjacent bins holding same class
 	auto nb = histo.mergeSearch();
 	std::cout << "Nb merges = " << nb << '\n';
 
-	histo.printInfo( std::cout, "AFTER merge" );
+	histo.print( std::cout, "AFTER merge" );
 
 	assert( histo.nbBins() > 1 );
 // Step 4 - build thresholds from bins

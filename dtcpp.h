@@ -471,7 +471,7 @@ struct Fparams
 	bool classAsString = false;       ///< Class values are given as strings
 	bool dataFilesHoldsClass = true;  ///< Set to false to read files holding only attribute values (for classification task)
 	bool classIsfirst = false;        ///< Default: class is last element of line, if first, then set this to true
-	uint nbBinHistograms = 15;        ///< Nb of bins for the data analysis histograms
+//	uint nbBinHistograms = 15;        ///< Nb of bins for the data analysis histograms
 	bool firstLineLabels = false;     ///< first line of data file holds attribute labels
 };
 
@@ -2410,13 +2410,18 @@ computeBestThreshold(
 	for( uint i=0; i<v_thresVal.size(); i++ )
 		v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
 #else
+	std::map<ClassVal,size_t> localMapCount;
 	using PairAtvalClass = std::pair<float,ClassVal>;
 	std::vector<PairAtvalClass> v_pac( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
 	for( size_t i=0; i<v_dpidx.size(); i++ )
-		v_pac[i] = std::make_pair(
-			data.getDataPoint( v_dpidx[i] ).attribVal( atIdx ),
-			data.getDataPoint( v_dpidx[i] ).classVal()
-		);
+	{
+		const auto& pt = data.getDataPoint( v_dpidx[i] );
+		v_pac[i] = std::make_pair( pt.attribVal( atIdx ), pt.classVal() );
+		localMapCount[ pt.classVal() ]++;
+	}
+
+	assert( localMapCount.size() > 1 ); // no search needed if we have only one class !
+
 	COUT << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
 	auto v_thresVal = getThresholds<float,ClassVal>( v_pac, 15 );
 

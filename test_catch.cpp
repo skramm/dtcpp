@@ -188,7 +188,8 @@ TEST_CASE( "computeBestThreshold", "[cbt]" )
 	auto ig1 = computeBestThreshold( 1, v_dpidx, dataset, giniCoeff.first, params );
 	std::cout << "ig1: " << ig1 <<'\n';
 //	AttribMap aMap;
-	auto ba = findBestAttribute( v_dpidx, dataset, params, AttribMap(2) );
+	AttribMap amap(2);
+	auto ba = findBestAttribute( v_dpidx, dataset, params, amap );
 }
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "removeDuplicates", "[RD]" )
@@ -213,22 +214,22 @@ TEST_CASE( "removeDuplicates", "[RD]" )
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "my_stod", "[STOD]" )
 {
-	CHECK_THROWS( priv::my_stod( "abc" ) );
-	CHECK_THROWS( priv::my_stod( "12.34.56" ) );
-	CHECK_THROWS( priv::my_stod( "12,34,56" ) );
+	CHECK_THROWS( dtcpp::priv::my_stod( "abc" ) );
+	CHECK_THROWS( dtcpp::priv::my_stod( "12.34.56" ) );
+	CHECK_THROWS( dtcpp::priv::my_stod( "12,34,56" ) );
 
-	CHECK( priv::my_stod( ".23" ) == 0.23 );
-	CHECK( priv::my_stod( ",23" ) == 0.23 );
+	CHECK( dtcpp::priv::my_stod( ".23" ) == 0.23 );
+	CHECK( dtcpp::priv::my_stod( ",23" ) == 0.23 );
 
-	CHECK( priv::my_stod( "23." ) == 23. );
-	CHECK( priv::my_stod( "23," ) == 23. );
+	CHECK( dtcpp::priv::my_stod( "23." ) == 23. );
+	CHECK( dtcpp::priv::my_stod( "23," ) == 23. );
 
-	CHECK( priv::my_stod( "1.23" ) == 1.23 );
-	CHECK( priv::my_stod( "1,23" ) == 1.23 );
+	CHECK( dtcpp::priv::my_stod( "1.23" ) == 1.23 );
+	CHECK( dtcpp::priv::my_stod( "1,23" ) == 1.23 );
 
-	CHECK( priv::my_stod( "0.23" ) == 0.23 );
-	CHECK( priv::my_stod( "0,23" ) == 0.23 );
-	CHECK( priv::my_stod( "0,12345678912" ) == 0.12345678912 );
+	CHECK( dtcpp::priv::my_stod( "0.23" ) == 0.23 );
+	CHECK( dtcpp::priv::my_stod( "0,23" ) == 0.23 );
+	CHECK( dtcpp::priv::my_stod( "0,12345678912" ) == 0.12345678912 );
 }
 
 //-------------------------------------------------------------------------------------------
@@ -236,7 +237,7 @@ TEST_CASE( "my_stod", "[STOD]" )
 std::pair<vertexT_t,vertexT_t>
 addChildPairT( vertexT_t v, GraphT& g )
 {
-	auto pv = priv::addChildPair( v, g, 10 );
+	auto pv = dtcpp::priv::addChildPair( v, g, 10 );
 	if( g[v]._type != NT_Root )   // so the root... stays the root !
 		g[v]._type = NT_Decision;
 

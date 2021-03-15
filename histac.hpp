@@ -192,7 +192,7 @@ VBS_Histogram<T,KEY>::printInfo( std::ostream& f, const char* msg ) const
 		<< "\n - nb pts=" << nbPts()
 		<< "\n - nb classes=" << _mCCount.size()
 		<< '\n';
-	::priv::printMap( f, _mCCount );
+	priv::printMap( f, _mCCount );
 }
 //---------------------------------------------------------------------
 template<typename T,typename KEY>
@@ -299,8 +299,6 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 			( midValue < bin._endValue )
 		)
 		{
-//			std::cout << " => splittable, new thres: " << bin._startValue << " - " << midValue << " - " << bin._endValue << '\n';
-
 			std::vector<size_t> vec1;  // new vector of indexes for the current bin
 			std::vector<size_t> vec2;  // new vector of indexes for the new bin
 			vec1.reserve( bin.size() );
@@ -385,7 +383,7 @@ VBS_Histogram<T,KEY>::mergeSearch()
 	START;
 	COUT << "\n* Start merge search\n";
 	::priv::printMap( std::cout, _mCCount );
-	print( std::cout );
+//	print( std::cout );
 
 	size_t countNbMerge = 0;
 
@@ -455,11 +453,23 @@ VBS_Histogram<T,KEY>::mergeSearch()
 } //namespace histac
 
 //---------------------------------------------------------------------
-/// Input:  a vector or pairs, size=nb of points in data set
-/// first value: the attribute value, second: the class value
+/// Compute the thresholds on an attribute value to be used to find the best split
+/**
+ Input: a vector or pairs, size=nb of points in data set.
+first value: the attribute value, second: the class value
+
+Output: a pair made of the vector of floating point threshold values and a bool.
+If the bool is false, then this means the function was unable to compute the thresholds.
+This can happen because the histrogram bins are splitted to find the best value separating classes, and if
+splitting reaches a maximum depth and there are still more than one class in the bin, then we just
+"forget" about the minority class values of the bin.
+*/
 template<typename T,typename KEY>
 std::pair<std::vector<float>,bool>
-getThresholds( const std::vector<std::pair<T,KEY>>& v_pac, int nbBins )
+getThresholds(
+	const std::vector<std::pair<T,KEY>>& v_pac,    ///< vector of pairs (attrib value, class value)
+	int nbBins                                     ///< nb of bins on which the initial histogram of attribute values is built
+)
 {
 	START;
 // Step 1 - build initial histogram, evenly spaced
@@ -469,16 +479,16 @@ getThresholds( const std::vector<std::pair<T,KEY>>& v_pac, int nbBins )
 //	histo.print( std::cout, "AFTER BUILD" );
 
 // Step 2 - split bins that need to be splitted
-	histo.print( std::cout, "BEFORE split" );
+//	histo.print( std::cout, "BEFORE split" );
 
 	histo.splitSearch();
-	histo.print( std::cout, "AFTER split" );
+//	histo.print( std::cout, "AFTER split" );
 
 // Step 3 - merge adjacent bins holding same class
 	auto nb = histo.mergeSearch();
 	std::cout << "Nb merges = " << nb << '\n';
 
-	histo.print( std::cout, "AFTER merge" );
+//	histo.print( std::cout, "AFTER merge" );
 
 // if the split operations made the histrogram have only one class, then
 // we can't provide a threshold, we just return an empty vector and set

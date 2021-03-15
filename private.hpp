@@ -24,6 +24,8 @@
 	#define START
 #endif // DEBUG
 
+//namespace dtcpp {
+
 // % % % % % % % % % % % % % %
 /// private namespace; not part of API
 namespace priv {
@@ -68,6 +70,7 @@ printMap( std::ostream& f, const std::map<K,V>& m, const char* msg=0 )
 
 // % % % % % % % % % % % % % %
 } // namespace priv
+//} // namespace dtcpp
 // % % % % % % % % % % % % % %
 
 

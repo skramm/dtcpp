@@ -96,7 +96,7 @@ plt: $(PLOT_OUT_FILES)
 out/%.png:out/%.plt
 	chmod u+x out/*.plt
 	@echo "processing file $<"
-	cd out; $(notdir $<)
+	cd out; ./$(notdir $<)
 
 dot: $(PNG_FILES)
 

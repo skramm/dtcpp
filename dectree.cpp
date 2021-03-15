@@ -4,6 +4,14 @@
 \brief Command-line app to train a Decision Tree with a dataset, given as argument.
 See doc on https://github.com/skramm/dtcpp
 \author S. Kramm - 2021
+
+\todo 2021-03-15: check:
+build/bin/dectree sample_data/wine.data -sep ',' -cf
+make plt
+=>
+produce plots of data "class vs attributes" with points only on classes 1 and 2
+although there is 3 classes!
+
 */
 
 //#define DEBUG

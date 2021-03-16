@@ -65,6 +65,8 @@ namespace dtcpp {
 		} \
 	}
 
+// forward declaration
+class DataSet;
 
 // % % % % % % % % % % % % % %
 /// private namespace; not part of API
@@ -117,6 +119,7 @@ struct Gparams
 	{
 		timer.start();
 	}
+	const dtcpp::DataSet* p_dataset = nullptr; ///< this will always point on the loaded dataset
 };
 
 //---------------------------------------------------------------------
@@ -447,12 +450,8 @@ class DataPoint
 			assert( vec.size() == nbAttribs() );
 			_attrValue = vec;
 		}
-		void print( std::ostream& f ) const
-		{
-			for( const auto& v: _attrValue )
-				f << v << ' ';
-			f << classVal() << '\n';
-		}
+		void print( std::ostream& f ) const;
+
 		friend std::ostream& operator << ( std::ostream& f, const DataPoint& pt )
 		{
 			f << "Datapoint: ";
@@ -558,9 +557,14 @@ class DataSet
 {
 	public:
 		DataSet() : _nbAttribs(0)
-		{}
+		{
+//			g_params.p_dataset = this;
+		}
 		DataSet( size_t nbAttribs ) : _nbAttribs(nbAttribs)
-		{ assert( nbAttribs ); }
+		{
+			assert( nbAttribs );
+//			g_params.p_dataset = this;
+		}
 
 		size_t size() const
 		{ return _data.size(); }
@@ -606,7 +610,9 @@ class DataSet
 			else
 				_nbNoClassPoints++;
 			_noChange = false;
+			_cimIsUpToDate = false;
 		}
+
 //		template<typename U>
 		DataPoint& getDataPoint( size_t idx )
 		{
@@ -629,10 +635,13 @@ class DataSet
 			assert( idx < _data.size() );
 			return _data[idx];
 		}
+
 		bool load( std::string fname, const Fparams=Fparams() );
 		void print( std::ostream& ) const;
 		void print( std::ostream&, const std::vector<uint>& ) const;
 		void printInfo( std::ostream&, const char* name=0 ) const;
+
+		uint getIndexFromClass( ClassVal ) const;
 		void generateClassDistrib( std::string fname ) const;
 
 		template<typename T>
@@ -645,6 +654,7 @@ class DataSet
 			_nbNoClassPoints = 0u;
 			clearOutliers();
 			_noChange = false;
+			_cimIsUpToDate = false;
 		}
 		std::pair<DataSet,DataSet> getFolds( uint i, uint nbFolds ) const;
 
@@ -693,12 +703,14 @@ class DataSet
 
 		ClassIndexMap getClassIndexMap() const
 		{
-			ClassIndexMap cim;
-			size_t i = 0;
-			for( const auto& cc: _classCount )  // for each class value, fill
-//				cim[cc.first] = i++;            // the map with an incremental index
-				cim.insert( ClassIndexMap::value_type( cc.first, i++ ) );            // the map with an incremental index
-			return cim;
+			if( !_cimIsUpToDate )
+			{
+				size_t i = 0;
+				for( const auto& cc: _classCount )  // for each class value, fill
+					_classIndexMap.insert( ClassIndexMap::value_type( cc.first, i++ ) );            // the map with an incremental index
+				_cimIsUpToDate = true;
+			}
+			return _classIndexMap;
 		}
 		template<typename HISTO>
 		std::vector<std::pair<uint,uint>> countClassPerBin( size_t, const HISTO& ) const;
@@ -721,6 +733,8 @@ class DataSet
 		size_t                  _nbAttribs = 0;
 		std::vector<DataPoint>  _data;
 		std::map<ClassVal,uint> _classCount;            ///< Holds the number of points for each class value. Does \b NOT count classless points
+		mutable ClassIndexMap   _classIndexMap;		    ///< holds correspondence between real class values (say, 1,4,7) and corresponding indexes (0,1,2)
+		mutable bool            _cimIsUpToDate = false;
 		uint                    _nbNoClassPoints = 0u;
 		std::vector<bool>       _vIsOutlier;            ///< Will be allocated ONLY if tagOutliers() is called, with En_OR_method::disablePoint
 		size_t                  _nbOutliers = 0;        ///< to avoid recounting them when unneeded
@@ -730,6 +744,26 @@ class DataSet
 //using DataSetf = DataSet<float>;
 //using DataSetd = DataSet<double>;
 
+
+//---------------------------------------------------------------------
+void
+DataPoint::print( std::ostream& f ) const
+{
+	for( const auto& v: _attrValue )
+		f << v << ' ';
+	f << classVal();
+	if( g_params.p_dataset )
+		f << ' ' << g_params.p_dataset->getIndexFromClass( classVal() );
+	f << '\n';
+}
+
+//---------------------------------------------------------------------
+uint
+DataSet::getIndexFromClass( ClassVal cval ) const
+{
+	const auto& cim = getClassIndexMap();
+	return cim.left.at( cval );
+}
 
 //---------------------------------------------------------------------
 /// Writes in current folder a file named <code>attrib_histo_<i>.dat</code>, holding
@@ -1164,9 +1198,10 @@ DataSet::generateAttribPlot(
 	f1 << '\n';
 
 	auto f = priv::openOutputFile( fname, priv::FT_PLT, _fname );
-	f << "set ylabel 'CLASS'"
+	f << "set ylabel 'Class index'"
+		<< "\nset y2label 'Class label'"
 		<< "\nset yrange [-0.5:" << nbClasses()-0.5f << ']'
-		<< "\nclass=" << nbAttribs()+1
+		<< "\nclass=" << nbAttribs()+2
 		<< "\nset datafile separator ' '"
 		<< "\nset grid"
 		<< "\n\n";
@@ -1298,6 +1333,8 @@ DataSet::load( std::string fname, const Fparams params )
 	}
 	while( !f.eof() );
 
+	_cimIsUpToDate = false;
+	g_params.p_dataset = this;
 #if 1
 	std::cout << " - Read " << size() << " points in file " << fname;
 	std::cout << "\n - file info:"

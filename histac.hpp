@@ -259,7 +259,7 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 	bool retval = false;
 	auto& bin = *it;                // current bin
 	auto it_next = std::next(it);  // next one (will insert before this one)
-	COUT << side << ": depth=" << depth_sb << " start split " << bin << '\n';
+//	COUT << side << ": depth=" << depth_sb << " start split " << bin << '\n';
 
 	if( depth_sb >= _maxDepth )
 	{
@@ -324,7 +324,7 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 			( midValue < bin._endValue )
 		)
 		{
-			COUT << "split bin, new thres=" << bin._startValue << ";" << midValue << ";" << bin._endValue << '\n';
+//			COUT << "split bin, new thres=" << bin._startValue << ";" << midValue << ";" << bin._endValue << '\n';
 			std::vector<size_t> vec1;  // new vector of indexes for the current bin
 			std::vector<size_t> vec2;  // new vector of indexes for the new bin
 			vec1.reserve( bin.size() );
@@ -378,6 +378,7 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 template<typename T,typename KEY>
 void
 VBS_Histogram<T,KEY>::splitSearch()
+#if 0
 {
 	START;
 	COUT << "\n* Start splitting, nb bins=" << nbBins() << '\n';
@@ -392,7 +393,7 @@ VBS_Histogram<T,KEY>::splitSearch()
 		auto it = _lBins.begin();
 		do
 		{
-			COUT << "iter1 " << iter1 << " iter2 " << iter2++ << '\n';
+//			COUT << "iter1 " << iter1 << " iter2 " << iter2++ << '\n';
 			splitOccured = p_splitBin( it, '0' );
 			it = std::next(it);
 		}
@@ -400,7 +401,37 @@ VBS_Histogram<T,KEY>::splitSearch()
 		iter1++;
 	}
 	while( splitOccured );
+	COUT << "Done, used " << iter1 << " iterations\n";
 }
+#else
+{
+	START;
+	COUT << "\n* Start splitting, nb bins=" << nbBins() << '\n';
+//	printInfo( std::cout );
+
+	size_t iter1 = 0;
+	bool splitOccured = false;
+	auto it = _lBins.begin();
+	do
+	{
+		splitOccured = false;
+//		size_t iter2 = 0;
+//		auto it = _lBins.begin();
+		do
+		{
+//			COUT << "iter1 " << iter1 << " iter2 " << iter2++ << '\n';
+			bool b = p_splitBin( it, '0' );
+			it = std::next(it);
+			if( b )
+				splitOccured = true;
+		}
+		while( it != std::end(_lBins) );
+		iter1++;
+	}
+	while( splitOccured );
+	COUT << "Done, used " << iter1 << " iterations\n";
+}
+#endif
 //---------------------------------------------------------------------
 /// Searches for any potential merges (adjacent bins holding same class)
 template<typename T,typename KEY>
@@ -426,7 +457,7 @@ VBS_Histogram<T,KEY>::mergeSearch()
 		size_t iter2 = 0;
 		do
 		{
-			COUT << "-Iter1 " << iter1 << " iter2 " << iter2++ << '\n';
+//			COUT << "-Iter1 " << iter1 << " iter2 " << iter2++ << '\n';
 			if( std::next(it) != std::end(_lBins) ) // if there is a next bin
 			{
 				auto& b1 = *it;
@@ -473,6 +504,7 @@ VBS_Histogram<T,KEY>::mergeSearch()
 		iter1++;
 	}
 	while( mergeOccurred );
+	COUT << "Done, used " << iter1 << " iterations\n";
 
 	return countNbMerge;
 }

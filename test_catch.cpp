@@ -306,7 +306,7 @@ TEST_CASE( "vbs_histogram", "[vbsh]" )
 		{ 0.6, c1 },
 		{ 0.7, c2 },
 		{ 0.8, c2 },
-		{ 3,   c2 },
+		{ 3.,  c2 },
 	};
 	histac::VBS_Histogram<float,ClassVal> h( vpac, 3 );
 	CHECK( h.nbBins() == 3 );
@@ -319,7 +319,32 @@ TEST_CASE( "vbs_histogram", "[vbsh]" )
 	CHECK( h.getBin(2).size()      == 1 );
 	CHECK( h.getBin(2).nbClasses() == 1 );
 
-	h.splitSearch();
+	h.splitSearch();           // first bin gets split into [0;0.5[ and [0.5;1[,
+	CHECK( h.nbBins() == 6 );  // then the latter into [0.5;0.75[ and [0.75;1[,
+	CHECK( h.nbPts()  == 6 );  // and the first if split into [0.5;0.625[ and [0.625;0.75[
+	h.print( std::cout );
+
+	CHECK( h.getBin(0).size() == 1 );  // point 0. is in [0;0.5[
+	CHECK( h.getBin(1).size() == 2 );  // points 0.5,0.6 are in [0.5;0.625[
+	CHECK( h.getBin(2).size() == 1 );  // points 0.7 is in [0.625;0.75[
+	CHECK( h.getBin(3).size() == 1 );  // points 0.8 is in [0.75;1.[
+	CHECK( h.getBin(4).size() == 0 );
+	CHECK( h.getBin(5).size() == 1 );  // point 3.
+
+	CHECK( h.getBin(0).nbClasses() == 1 ); // c1
+	CHECK( h.getBin(1).nbClasses() == 1 ); // c1
+	CHECK( h.getBin(2).nbClasses() == 1 ); // c2
+	CHECK( h.getBin(3).nbClasses() == 1 ); // c2
+	CHECK( h.getBin(4).nbClasses() == 0 );
+	CHECK( h.getBin(5).nbClasses() == 1 ); // c2
+
+	h.mergeSearch();
+	CHECK( h.nbBins() == 2 );
+	CHECK( h.nbPts()  == 6 );
+
+	for( const auto& b: h )
+		CHECK( b.nbClasses() == 1 );
+
 //	CHECK( h.nbBins() == 2 );
 //	CHECK( h.nbPts()  == 6 );
 }

@@ -74,10 +74,11 @@ struct VBS_Histogram
 			{
 				f << std::setprecision(10) << std::scientific
 				<< "Id=" << b._binId << ' ';
-				f << b.size() << " pts, " << b.nbClasses() << " classes ";
-				if( b.nbClasses() == 1 )
-					f << '(' << b._mClassCounter.begin()->first << ") ";
-				//", range=" << b._startValue << "-" << b._endValue << ' ';
+				f << b.size() << " pts, " << b.nbClasses() << " classes, range="
+					<< b._startValue << "-" << b._endValue << ' ';
+
+//				if( b.nbClasses() == 1 )
+//					f << '(' << b._mClassCounter.begin()->first << ") ";
 #ifdef BIN_PRINT_POINTS
 				f << " points: ";
 					priv::printVector( f, b._vIdxPt );
@@ -323,6 +324,7 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 			( midValue < bin._endValue )
 		)
 		{
+			COUT << "split bin, new thres=" << bin._startValue << ";" << midValue << ";" << bin._endValue << '\n';
 			std::vector<size_t> vec1;  // new vector of indexes for the current bin
 			std::vector<size_t> vec2;  // new vector of indexes for the new bin
 			vec1.reserve( bin.size() );

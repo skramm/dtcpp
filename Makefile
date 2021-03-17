@@ -2,7 +2,7 @@
 
 SHELL=bash
 
-.PHONY: fdoc clean cleanall all show doc dot test check
+.PHONY: fdoc clean cleanall all show doc dot test check touch
 
 BIN_DIR=build/bin
 OBJ_DIR=build/obj
@@ -73,6 +73,8 @@ show:
 	@echo "PLOT_OUT_FILES=$(PLOT_OUT_FILES)"
 	@echo "PLOT_IN_FILES=$(PLOT_IN_FILES)"
 
+touch:
+	touch dtcpp.h histac.hpp
 
 $(OBJ_DIR)/%.o: %.cpp dtcpp.h histac.hpp
 	$(CXX) -Wall -std=gnu++14 $(CFLAGS) -fexceptions -O2 -Iother/ -c $< -o $@

@@ -39,18 +39,18 @@ struct VBS_Histogram
 			T                    _startValue;     ///< bin left border
 			T                    _endValue;       ///< bin right border
 			std::vector<size_t>  _vIdxPt;         ///< indexes of the points in original dataset
-// TEMP
-			int _binId=0;
+			int _binId=0;                         ///< bin identifier \todo this is useful only for dev stage, can be removed afterwards.
 
 		public:
-			HBin( T v1, T v2 )
-				: _startValue(v1), _endValue(v2)
+			HBin( T v1, T v2 ) : _startValue(v1), _endValue(v2)
 			{
 				assert( v1 < v2 );
 				_binId = sBinIdCounter++;
 			}
 			HBin()
-			{_binId = sBinIdCounter++;}
+			{
+				_binId = sBinIdCounter++;
+			}
 
 		/// A bin can be split if more then 1 classes and more than 2 points
 			bool isSplittable() const
@@ -358,10 +358,11 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 //			COUT << "bin1: " << bin << '\n';
 //			COUT << "bin2: " << newBin << '\n';
 
-			_lBins.insert( it_next, newBin );
-			if( bin.size() )
-				p_splitBin( it, 'A' );
-			if( newBin.size() )
+			_lBins.insert( it_next, newBin );  // insert the new bin in histogram
+
+			if( bin.size() >1  )               // check if current bin still has points
+				p_splitBin( it, 'A' );         // if it does, attempt to split it
+			if( newBin.size() )                     // do the same for the new bin we just created
 				p_splitBin( std::next(it), 'B' );
 
 			retval = true;
@@ -391,7 +392,7 @@ VBS_Histogram<T,KEY>::splitSearch()
 		auto it = _lBins.begin();
 		do
 		{
-//			COUT << "iter1 " << iter1 << " iter2 " << iter2++ << '\n';
+			COUT << "iter1 " << iter1 << " iter2 " << iter2++ << '\n';
 			splitOccured = p_splitBin( it, '0' );
 			it = std::next(it);
 		}

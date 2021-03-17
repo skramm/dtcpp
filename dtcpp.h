@@ -1729,10 +1729,8 @@ struct ConfusionMatrix
 		}
 	}
 
-	explicit ConfusionMatrix( const std::vector<std::vector<uint>>& m )
-	{
-		_mat = m;
-	}
+	explicit ConfusionMatrix( const std::vector<std::vector<uint>>& m ) : _mat(m)
+	{}
 #endif //  TESTMODE
 
 	void clear()

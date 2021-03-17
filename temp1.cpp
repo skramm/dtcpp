@@ -66,7 +66,6 @@ int main()
 				ClassVal( 4. * std::rand()/RAND_MAX )
 			)
 		);
-
 	}
 
 #endif

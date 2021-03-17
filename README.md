@@ -9,12 +9,10 @@ Naive attempt of a Decision Tree implementation for continuous variables (WIP !!
 
 ## WORK IN PROGRESS, NO RELEASES YET !
 
-## current status 20210313
-make run => failure:
-In some situations, when searching for the best thresholds:
+## current status 20210317:
+build/bin/dectree ~/data/Sensorless_drive_diagnosis.txt
+=> failure:
 
-all the attribute values hold the same class =>
-what do we do?
 
 ## Features
 

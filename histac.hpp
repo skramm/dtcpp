@@ -17,8 +17,12 @@
 namespace histac {
 
 //---------------------------------------------------------------------
-/// Variable bin-size histogram. 1st argument type is the floating-point type (\c float or \c double)
-/// 2nd type is the key used for the mapping
+/// Variable bin-size histogram, used to find the best thresholds on the attribute values
+/**
+template arguments:
+- 1st argument type is the floating-point type (\c float or \c double)
+- 2nd type is the key used for the mapping (class type, see dtcpp::ClassVal)
+*/
 template<typename U,typename KEY>
 struct VBS_Histogram
 {
@@ -58,7 +62,9 @@ struct VBS_Histogram
 					return false;
 				return true;
 			}
+/// Returns the number of points in the bin
 			size_t size()      const { return _vIdxPt.size(); }
+/// Returns the number of classes in the bin
 			size_t nbClasses() const { return _mClassCounter.size(); }
 			std::pair<T,T> getBorders() const
 			{
@@ -100,6 +106,24 @@ struct VBS_Histogram
 		void splitSearch();
 		void print( std::ostream&, const char* msg=0 ) const;
 		void printInfo( std::ostream&, const char* msg=0 ) const;
+
+#ifdef TESTMODE
+/// This is ONLY for testing !
+		const HBin<U>& getBin( size_t idx ) const
+		{
+			assert( idx < nbBins() );
+			size_t c=0;
+			auto it = begin();
+			do
+			{
+				if( idx == c )
+					return *it;
+				it = std::next(it);
+				c++;
+			}
+			while(1);
+		}
+#endif // TESTMODE
 
 	private:
 		void p_assignToBin( const std::pair<U,KEY>& pac, size_t idx );

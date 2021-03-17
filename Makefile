@@ -2,7 +2,7 @@
 
 SHELL=bash
 
-.PHONY: fdoc clean cleanall all show doc dot test
+.PHONY: fdoc clean cleanall all show doc dot test check
 
 BIN_DIR=build/bin
 OBJ_DIR=build/obj
@@ -61,6 +61,9 @@ run2: all
 run3: all
 	$(BIN_DIR)/dectree sample_data/winequality-white.csv -sep ";" -cs -ll 0
 
+check:
+	cppcheck . --enable=all 2>cppcheck.log
+	xdg-open cppcheck.log
 
 show:
 	@echo "OBJ_FILES=$(OBJ_FILES)"

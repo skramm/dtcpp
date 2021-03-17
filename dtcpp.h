@@ -359,7 +359,7 @@ enum DataType
 
 class DataSetDescription
 {
-public:
+	public:
 		DataSetDescription( uint nbAttribs )
 			: _dataType(nbAttribs)
 		{}
@@ -389,12 +389,14 @@ class DataPoint
 		{}
 #endif
 /// Constructor from a vector of strings (used by file reader)
-		DataPoint( const std::vector<std::string>& v_string, ClassVal c ) : DataPoint( v_string )
+		DataPoint( const std::vector<std::string>& v_string, ClassVal c )
+			: DataPoint( v_string )
 		{
 			_class = c;
 		}
+
 /// Constructor from a vector of strings (used by file reader when no class is given)
-		DataPoint( const std::vector<std::string>& v_string )
+		explicit DataPoint( const std::vector<std::string>& v_string )
 		{
 			assert( v_string.size() > 0 );              // at least one attribute
 			for( size_t i=0; i<v_string.size(); i++ )
@@ -415,7 +417,7 @@ class DataPoint
 			_class = c;
 		}
 /// Constructor from a vector of floats and no class value
-		DataPoint( const std::vector<float>& v_val )
+		explicit DataPoint( const std::vector<float>& v_val )
 		{
 			assert( v_val.size() > 0 );              // at least one attribute
 
@@ -508,7 +510,7 @@ struct DatasetStats
 
 	public:
 /// Constructor. Argument is the number of attributes
-		DatasetStats( size_t nbAttribs ) : v_stats(nbAttribs)
+		explicit DatasetStats( size_t nbAttribs ) : v_stats(nbAttribs)
 		{}
 		void add( size_t idx, const AttribStats<T>& ats )
 		{
@@ -560,7 +562,7 @@ class DataSet
 		{
 //			g_params.p_dataset = this;
 		}
-		DataSet( size_t nbAttribs ) : _nbAttribs(nbAttribs)
+		explicit DataSet( size_t nbAttribs ) : _nbAttribs(nbAttribs)
 		{
 			assert( nbAttribs );
 //			g_params.p_dataset = this;
@@ -1698,7 +1700,7 @@ struct ConfusionMatrix
 {
 	friend std::ostream& operator << ( std::ostream&, const ConfusionMatrix& );
 
-	ConfusionMatrix( ClassIndexMap cim )
+	explicit ConfusionMatrix( ClassIndexMap cim )
 		: _cmClassIndexMap(cim)
 	{
 		auto nbClasses = cim.size();
@@ -1713,7 +1715,7 @@ struct ConfusionMatrix
 
 #ifdef TESTMODE
 /// Constructor only for testing
-	ConfusionMatrix( size_t nbClasses )
+	explicit ConfusionMatrix( size_t nbClasses )
 	{
 		assert( nbClasses>1 );
 		_mat.resize( nbClasses );
@@ -1727,7 +1729,7 @@ struct ConfusionMatrix
 		}
 	}
 
-	ConfusionMatrix( const std::vector<std::vector<uint>>& m )
+	explicit ConfusionMatrix( const std::vector<std::vector<uint>>& m )
 	{
 		_mat = m;
 	}
@@ -2054,7 +2056,7 @@ class TrainingTree
 		}
 #endif
 /// Constructor 2, to be used if class values can not be used as indexes.
-		TrainingTree( const ClassIndexMap& cim )
+		explicit TrainingTree( const ClassIndexMap& cim )
 			: _classIndexMap( cim )
 		{
 			clear();
@@ -2564,7 +2566,7 @@ struct AttribMap
 	private:
 		std::map<uint,bool> _attribMap;
 	public:
-		AttribMap( uint nbAttribs )
+		explicit AttribMap( uint nbAttribs )
 		{
 			for( uint i=0; i<nbAttribs; i++ )
 				_attribMap[i] = false;

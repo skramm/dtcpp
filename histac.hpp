@@ -354,8 +354,8 @@ VBS_Histogram<T,KEY>::splitSearch()
 {
 	START;
 	COUT << "\n* Start splitting, nb bins=" << nbBins() << '\n';
-	printInfo( std::cout );
-	::priv::printMap( std::cout, _mCCount );
+//	printInfo( std::cout );
+
 	size_t iter1 = 0;
 	bool splitOccured = false;
 	do
@@ -382,7 +382,7 @@ VBS_Histogram<T,KEY>::mergeSearch()
 {
 	START;
 	COUT << "\n* Start merge search\n";
-	::priv::printMap( std::cout, _mCCount );
+//	::priv::printMap( std::cout, _mCCount );
 //	print( std::cout );
 
 	size_t countNbMerge = 0;

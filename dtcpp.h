@@ -642,6 +642,7 @@ class DataSet
 		void printInfo( std::ostream&, const char* name=0 ) const;
 
 		uint getIndexFromClass( ClassVal ) const;
+		ClassVal getClassFromIndex( uint ) const;
 		void generateClassDistrib( std::string fname ) const;
 
 		template<typename T>
@@ -651,10 +652,12 @@ class DataSet
 		{
 			_data.clear();
 			_classCount.clear();
+			_classStringMap.clear();
 			_nbNoClassPoints = 0u;
-			clearOutliers();
 			_noChange = false;
 			_cimIsUpToDate = false;
+
+			clearOutliers();
 		}
 		std::pair<DataSet,DataSet> getFolds( uint i, uint nbFolds ) const;
 
@@ -705,9 +708,9 @@ class DataSet
 		{
 			if( !_cimIsUpToDate )
 			{
-				size_t i = 0;
-				for( const auto& cc: _classCount )  // for each class value, fill
-					_classIndexMap.insert( ClassIndexMap::value_type( cc.first, i++ ) );            // the map with an incremental index
+				size_t i = 0;                            // for each class value, fill
+				for( const auto& cc: _classCount )       // the map with an incremental index
+					_classIndexMap.insert( ClassIndexMap::value_type( cc.first, i++ ) );
 				_cimIsUpToDate = true;
 			}
 			return _classIndexMap;
@@ -727,11 +730,12 @@ class DataSet
 
 	private:
 		void p_countClasses();
-		void p_parseTokens( std::vector<std::string>&, const Fparams&, std::map<std::string,uint>&, uint&, size_t );
+		void p_parseTokens( std::vector<std::string>&, const Fparams&, uint&, size_t );
 
 	private:
 		size_t                  _nbAttribs = 0;
 		std::vector<DataPoint>  _data;
+		std::map<std::string,uint> _classStringMap;     ///< maps string labels to indexes
 		std::map<ClassVal,uint> _classCount;            ///< Holds the number of points for each class value. Does \b NOT count classless points
 		mutable ClassIndexMap   _classIndexMap;		    ///< holds correspondence between real class values (say, 1,4,7) and corresponding indexes (0,1,2)
 		mutable bool            _cimIsUpToDate = false;
@@ -740,6 +744,7 @@ class DataSet
 		size_t                  _nbOutliers = 0;        ///< to avoid recounting them when unneeded
 		std::string             _fname;                 ///< file name (saved so it can be printed out in output files)
 		bool                    _noChange = false;
+		Fparams                 _fparams;               ///< stored here, because some flags might be useful after loading
 };
 //using DataSetf = DataSet<float>;
 //using DataSetd = DataSet<double>;
@@ -764,7 +769,12 @@ DataSet::getIndexFromClass( ClassVal cval ) const
 	const auto& cim = getClassIndexMap();
 	return cim.left.at( cval );
 }
-
+ClassVal
+DataSet::getClassFromIndex( uint idx ) const
+{
+	const auto& cim = getClassIndexMap();
+	return cim.right.at( idx );
+}
 //---------------------------------------------------------------------
 /// Writes in current folder a file named <code>attrib_histo_<i>.dat</code>, holding
 /// the histogram values of attribute \c i. Helper function for DataSet::computeStats()
@@ -1198,8 +1208,15 @@ DataSet::generateAttribPlot(
 	f1 << '\n';
 
 	auto f = priv::openOutputFile( fname, priv::FT_PLT, _fname );
+
+	if( !_fparams.classAsString )                                   // if class are not strings,
+	{                                                               // they can have numeric labels
+		f << "set y2label 'Class label'\nset y2tics (";             // different from 0-based indexes,
+		for( int i=0; i<nbClasses(); i++ )                          // they are printed on the right
+			f << '"' << getClassFromIndex(i) << "\" " << i << ',';
+		f << ")\n";
+	}
 	f << "set ylabel 'Class index'"
-		<< "\nset y2label 'Class label'"
 		<< "\nset yrange [-0.5:" << nbClasses()-0.5f << ']'
 		<< "\nclass=" << nbAttribs()+2
 		<< "\nset datafile separator ' '"
@@ -1230,7 +1247,7 @@ void
 DataSet::p_parseTokens(
 	std::vector<std::string>&   v_tok,             ///< string tokens read on line
 	const Fparams&              params,            ///< parameters
-	std::map<std::string,uint>& classStringMap,    ///< class to string map, used if class is given as a string
+//	std::map<std::string,uint>& classStringMap,    ///< class to string map, used if class is given as a string
 	uint&                       classIndexCounter, ///< the next index value for classes as strings
 	size_t                      nb_lines           ///< in case of error
 )
@@ -1257,14 +1274,14 @@ DataSet::p_parseTokens(
 		}
 		else
 		{
-			if( classStringMap.find( cla ) == classStringMap.end() )  // if not registered, then
+			if( _classStringMap.find( cla ) == _classStringMap.end() )  // if not registered, then
 			{
-				classIndex            = classIndexCounter;
-				classStringMap[ cla ] = classIndexCounter;             // new class, add it
+				classIndex             = classIndexCounter;
+				_classStringMap[ cla ] = classIndexCounter;             // new class, add it
 				classIndexCounter++;
 			}
 			else
-				classIndex = classStringMap[ cla ];
+				classIndex = _classStringMap[ cla ];
 		}
 		if( classIndex < 0 )
 			_nbNoClassPoints++;
@@ -1290,10 +1307,11 @@ DataSet::load( std::string fname, const Fparams params )
 		std::cerr << "Unable to open file " << fname << "\n";
 		return false;
 	}
-	_fname = fname;
+	_fparams = params;
+	_fname   = fname;
 	clear();
 
-	std::map<std::string,uint> classStringMap;  // maps string to class Idx used only if classes are given as strings
+//	std::map<std::string,uint> classStringMap;  // maps string to class Idx used only if classes are given as strings
 	uint classIndexCounter = 0;
 
 	size_t nb_lines     = 0;
@@ -1326,7 +1344,7 @@ DataSet::load( std::string fname, const Fparams params )
 					if( size() == 0 )                    // if this is the first datapoint, then set the nb of attributes
 						setNbAttribs( params.dataFilesHoldsClass ? v_tok.size()-1 : v_tok.size() );
 
-					p_parseTokens( v_tok, params, classStringMap, classIndexCounter, nb_lines );
+					p_parseTokens( v_tok, params, classIndexCounter, nb_lines );
 				}
 			}
 		}
@@ -1341,7 +1359,6 @@ DataSet::load( std::string fname, const Fparams params )
 		<< "\n  - nb lines=" << nb_lines
 		<< "\n  - nb empty=" << nb_empty
 		<< "\n  - nb comment=" << nb_comment
-//		<< "\n  - nb classes=" << classValues.size()
 		<< "\n  - nb classes=" << nbClasses()
 		<< '\n';
 #endif
@@ -1382,31 +1399,36 @@ DataSet::generateClassDistrib( std::string fname ) const
 void
 DataSet::printInfo( std::ostream& f, const char* name ) const
 {
-	f << "Dataset: ";
+	f << "------------------------\nDataset: ";
 	if( name )
 		f << name;
 	f << "\n # points="             << size()
 		<< "\n # attributes="       << nbAttribs()
 		<< "\n # classes="          << nbClasses()
-		<< "\n # classless points=" << _nbNoClassPoints;
+		<< "\n # classless points=" << _nbNoClassPoints
+		<< "\n # outliers=" << _nbOutliers << '\n';
 
-//	if( _vIsOutlier.size() )
-		f << "\n # outliers=" << _nbOutliers;
+	if( _fparams.classAsString )
+	{
+		f << "- Class strings => indexes:\n";
+		for( const auto& psi: _classStringMap )
+			f << " -\"" << psi.first << "\": " << psi.second << '\n';
+	}
 
-	f << "\nClasses frequency:\n";
+	f << "- Classes frequency:\n";
 	size_t sum = 0;
 	size_t c = 0;
-	f << " # : label Nb  %\n-----------------------------\n";
+	f << " # : label - Nb  %\n"; //-----------------------------\n";
 
 	for( const auto& cval: _classCount )
 	{
-		f << ++c << ": " <<  cval.first << ": "
+		f << ++c << " : " <<  cval.first << " - "
 			<< cval.second
 			<< " (" << std::setw(4) << 100. * cval.second/size()
 			<< " %)\n";
 		sum += cval.second;
 	}
-	f << " => " << sum << " points holding a class value\n";
+	f << " => " << sum << " points holding a class value\n\n";
 }
 //---------------------------------------------------------------------
 //template<typename T>

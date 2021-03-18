@@ -531,6 +531,7 @@ getThresholds(
 )
 {
 	START;
+//	std::cout << "start " << __FUNCTION__ << "()\n";
 // Step 1 - build initial histogram, evenly spaced
 	COUT << "build histogram from vector size=" << v_pac.size() << '\n';
 	histac::VBS_Histogram<T,KEY> histo( v_pac, nbBins );

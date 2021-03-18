@@ -1769,18 +1769,15 @@ struct ConfusionMatrix
 	{
 		assert( trueVal.get() >= 0 );
 		assert( predictedVal.get() >=0 );
+		assert( _cmClassIndexMap.size() );
 
-		auto col = static_cast<size_t>( trueVal.get() );
-		auto li  = static_cast<size_t>( predictedVal.get() );
-		if( _cmClassIndexMap.size() )  /// \todo this is now always true
-		{
-			col = _cmClassIndexMap.left.at( trueVal );
-			li  = _cmClassIndexMap.left.at( predictedVal );
-		}
+		auto col = _cmClassIndexMap.left.at( trueVal );
+		auto li  = _cmClassIndexMap.left.at( predictedVal );
 
 		assert( li < _mat.size() && col < _mat.size() );
 		_mat[li][col]++;
 	}
+
 	void printAllScores( std::ostream&, const char* msg=0 ) const;
 	void printAverageScores( std::ostream&, const char* msg=0 ) const;
 
@@ -2315,9 +2312,6 @@ struct NodeContent
 
 //---------------------------------------------------------------------
 /// Returns some info on what a node holding the points defined by \c v_dpidx holds.
-/**
-\todo Here, we iterate twice on the set, that could probably be done with a single iteration.
-*/
 NodeContent
 getNodeContent(
 	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
@@ -2448,7 +2442,7 @@ computeBestThreshold(
 )
 {
 	START;
-//	LOG(3, "Searching best threshold for attrib=" << atIdx );
+	LOG(3, "Searching best threshold for attrib=" << atIdx );
 
 #if 0
 // step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)

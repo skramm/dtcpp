@@ -24,6 +24,7 @@
 	#define START
 #endif // DEBUG
 
+
 //namespace dtcpp {
 
 // % % % % % % % % % % % % % %

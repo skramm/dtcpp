@@ -415,15 +415,11 @@ VBS_Histogram<T,KEY>::splitSearch()
 	do
 	{
 		splitOccured = false;
-//		size_t iter2 = 0;
-//		auto it = _lBins.begin();
 		do
 		{
-//			COUT << "iter1 " << iter1 << " iter2 " << iter2++ << '\n';
-			bool b = p_splitBin( it, '0' );
-			it = std::next(it);
-			if( b )
+			if( p_splitBin( it, '0' ) )
 				splitOccured = true;
+			it = std::next(it);
 		}
 		while( it != std::end(_lBins) );
 		iter1++;

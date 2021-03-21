@@ -74,8 +74,10 @@ struct VBS_Histogram
 			{
 				f << std::setprecision(10) << std::scientific
 				<< "Id=" << b._binId << ' ';
-				f << b.size() << " pts, " << b.nbClasses() << " classes, range="
-					<< b._startValue << "-" << b._endValue << ' ';
+				f << b.size() << " pts, " << b.nbClasses() << " classes:";
+				for( const auto& pc: b._mClassCounter )
+					f << "C" << pc.first << "=" << pc.second << ", ";
+//				f << "range=" << b._startValue << "-" << b._endValue << ' ';
 
 //				if( b.nbClasses() == 1 )
 //					f << '(' << b._mClassCounter.begin()->first << ") ";
@@ -91,8 +93,8 @@ struct VBS_Histogram
 	private:
 		const std::vector<std::pair<U,KEY>>* p_src = 0;    ///< pointer on source data
 		std::list<HBin<U>>   _lBins;                       ///< list of bins
-		size_t               _maxDepth = 12;
-		size_t               _nbPts=0;                     ///< Total nb of points. \warning Can be different than the input vector size
+		size_t               _bMaxDepth = 10;
+		size_t               _nbPts=0;                     ///< Total nb of points. \warning Can be different than the input vector size because some data points can be discarded
 		std::map<KEY,size_t> _mCCount;                     ///< nb of points per class, for the whole histogram
 
 	public:
@@ -171,7 +173,8 @@ VBS_Histogram<T,KEY>::VBS_Histogram( const std::vector<std::pair<T,KEY>>& v_pac,
 	}
 
 	for( size_t i=0; i<v_pac.size(); i++ )
-		p_assignToBin( v_pac[i], i );
+		if( v_pac[i].second != KEY(-1) )      // so we don not put points having no class in the bins
+			p_assignToBin( v_pac[i], i );
 
 	_nbPts = v_pac.size();
 }
@@ -261,7 +264,7 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 	auto it_next = std::next(it);  // next one (will insert before this one)
 //	COUT << side << ": depth=" << depth_sb << " start split " << bin << '\n';
 
-	if( depth_sb >= _maxDepth )
+	if( depth_sb >= _bMaxDepth )
 	{
 		COUT << "Reached MAX DEPTH! bin=" << bin << '\n';
 /*		priv::printVector( std::cout, bin._vIdxPt, "BEFORE points" );
@@ -277,11 +280,11 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 				return p1.second < p2.second;
 			}
 		);
-		auto domClass = it->first;
+		auto domClass   = it->first;
 		auto nbDomClass = it->second;
-		COUT << "domClass=" << domClass << ", #=" << nbDomClass << " (" << 100.*nbDomClass/bin._mClassCounter.size() << "%)\n";
+		COUT << "domClass=" << domClass << ", #=" << nbDomClass << " (" << 100.*nbDomClass/bin._mClassCounter.size() << "%) binsize=" << bin.size() << "\n";
 //		::priv::printMap( std::cout, bin._mClassCounter, "bin class map" );
-
+		COUT << "nbpts BEFORE=" << _nbPts << '\n';
 		_nbPts -= bin.size();
 //		std::cout << "Reached max depth, removing " << bin.size() << " pts ";
 
@@ -293,18 +296,18 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 			const auto& pt = p_src->at(idx);
 			if( pt.second == domClass )
 				vec1.push_back( idx );
-			else                              // adjust global map
+/*			else                              // adjust global map
 			{
+				COUT << "BEFORE removing from ccount: class=" << pt.second << " nb="  << _mCCount[pt.second] << '\n';
 				_mCCount[pt.second]--;
 				if( _mCCount[pt.second] == 0 )
 					_mCCount.erase(pt.second);
-				_nbPts--;
-			}
+			}*/
 		}
 		bin._mClassCounter[domClass] = nbDomClass;
 		bin._vIdxPt = std::move(vec1);
 		_nbPts += bin.size();
-		COUT << "AFTER bin:" << bin << '\n';
+		COUT << "AFTER bin:" << bin << '\n' << " nbpts AFTER=" << _nbPts << '\n';
 //		std::cout << "but adding " << bin.size() << " pts\n";
 
 
@@ -351,18 +354,21 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 			VBS_Histogram::HBin<T> newBin( midValue, bin._endValue );
 			bin._endValue = midValue;
 
-			bin._vIdxPt           = std::move(vec1);
-			bin._mClassCounter    = std::move(mapCount1);
-			newBin._vIdxPt        = std::move(vec2);
-			newBin._mClassCounter = std::move(mapCount2);
-//			COUT << "bin1: " << bin << '\n';
-//			COUT << "bin2: " << newBin << '\n';
-
+			if( vec1.size() != 0 )
+			{
+				bin._vIdxPt           = std::move(vec1);
+				bin._mClassCounter    = std::move(mapCount1);
+			}
+			if( vec2.size() != 0 )
+			{
+				newBin._vIdxPt        = std::move(vec2);
+				newBin._mClassCounter = std::move(mapCount2);
+			}
 			_lBins.insert( it_next, newBin );  // insert the new bin in histogram
 
-			if( bin.size() >1  )               // check if current bin still has points
+			if( bin.size() > 1  )               // check if current bin still has points
 				p_splitBin( it, 'A' );         // if it does, attempt to split it
-			if( newBin.size() )                     // do the same for the new bin we just created
+			if( newBin.size() > 1 )                     // do the same for the new bin we just created
 				p_splitBin( std::next(it), 'B' );
 
 			retval = true;
@@ -529,24 +535,24 @@ getThresholds(
 	START;
 //	std::cout << "start " << __FUNCTION__ << "()\n";
 // Step 1 - build initial histogram, evenly spaced
-	COUT << "build histogram from vector size=" << v_pac.size() << '\n';
+	std::cout << "build histogram from vector size=" << v_pac.size() << '\n';
 	histac::VBS_Histogram<T,KEY> histo( v_pac, nbBins );
 
-//	histo.print( std::cout, "AFTER BUILD" );
+	histo.printInfo( std::cout, "AFTER BUILD" );
 
 // Step 2 - split bins that need to be splitted
 //	histo.print( std::cout, "BEFORE split" );
 
 	histo.splitSearch();
-//	histo.print( std::cout, "AFTER split" );
+	histo.printInfo( std::cout, "AFTER split" );
 
 // Step 3 - merge adjacent bins holding same class
 	auto nb = histo.mergeSearch();
 	std::cout << "Nb merges = " << nb << '\n';
 
-//	histo.print( std::cout, "AFTER merge" );
+	histo.printInfo( std::cout, "AFTER merge" );
 
-// if the split operations made the histrogram have only one class, then
+// if the split operations made the histogram have only one class, then
 // we can't provide a threshold, we just return an empty vector and set
 // the flag to false
 /// \todo maybe we can do that BEFORE the merging operation?

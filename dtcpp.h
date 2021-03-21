@@ -760,7 +760,12 @@ DataPoint::print( std::ostream& f ) const
 		f << v << ' ';
 	f << classVal();
 	if( g_params.p_dataset )
-		f << ' ' << g_params.p_dataset->getIndexFromClass( classVal() );
+	{
+		if( classVal() == ClassVal(-1) )
+			f << " -1";
+		else
+			f << ' ' << g_params.p_dataset->getIndexFromClass( classVal() );
+	}
 	f << '\n';
 }
 
@@ -768,12 +773,14 @@ DataPoint::print( std::ostream& f ) const
 uint
 DataSet::getIndexFromClass( ClassVal cval ) const
 {
+//	COUT << "ClassVal=" << cval << '\n';
 	const auto& cim = getClassIndexMap();
 	return cim.left.at( cval );
 }
 ClassVal
 DataSet::getClassFromIndex( uint idx ) const
 {
+//	COUT << "idx=" << idx << '\n';
 	const auto& cim = getClassIndexMap();
 	return cim.right.at( idx );
 }
@@ -1214,7 +1221,7 @@ DataSet::generateAttribPlot(
 	if( !_fparams.classAsString )                                   // if class are not strings,
 	{                                                               // they can have numeric labels
 		f << "set y2label 'Class label'\nset y2tics (";             // different from 0-based indexes,
-		for( int i=0; i<nbClasses(); i++ )                          // they are printed on the right
+		for( size_t i=0; i<nbClasses(); i++ )                          // they are printed on the right
 			f << '"' << getClassFromIndex(i) << "\" " << i << ',';
 		f << ")\n";
 	}

@@ -34,7 +34,7 @@ ifeq "$(DEBUG)" ""
 endif
 
 ifeq ($(DEBUG),Y)
-	CFLAGS += -DDEBUG
+	CFLAGS += -DDEBUG -g
 endif
 
 #----------------------------------------------
@@ -45,7 +45,6 @@ endif
 ifeq ($(DEBUGS),Y)
 	CFLAGS += -DDEBUG_START
 endif
-
 
 
 all: $(BIN_DIR)/dectree

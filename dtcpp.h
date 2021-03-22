@@ -112,8 +112,13 @@ struct Timer
 /// Some global runtime parameters
 struct Gparams
 {
+#ifdef DEBUG
+	bool  verbose = true;
+	int   verboseLevel = 5;
+#else
 	bool  verbose = false;
 	int   verboseLevel = 1;
+#endif
 	Timer timer; ///< Used for logging, to measure duration.
 	Gparams()
 	{

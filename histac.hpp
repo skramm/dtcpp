@@ -220,7 +220,12 @@ VBS_Histogram<T,KEY>::printInfo( std::ostream& f, const char* msg ) const
 		<< "\n - nb pts=" << nbPts()
 		<< "\n - nb classes=" << _mCCount.size()
 		<< '\n';
-	priv::printMap( f, _mCCount );
+
+	f << " * Classes:\n";
+	for( const auto& cla: _mCCount )
+		f << " Class " << cla.first << ": " << cla.second << " pts\n";
+
+//	priv::printMap( f, _mCCount );
 }
 //---------------------------------------------------------------------
 template<typename T,typename KEY>
@@ -229,9 +234,6 @@ VBS_Histogram<T,KEY>::print( std::ostream& f, const char* msg ) const
 {
 	printInfo( f, msg );
 
-	f << " * Classes:\n";
-	for( const auto& cla: _mCCount )
-		f << " Class " << cla.first << ": " << cla.second << " pts\n";
 
 	f << " * Bins:\n";
 	size_t i=0;
@@ -262,8 +264,9 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 	bool retval = false;
 	auto& bin = *it;                // current bin
 	auto it_next = std::next(it);  // next one (will insert before this one)
-//	COUT << side << ": depth=" << depth_sb << " start split " << bin << '\n';
+	COUT << side << ": depth=" << depth_sb << " start split " << bin << '\n';
 
+//	print( std::cout );
 	if( depth_sb >= _bMaxDepth )
 	{
 		COUT << "Reached MAX DEPTH! bin=" << bin << '\n';
@@ -308,6 +311,7 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 		bin._vIdxPt = std::move(vec1);
 		_nbPts += bin.size();
 		COUT << "AFTER bin:" << bin << '\n' << " nbpts AFTER=" << _nbPts << '\n';
+//		assert( _nbPts<200);
 //		std::cout << "but adding " << bin.size() << " pts\n";
 
 
@@ -327,7 +331,7 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 			( midValue < bin._endValue )
 		)
 		{
-//			COUT << "split bin, new thres=" << bin._startValue << ";" << midValue << ";" << bin._endValue << '\n';
+			COUT << "split bin, new thres=" << bin._startValue << ";" << midValue << ";" << bin._endValue << '\n';
 			std::vector<size_t> vec1;  // new vector of indexes for the current bin
 			std::vector<size_t> vec2;  // new vector of indexes for the new bin
 			vec1.reserve( bin.size() );
@@ -354,12 +358,12 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 			VBS_Histogram::HBin<T> newBin( midValue, bin._endValue );
 			bin._endValue = midValue;
 
-			if( vec1.size() != 0 )
+//			if( vec1.size() != 0 )
 			{
 				bin._vIdxPt           = std::move(vec1);
 				bin._mClassCounter    = std::move(mapCount1);
 			}
-			if( vec2.size() != 0 )
+//			if( vec2.size() != 0 )
 			{
 				newBin._vIdxPt        = std::move(vec2);
 				newBin._mClassCounter = std::move(mapCount2);
@@ -535,22 +539,23 @@ getThresholds(
 	START;
 //	std::cout << "start " << __FUNCTION__ << "()\n";
 // Step 1 - build initial histogram, evenly spaced
-	std::cout << "build histogram from vector size=" << v_pac.size() << '\n';
+//	std::cout << "build histogram from vector size=" << v_pac.size() << '\n';
 	histac::VBS_Histogram<T,KEY> histo( v_pac, nbBins );
 
-	histo.printInfo( std::cout, "AFTER BUILD" );
+//	histo.printInfo( std::cout, "AFTER BUILD" );
 
 // Step 2 - split bins that need to be splitted
 //	histo.print( std::cout, "BEFORE split" );
 
 	histo.splitSearch();
-	histo.printInfo( std::cout, "AFTER split" );
-
+//	histo.printInfo( std::cout, "AFTER split" );
+	std::cout << "after split: nb bins=" << histo.nbBins() << '\n';
 // Step 3 - merge adjacent bins holding same class
 	auto nb = histo.mergeSearch();
-	std::cout << "Nb merges = " << nb << '\n';
+//	std::cout << "Nb merges = " << nb << '\n';
+	std::cout << "after merge: nb bins=" << histo.nbBins() << '\n';
 
-	histo.printInfo( std::cout, "AFTER merge" );
+//	histo.printInfo( std::cout, "AFTER merge" );
 
 // if the split operations made the histogram have only one class, then
 // we can't provide a threshold, we just return an empty vector and set

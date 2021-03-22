@@ -2484,8 +2484,9 @@ computeBestThreshold(
 	assert( localMapCount.size() > 1 ); // no search needed if we have only one class !
 
 	COUT << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
+	std::cout << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
 
-	auto pair_vb = getThresholds<float,ClassVal>( v_pac, 15 );
+	auto pair_vb = getThresholds<float,ClassVal>( v_pac, 20 );
 	const auto& v_thresVal = pair_vb.first;
 	if( pair_vb.second == false )
 	{

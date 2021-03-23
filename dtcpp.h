@@ -112,8 +112,13 @@ struct Timer
 /// Some global runtime parameters
 struct Gparams
 {
+#ifdef DEBUG
+	bool  verbose = true;
+	int   verboseLevel = 5;
+#else
 	bool  verbose = false;
 	int   verboseLevel = 1;
+#endif
 	Timer timer; ///< Used for logging, to measure duration.
 	Gparams()
 	{
@@ -760,7 +765,12 @@ DataPoint::print( std::ostream& f ) const
 		f << v << ' ';
 	f << classVal();
 	if( g_params.p_dataset )
-		f << ' ' << g_params.p_dataset->getIndexFromClass( classVal() );
+	{
+		if( classVal() == ClassVal(-1) )
+			f << " -1";
+		else
+			f << ' ' << g_params.p_dataset->getIndexFromClass( classVal() );
+	}
 	f << '\n';
 }
 
@@ -768,12 +778,14 @@ DataPoint::print( std::ostream& f ) const
 uint
 DataSet::getIndexFromClass( ClassVal cval ) const
 {
+//	COUT << "ClassVal=" << cval << '\n';
 	const auto& cim = getClassIndexMap();
 	return cim.left.at( cval );
 }
 ClassVal
 DataSet::getClassFromIndex( uint idx ) const
 {
+//	COUT << "idx=" << idx << '\n';
 	const auto& cim = getClassIndexMap();
 	return cim.right.at( idx );
 }
@@ -1214,7 +1226,7 @@ DataSet::generateAttribPlot(
 	if( !_fparams.classAsString )                                   // if class are not strings,
 	{                                                               // they can have numeric labels
 		f << "set y2label 'Class label'\nset y2tics (";             // different from 0-based indexes,
-		for( int i=0; i<nbClasses(); i++ )                          // they are printed on the right
+		for( size_t i=0; i<nbClasses(); i++ )                          // they are printed on the right
 			f << '"' << getClassFromIndex(i) << "\" " << i << ',';
 		f << ")\n";
 	}
@@ -2477,8 +2489,9 @@ computeBestThreshold(
 	assert( localMapCount.size() > 1 ); // no search needed if we have only one class !
 
 	COUT << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
+	std::cout << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
 
-	auto pair_vb = getThresholds<float,ClassVal>( v_pac, 15 );
+	auto pair_vb = getThresholds<float,ClassVal>( v_pac, 20 );
 	const auto& v_thresVal = pair_vb.first;
 	if( pair_vb.second == false )
 	{

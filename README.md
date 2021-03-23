@@ -9,9 +9,11 @@ Naive attempt of a Decision Tree implementation for continuous variables (WIP !!
 
 ## WORK IN PROGRESS, NO RELEASES YET !
 
-## current status 20210317:
-build/bin/dectree ~/data/Sensorless_drive_diagnosis.txt
-=> failure:
+## current status 20210322:
+segfaults:
+$ make DEBUG=Y DEBUGS=Y
+$ gdb --args build/bin/dectree sample_data/balance-scale.csv -fl -sep ','
+
 
 
 ## Features

@@ -2646,13 +2646,17 @@ findBestAttribute(
 		{
 			auto best = computeBestThreshold( atIdx.first, vIdx, data, giniCoeff.first, params );
 			if( best._unable )        // this means we couldn't find a threshold, so
-				atIdx.second = true;  // we forget this one and will switch to the next attribute
+			{                         // we forget this one and we switch to the next attribute
+				atIdx.second = true;  //
+				LOG( 2, "unable to compute thresholds for attrib " << atIdx.first );
+			}
 			else
 				v_IG.push_back( best );
 		}
 	assert( v_IG.size() );
 
 // step 3 - get the one with max gain value
+	LOG( 2, "search for best attribute among " << v_IG.size() << " attribs" );
 	auto it_mval = std::max_element(
 		std::begin(v_IG),
 		std::end(v_IG),

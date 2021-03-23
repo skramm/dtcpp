@@ -401,7 +401,6 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 template<typename T,typename KEY>
 void
 VBS_Histogram<T,KEY>::splitSearch()
-#if 0
 {
 	START;
 	COUT << "\n* Start splitting, nb bins=" << nbBins() << '\n';
@@ -409,6 +408,8 @@ VBS_Histogram<T,KEY>::splitSearch()
 
 	size_t iter1 = 0;
 	bool splitOccured = false;
+
+#if 1
 	do
 	{
 		splitOccured = false;
@@ -427,13 +428,6 @@ VBS_Histogram<T,KEY>::splitSearch()
 	COUT << "Done, used " << iter1 << " iterations\n";
 }
 #else
-{
-	START;
-	COUT << "\n* Start splitting, nb bins=" << nbBins() << '\n';
-//	printInfo( std::cout );
-
-	size_t iter1 = 0;
-	bool splitOccured = false;
 	auto it = _lBins.begin();
 	do
 	{
@@ -508,7 +502,7 @@ VBS_Histogram<T,KEY>::mergeSearch()
 				{
 					if( b2.size() == 0 )  // if next bin is empty, then merge it
 					{
-						COUT << "bin2 is empty, removing\n";
+//						COUT << "bin2 is empty, removing\n";
 						b1._endValue = b2._endValue;
 						mergeOccurred = true;
 						countNbMerge++;
@@ -563,6 +557,10 @@ getThresholds(
 	histo.splitSearch();
 //	histo.printInfo( std::cout, "AFTER split" );
 	std::cout << "after split: nb bins=" << histo.nbBins() << '\n';
+
+	if( histo.nbBins()==38)
+		histo.print( std::cout );
+
 // Step 3 - merge adjacent bins holding same class
 	auto nb = histo.mergeSearch();
 //	std::cout << "Nb merges = " << nb << '\n';

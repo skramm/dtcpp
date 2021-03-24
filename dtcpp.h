@@ -272,6 +272,7 @@ struct Params
 //	bool  doFolding = false;
 //	int   nbFolds = 5;
 	uint  maxTreeDepth = 12;
+	bool  useSortToFindThresholds = false;
 };
 
 //---------------------------------------------------------------------
@@ -2377,51 +2378,57 @@ computeBestThreshold(
 	START;
 	LOG(3, "Searching best threshold for attrib=" << atIdx );
 
-#if 0
-// step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
-	std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
-	for( size_t i=0; i<v_dpidx.size(); i++ )
-		v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
+	std::vector<float> v_thresVal;
 
-	auto nbRemoval = removeDuplicates( v_attribVal, params );
-//	std::cout << "Removal of " << nbRemoval << " attribute values\n";
-
-	if( v_attribVal.size() < 2 )         // if only one value, is pointless
+	if( params.useSortToFindThresholds )
 	{
-		std::cout << "WARNING, unable to compute best threshold value for attribute " << atIdx
-			<< ", maybe check value of 'removalCoeff'\n";
-		return AttributeData();
+	// step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
+		std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
+		for( size_t i=0; i<v_dpidx.size(); i++ )
+			v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
+
+		auto nbRemoval = removeDuplicates( v_attribVal, params );
+	//	std::cout << "Removal of " << nbRemoval << " attribute values\n";
+
+		if( v_attribVal.size() < 2 )         // if only one value, is pointless
+		{
+			std::cout << "WARNING, unable to compute best threshold value for attribute " << atIdx
+				<< ", maybe check value of 'removalCoeff'\n";
+			return AttributeData();
+		}
+
+		v_thresVal.resize( v_attribVal.size()-1 );      // if 10 values, then only 9 thresholds
+		for( uint i=0; i<v_thresVal.size(); i++ )
+			v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
 	}
 
-	std::vector<float> v_thresVal( v_attribVal.size()-1 ); // if 10 values, then only 9 thresholds
-	for( uint i=0; i<v_thresVal.size(); i++ )
-		v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
-#else
-	std::map<ClassVal,size_t> localMapCount;
-	using PairAtvalClass = std::pair<float,ClassVal>;
-	std::vector<PairAtvalClass> v_pac( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
-	for( size_t i=0; i<v_dpidx.size(); i++ )
+	else
 	{
-		const auto& pt = data.getDataPoint( v_dpidx[i] );
-		v_pac[i] = std::make_pair( pt.attribVal( atIdx ), pt.classVal() );
-		localMapCount[ pt.classVal() ]++;
+		std::map<ClassVal,size_t> localMapCount;
+		using PairAtvalClass = std::pair<float,ClassVal>;
+		std::vector<PairAtvalClass> v_pac( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
+		for( size_t i=0; i<v_dpidx.size(); i++ )
+		{
+			const auto& pt = data.getDataPoint( v_dpidx[i] );
+			v_pac[i] = std::make_pair( pt.attribVal( atIdx ), pt.classVal() );
+			localMapCount[ pt.classVal() ]++;
+		}
+
+		assert( localMapCount.size() > 1 ); // no search needed if we have only one class !
+
+		LOG( 3, "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts");
+	//	std::cout << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
+
+		auto pair_vb = getThresholds<float,ClassVal>( v_pac, 20 );
+		v_thresVal = std::move(pair_vb.first);
+		if( pair_vb.second == false )
+		{
+			AttributeData atd;
+			atd._unable = true;
+			return atd;
+		}
 	}
 
-	assert( localMapCount.size() > 1 ); // no search needed if we have only one class !
-
-	LOG( 3, "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts");
-//	std::cout << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
-
-	auto pair_vb = getThresholds<float,ClassVal>( v_pac, 20 );
-	const auto& v_thresVal = pair_vb.first;
-	if( pair_vb.second == false )
-	{
-		AttributeData atd;
-		atd._unable = true;
-		return atd;
-	}
-
-#endif
 	LOG(3, "Searching best threshold for attrib=" << atIdx << " among " << v_thresVal.size() << " thresholds, based on " << v_dpidx.size() << " pts" );
 
 // step 2: compute IG for each threshold value
@@ -2468,9 +2475,6 @@ computeBestThreshold(
 
 // step 3 - find max value of the delta Gini
 	auto max_pos = std::max_element( std::begin( deltaGini ), std::end( deltaGini ) );
-
-//	COUT << "max gini for thres idx=" << std::distance( std::begin( deltaGini ), max_pos ) << " val=" << *max_pos
-//		<< " thresval=" << v_thresVal.at( std::distance( std::begin( deltaGini ), max_pos ) ) << "\n";
 
 	auto best_thres_idx = std::distance( std::begin( deltaGini ), max_pos );
 

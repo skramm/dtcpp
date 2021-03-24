@@ -83,6 +83,7 @@ that are freely available on any OS/architecture:
 * `-ro` : remove outliers before training
 * `-md xx` : max depth for tree
 * `-fl` : First line of input data file holds labels, ignore it
+* `-sd` :  use sorting of points to find thresholds, to evaluate best split (default is histogram binning technique)
 
 ## Build information
 

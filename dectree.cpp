@@ -54,7 +54,6 @@ int main( int argc, const char** argv )
 		params.maxTreeDepth = std::stoi( str_maxDepth );
 	std::cout << " - max depth for tree=" << params.maxTreeDepth << '\n';
 
-
 // optional boolean arg: -cs => the class value in the datafile is given as a string value
 	if( cmdl["cs"] )
 		fparams.classAsString = true;
@@ -86,6 +85,13 @@ int main( int argc, const char** argv )
 	if( cmdl["ro"] )
 		doRemoveOutliers = true;
 	std::cout << " - removal of outliers: " << std::boolalpha << doRemoveOutliers << '\n';
+
+	auto str_sortData = cmdl("sd").str();
+	if( !str_sortData.empty() )
+		params.useSortToFindThresholds = true;
+	std::cout << " - threshold finding technique =" << (params.useSortToFindThresholds?"sort point":"histogram binning") << '\n';
+
+
 
 	DataSet dataset;
 	if( !dataset.load( fname, fparams ) )

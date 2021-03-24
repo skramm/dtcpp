@@ -120,20 +120,21 @@ int main( int argc, const char** argv )
 	{
 		TrainingTree tt( dataset.getClassIndexMap() );
 		tt.train( dataset, params );
-		auto cm = tt.classify( dataset );
-		std::cout << cm << "\n";
+//		auto cm = tt.classify( dataset );
+//		std::cout << cm << "\n";
 		tt.printInfo( std::cout, "Before Pruning" );
 		tt.printDot( "dectree" );
+
+		tt.pruning();
+		tt.printInfo( std::cout, "After pruning" );
+		tt.printDot( "dectree_p" );
+		auto cm = tt.classify( dataset );
+		std::cout << cm << "\n";
 		if( dataset.nbClasses() == 2 )
 			cm.printAllScores( std::cout );
 		else
 			cm.printAverageScores( std::cout );
 
-		tt.pruning();
-		tt.printInfo( std::cout, "After pruning" );
-		tt.printDot( "dectree_p" );
-		auto cm2 = tt.classify( dataset );
-		std::cout << cm2 << "\n";
 	}
 	else
 	{

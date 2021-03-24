@@ -41,91 +41,14 @@ See doc on https://github.com/skramm/dtcpp
 
 /// All the API and code lies here
 namespace dtcpp {
-/*
-#ifdef DEBUG
-	#define COUT if(1) std::cout << __FUNCTION__ << "(), line " << __LINE__ << ": "
-#else
-	#define COUT if(0) std::cout
-#endif // DEBUG
-
-#ifdef DEBUG_START
-	#define START if(1) std::cout << "* Start: " << __FUNCTION__ << "()\n"
-#else
-	#define START
-#endif // DEBUG
-*/
-
-#define LOG( level, msg ) \
-	{ \
-		if( g_params.verbose && level<=g_params.verboseLevel ) \
-		{ \
-			std::cout << std::setfill('0') << std::setw(4) << g_params.timer.getDuration(level); \
-			priv::spaceLog( level ); \
-			std::cout << " E" << std::setfill('0') << std::setw(4) << priv::logCount()++ << '-' << __FUNCTION__ << "(): " << msg << '\n'; \
-		} \
-	}
 
 // forward declaration
-class DataSet;
+//class DataSet;
 
 // % % % % % % % % % % % % % %
 /// private namespace; not part of API
 namespace priv {
 // % % % % % % % % % % % % % %
-
-uint& logCount()
-{
-	static uint s_logCount;
-	return s_logCount;
-}
-
-//---------------------------------------------------------------------
-/// Used in logging macro, see \ref LOG
-void spaceLog( int n )
-{
-	std::cout << ':';
-	for( int i=0; i<n; i++ )
-		std::cout << "  ";
-}
-
-//---------------------------------------------------------------------
-/// Holds timing
-/// \todo add level to have a timing PER log level
-struct Timer
-{
-//auto t1 = std::chrono::high_resolution_clock::now();
-	std::string getDuration(int level)
-	{
-		auto t2 = std::chrono::high_resolution_clock::now();
-		auto tdiff = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - ck ).count();
-		ck = t2;
-		return std::to_string( tdiff );
-	}
-	void start()
-	{
-		ck = std::chrono::high_resolution_clock::now();
-	}
-	std::chrono::high_resolution_clock::time_point ck;
-};
-
-//---------------------------------------------------------------------
-/// Some global runtime parameters
-struct Gparams
-{
-#ifdef DEBUG
-	bool  verbose = true;
-	int   verboseLevel = 5;
-#else
-	bool  verbose = false;
-	int   verboseLevel = 1;
-#endif
-	Timer timer; ///< Used for logging, to measure duration.
-	Gparams()
-	{
-		timer.start();
-	}
-	const dtcpp::DataSet* p_dataset = nullptr; ///< this will always point on the loaded dataset
-};
 
 //---------------------------------------------------------------------
 /// Identifier for output file type, used in openOutputFile()
@@ -333,8 +256,6 @@ my_stod( std::string str )
 // % % % % % % % % % % % % % %
 
 //---------------------------------------------------------------------
-/// Global parameters
-priv::Gparams g_params;
 
 using ThresholdVal = priv::NamedType<float,struct ThresholdValTag>;
 using ClassVal     = priv::NamedType<int,  struct ClassValTag>;
@@ -2488,8 +2409,8 @@ computeBestThreshold(
 
 	assert( localMapCount.size() > 1 ); // no search needed if we have only one class !
 
-	COUT << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
-	std::cout << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
+	LOG( 3, "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts");
+//	std::cout << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
 
 	auto pair_vb = getThresholds<float,ClassVal>( v_pac, 20 );
 	const auto& v_thresVal = pair_vb.first;

@@ -299,7 +299,6 @@ TEST_CASE( "vbs_histogram", "[vbsh]" )
 {
 	auto c1 = ClassVal(1);
 	auto c2 = ClassVal(2);
-//	auto c3 = ClassVal(3);
 	std::vector<std::pair<float,ClassVal>> vpac{
 		{ 0.,  c1 },
 		{ 0.5, c1 },
@@ -349,4 +348,40 @@ TEST_CASE( "vbs_histogram", "[vbsh]" )
 //	CHECK( h.nbPts()  == 6 );
 }
 
+//-------------------------------------------------------------------------------------------
+TEST_CASE( "vbs_histogram2", "[vbsh2]" )
+{
+	auto c1 = ClassVal(1);
+	auto c2 = ClassVal(2);
+	std::vector<std::pair<float,ClassVal>> vpac{
+		{ 0.0, c1 },
+		{ 1.5, c1 },
+		{ 1.5, c2 },
+		{ 2.5, c2 },
+		{ 2.5, c2 },
+		{ 4.0, c2 },
+	};
+	histac::VBS_Histogram<float,ClassVal> h( vpac, 4 );
+	CHECK( h.nbBins() == 4 );
+	CHECK( h.nbPts()  == 6 );
+	h.print( std::cout, "BEFORE SPLIT" );
+	h.splitSearch();
+	h.print( std::cout, "AFTER SPLIT" );
+	CHECK( h.nbPts()  == 6 );
+
+	auto nbNoSplit = std::count_if(
+			std::begin( h._lBins ),
+			std::end( h._lBins ),
+			[]                            // lambda
+			( const auto& b )
+			{
+				return b._doNotSplit;
+			}
+		);
+	CHECK( nbNoSplit == 1 );
+
+	h.mergeSearch();
+	CHECK( h.nbBins() == 3 );
+	CHECK( h.nbPts()  == 6 );
+}
 //-------------------------------------------------------------------------------------------

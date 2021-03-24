@@ -16,6 +16,18 @@
 
 namespace histac {
 
+enum class EN_MDB
+{
+	discardNonMajPoints,
+	tagBinAsNoSplit
+};
+
+/// Parameters for histogram splitting/merging bins
+struct HParams
+{
+	EN_MDB _maxDepthBehavior = EN_MDB::tagBinAsNoSplit;
+
+};
 //---------------------------------------------------------------------
 /// Variable bin-size histogram, used to find the best thresholds on the attribute values
 /**
@@ -40,6 +52,10 @@ struct VBS_Histogram
 			T                    _endValue;       ///< bin right border
 			std::vector<size_t>  _vIdxPt;         ///< indexes of the points in original dataset
 			int _binId=0;                         ///< bin identifier \todo this is useful only for dev stage, can be removed afterwards.
+#ifdef TESTMODE
+		public:
+#endif // TESTMODE
+			bool                 _doNotSplit = false;
 
 		public:
 			HBin( T v1, T v2 ) : _startValue(v1), _endValue(v2)
@@ -57,7 +73,8 @@ struct VBS_Histogram
 			{
 				if( _vIdxPt.size() < 2 )  // not enough points
 					return false;
-
+				if( _doNotSplit )
+					return false;
 				if( _mClassCounter.size() < 2 )  // single class, no need to split
 					return false;
 				return true;
@@ -74,7 +91,10 @@ struct VBS_Histogram
 			{
 				f << std::setprecision(10) << std::scientific
 				<< "Id=" << b._binId << ' ';
-				f << b.size() << " pts, " << b.nbClasses() << " classes:";
+				f << b.size() << " pts, ";
+				if( b._doNotSplit )
+					f << "NS, ";
+				f  << b.nbClasses() << "classes: ";
 				for( const auto& pc: b._mClassCounter )
 					f << "C" << pc.first << "=" << pc.second << ", ";
 //				f << "range=" << b._startValue << "-" << b._endValue << ' ';
@@ -92,11 +112,18 @@ struct VBS_Histogram
 
 	private:
 		const std::vector<std::pair<U,KEY>>* p_src = 0;    ///< pointer on source data
+#ifdef TESTMODE
+	public:
+#endif
 		std::list<HBin<U>>   _lBins;                       ///< list of bins
+	private:
 		size_t               _bMaxDepth = 10;
 		size_t               _nbPts=0;                     ///< Total nb of points. \warning Can be different than the input vector size because some data points can be discarded
 		std::map<KEY,size_t> _mCCount;                     ///< nb of points per class, for the whole histogram
+		HParams              _hparams;                     ///< general parameters
+
 	public: // TEMP
+
 		size_t               _reachedMaxDepth = 0;         ///< nb of times we reached the max depth when splitting a bin
 
 	public:
@@ -215,10 +242,21 @@ template<typename T,typename KEY>
 void
 VBS_Histogram<T,KEY>::printInfo( std::ostream& f, const char* msg ) const
 {
+	auto nbNoSplit = std::count_if(
+			std::begin( _lBins ),
+			std::end( _lBins ),
+			[]                            // lambda
+			( const auto& b )
+			{
+				return b._doNotSplit;
+			}
+		);
+
 	f << "HISTOGRAM - ";
 	if( msg )
 		f << msg;
 	f << "\n - nb bins=" << nbBins()
+		<< ", tagged as \"no split\"=" << nbNoSplit
 		<< "\n - nb pts=" << nbPts()
 		<< "\n - nb classes=" << _mCCount.size()
 		<< '\n';
@@ -277,6 +315,19 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 		for( const auto idx: bin._vIdxPt )
 			std::cout << idx << ": " <<p_src->at(idx).first << "-" << p_src->at(idx).second << "\n";
 */
+		switch( _hparams._maxDepthBehavior )
+		{
+			case EN_MDB::tagBinAsNoSplit:
+				bin._doNotSplit = true;
+				COUT << "bin, tagged as NoSplit\n";
+			break;
+/*			case EN_MDB::discardNonMajPoints:
+			break;
+			*/
+			default: assert(0);
+		}
+		depth_sb--;
+		return false;
 
 #ifdef DISCARD_POINTS_IF_CANT_SPLIT
 		for( auto idx: bin._vIdxPt )
@@ -532,7 +583,7 @@ first value: the attribute value, second: the class value
 
 Output: a pair made of the vector of floating point threshold values and a bool.
 If the bool is false, then this means the function was unable to compute the thresholds.
-This can happen because the histrogram bins are splitted to find the best value separating classes, and if
+This can happen because the histogram bins are splitted to find the best value separating classes, and if
 splitting reaches a maximum depth and there are still more than one class in the bin, then we just
 "forget" about the minority class values of the bin.
 */
@@ -556,15 +607,15 @@ getThresholds(
 
 	histo.splitSearch();
 //	histo.printInfo( std::cout, "AFTER split" );
-	std::cout << "after split: nb bins=" << histo.nbBins() << '\n';
+	LOG( 2, "after split: nb bins=" << histo.nbBins() );
 
-	if( histo.nbBins()==38)
-		histo.print( std::cout );
+//	if( histo.nbBins()==38)
+//		histo.print( std::cout );
 
 // Step 3 - merge adjacent bins holding same class
 	auto nb = histo.mergeSearch();
 //	std::cout << "Nb merges = " << nb << '\n';
-	std::cout << "after merge: nb bins=" << histo.nbBins() << " _reachedMaxDepth=" << histo._reachedMaxDepth << '\n';
+	LOG( 2, "after merge: nb bins=" << histo.nbBins() << " _reachedMaxDepth=" << histo._reachedMaxDepth );
 
 //	histo.printInfo( std::cout, "AFTER merge" );
 

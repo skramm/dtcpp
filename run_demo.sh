@@ -2,7 +2,7 @@
 
 set +x
 app=build/bin/dectree
-
+make
 if [ "$1" == "" ]
 then
 	echo "missing arg"

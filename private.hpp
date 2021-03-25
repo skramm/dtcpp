@@ -24,15 +24,13 @@
 	#define START
 #endif // DEBUG
 
-
-
 #define LOG( level, msg ) \
 	{ \
 		if( g_params.verbose && level<=g_params.verboseLevel ) \
 		{ \
 			std::cout << std::setfill('0') << std::setw(4) << g_params.timer.getDuration(level); \
 			::priv::spaceLog( level ); \
-			std::cout << " E" << std::setfill('0') << std::setw(4) << ::priv::logCount()++ << '-' << __FUNCTION__ << "(): " << msg << '\n'; \
+			std::cout << " E" << std::setfill('0') << std::setw(4) << ::priv::logCount(level)++ << '-' << __FUNCTION__ << "(): " << msg << '\n'; \
 		} \
 	}
 
@@ -46,10 +44,12 @@ class DataSet;
 namespace priv {
 // % % % % % % % % % % % % % %
 
-uint& logCount()
+uint& logCount(uint level)
 {
-	static uint s_logCount;
-	return s_logCount;
+//	static uint s_logCount;
+	static std::array<uint,5> s_logCount;
+	assert( level<5 );
+	return s_logCount[level];
 }
 
 //---------------------------------------------------------------------

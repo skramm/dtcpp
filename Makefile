@@ -9,6 +9,7 @@ OBJ_DIR=build/obj
 
 
 SRC_FILES = $(wildcard *.cpp)
+HEADERS = $(wildcard *.h*)
 
 DOT_FILES = $(wildcard out/*.dot)
 
@@ -75,7 +76,7 @@ show:
 touch:
 	touch dtcpp.h histac.hpp
 
-$(OBJ_DIR)/%.o: %.cpp dtcpp.h histac.hpp
+$(OBJ_DIR)/%.o: %.cpp $(HEADERS)
 	$(CXX) -Wall -std=gnu++14 $(CFLAGS) -fexceptions -O2 -Iother/ -c $< -o $@
 
 $(BIN_DIR)/%:$(OBJ_DIR)/%.o

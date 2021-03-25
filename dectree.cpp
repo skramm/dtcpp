@@ -86,10 +86,9 @@ int main( int argc, const char** argv )
 		doRemoveOutliers = true;
 	std::cout << " - removal of outliers: " << std::boolalpha << doRemoveOutliers << '\n';
 
-	auto str_sortData = cmdl("sd").str();
-	if( !str_sortData.empty() )
+	if( cmdl["sd"] )
 		params.useSortToFindThresholds = true;
-	std::cout << " - threshold finding technique =" << (params.useSortToFindThresholds?"sort point":"histogram binning") << '\n';
+	std::cout << " - threshold finding technique: " << (params.useSortToFindThresholds?"sort points":"histogram binning") << '\n';
 
 
 

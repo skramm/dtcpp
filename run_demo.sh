@@ -6,13 +6,16 @@ app=build/bin/dectree
 
 make
 
-if [ "$1" == "" ]
-then
-	echo "missing arg"
+if [ $? != 0 ]; then
+	echo "Build failure!"
+	exit 1;
+fi
+
+if [ "$1" == "" ]; then
+	echo "missing arg, add one of these: a,b,c,d,e,f"
 	exit
 fi
 
-echo "arg=$1"
 
 case $1 in
 a)

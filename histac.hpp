@@ -5,21 +5,21 @@
 #ifndef HISTAC_HG
 #define HISTAC_HG
 
-#include <iostream>
+#include "private.hpp"
+
 #include <map>
 #include <list>
 #include <vector>
 #include <cassert>
 #include <algorithm>
 
-#include "private.hpp"
-
 namespace histac {
 
+/// Histogram binning. List of techniques on algorithm behavior when we reach the max depth, see HParams
 enum class EN_MDB
 {
-	discardNonMajPoints,
-	tagBinAsNoSplit
+	discardNonMajPoints,  ///< search for the class that is majority, and discard the other points in the bin
+	tagBinAsNoSplit       ///< tag the bin as "no split", so it won't be split on following iterations
 };
 
 /// Parameters for histogram splitting/merging bins

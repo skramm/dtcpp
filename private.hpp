@@ -7,7 +7,7 @@
 #ifndef PRIVATE_HG
 #define PRIVATE_HG
 
-//#include <iostream>
+#include <iostream>
 //#include <map>
 //#include <list>
 //#include <vector>
@@ -43,12 +43,12 @@ class DataSet;
 /// private namespace; not part of API
 namespace priv {
 // % % % % % % % % % % % % % %
+constexpr int nbLogLevels = 5;
 
 uint& logCount(uint level)
 {
-//	static uint s_logCount;
-	static std::array<uint,5> s_logCount;
-	assert( level<5 );
+	static std::array<uint,nbLogLevels> s_logCount;
+	assert( level<nbLogLevels );
 	return s_logCount[level];
 }
 
@@ -66,19 +66,20 @@ void spaceLog( int n )
 /// \todo add level to have a timing PER log level
 struct Timer
 {
-//auto t1 = std::chrono::high_resolution_clock::now();
 	std::string getDuration(int level)
 	{
+		assert( level<nbLogLevels );
 		auto t2 = std::chrono::high_resolution_clock::now();
-		auto tdiff = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - ck ).count();
-		ck = t2;
+		auto tdiff = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - ck[level] ).count();
+		ck[level] = t2;
 		return std::to_string( tdiff );
 	}
 	void start()
 	{
-		ck = std::chrono::high_resolution_clock::now();
+		for( auto& tp: ck )
+			tp = std::chrono::high_resolution_clock::now();
 	}
-	std::chrono::high_resolution_clock::time_point ck;
+	std::array<std::chrono::high_resolution_clock::time_point,nbLogLevels> ck;
 };
 
 //---------------------------------------------------------------------

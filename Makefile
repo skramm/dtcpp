@@ -15,7 +15,7 @@ DOT_FILES = $(wildcard out/*.dot)
 
 PLOT_IN_FILES = $(wildcard out/*.plt)
 
-PNG_FILES = $(patsubst %.dot,%.png,$(DOT_FILES))
+PNG_DOT_FILES = $(patsubst %.dot,%.png,$(DOT_FILES))
 OBJ_FILES = $(patsubst %.cpp,$(OBJ_DIR)/%,$(SRC_FILES))
 EXE_FILES = $(patsubst %.cpp,$(BIN_DIR)/%,$(SRC_FILES))
 PLOT_OUT_FILES= $(patsubst out/%.plt,out/%.png,$(PLOT_IN_FILES))
@@ -69,7 +69,7 @@ show:
 	@echo "OBJ_FILES=$(OBJ_FILES)"
 	@echo "EXE_FILES=$(EXE_FILES)"
 	@echo "DOT_FILES=$(DOT_FILES)"
-	@echo "PNG_FILES=$(PNG_FILES)"
+	@echo "PNG_FILES=$(PNG_DOT_FILES)"
 	@echo "PLOT_OUT_FILES=$(PLOT_OUT_FILES)"
 	@echo "PLOT_IN_FILES=$(PLOT_IN_FILES)"
 
@@ -103,7 +103,7 @@ out/%.png:out/%.plt
 	@echo "processing file $<"
 	cd out; ./$(notdir $<)
 
-dot: $(PNG_FILES)
+dot: $(PNG_DOT_FILES)
 
 out/%.png:out/%.dot $(DOT_FILES)
 	dot -Tpng $< >$@

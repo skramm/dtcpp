@@ -266,7 +266,7 @@ struct Params
 {
 	float minGiniCoeffForSplitting = 0.05f;
 	uint  minNbPoints = 3;                   ///< minimum nb of points to create a node
-	float removalCoeff = 0.05f;  ///< used to remove close attribute values when searching the best threshold. See removeDuplicates()
+	float removalCoeff = 0.01f;  ///< used to remove close attribute values when searching the best threshold. See removeDuplicates()
 //	bool  verbose = true;        ///< to allow logging of some run-time details
 //	int   verboseLevel = 0;      ///< verbose Level, related to \ref verbose
 //	bool  doFolding = false;
@@ -2330,8 +2330,9 @@ struct AttributeData
 	uint         _nbPtsLessThan = 0u;   ///< Nb of points that are less than the threshold
 	bool         _unable = false;       ///< will be set to \c true if unable to find a good threshold
 
-	AttributeData()
+	AttributeData() : _unable(true)
 	{}
+
 	AttributeData( uint atIdx, float ig, ThresholdVal tval, uint nbpLT ) :
 		_atIndex(atIdx),
 		_gain(ig),
@@ -2387,12 +2388,11 @@ computeBestThreshold(
 			v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
 
 		auto nbRemoval = removeDuplicates( v_attribVal, params );
-	//	std::cout << "Removal of " << nbRemoval << " attribute values\n";
+		LOG( 3, "Removal of " << nbRemoval << " attribute values over " << v_dpidx.size() << " points" );
 
 		if( v_attribVal.size() < 2 )         // if only one value, is pointless
 		{
-			std::cout << "WARNING, unable to compute best threshold value for attribute " << atIdx
-				<< ", maybe check value of 'removalCoeff'\n";
+			LOG( 3, "WARNING, unable to compute best threshold value for attribute " << atIdx << ", maybe check value of 'removalCoeff'" );
 			return AttributeData();
 		}
 
@@ -2400,7 +2400,6 @@ computeBestThreshold(
 		for( uint i=0; i<v_thresVal.size(); i++ )
 			v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
 	}
-
 	else
 	{
 		std::map<ClassVal,size_t> localMapCount;
@@ -2419,13 +2418,13 @@ computeBestThreshold(
 		v_thresVal = std::move(pair_vb.first);
 		if( pair_vb.second == false )
 		{
-			AttributeData atd;
-			atd._unable = true;
-			return atd;
+			LOG( 3, "WARNING, unable to fetch threshold value for attribute " << atIdx );
+			return AttributeData();
 		}
 	}
 
 	LOG( 3, "found " << v_thresVal.size() << " thresholds, searching best one" );
+//	::priv::printVector( std::cout, v_thresVal, "*** THRESHOLDS ***" );
 
 // step 2: compute IG for each threshold value
 
@@ -2474,6 +2473,7 @@ computeBestThreshold(
 
 	auto best_thres_idx = std::distance( std::begin( deltaGini ), max_pos );
 
+	LOG( 3, "Best threshold for attribute=" <<  atIdx << " among " << v_thresVal.size() << " values is at pos " << best_thres_idx << "=" << v_thresVal.at( best_thres_idx ) );
 	return AttributeData(
 		atIdx,
 		*max_pos,
@@ -2541,7 +2541,7 @@ struct AttribMap
 /// Finds the best attributes to use, considering the data points of the current node
 /// and compute threshold on that attribute so that the two classes are separated at best.
 /**
-\return object of type AttributeData, hoding all the details
+\return object of type AttributeData, holding all the details
 */
 //template<typename T>
 AttributeData
@@ -2638,7 +2638,7 @@ splitNode(
 	START;
 
 	const auto& vIdx = graph[v].v_Idx; // vector holding the indexes of the datapoints for this node
-	LOG( 1, "splitting node " << graph[v]._nodeId << " depth=" << graph[v]._depth << ", holding " << vIdx.size() << " points" );
+	LOG( 1, "Attempt to split node " << graph[v]._nodeId << " depth=" << graph[v]._depth << ", holding " << vIdx.size() << " points" );
 
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done
@@ -2713,7 +2713,7 @@ splitNode(
 		else
 			graph[v2].v_Idx.push_back( idx );
 	}
-	COUT << "after split: v1:"<< graph[v1].v_Idx.size() << " points, v2:"<< graph[v2].v_Idx.size() << " points\n";
+	LOG( 1, "after node split: v1: "<< graph[v1].v_Idx.size() << " points, v2: "<< graph[v2].v_Idx.size() << " points" );
 
 	if( graph[v1].v_Idx.size() )
 		splitNode( v1, graph, data, params, maxDepth );
@@ -2844,7 +2844,7 @@ TrainingTree::train( DataSet& data, const Params params )
 	if( data.nbOutliers() )                     // if outliers there,
 	{                                           // then we put in the
 		for( size_t i=0; i<data.size(); i++ )   // set of indexes only
-			if( !data.pointIsOutlier(i) )       // the points that are not
+			if( !data.pointIsOutlier(i) )       // the points that are not outliers
 				v_idx.push_back( i );
 	}
 	else
@@ -2859,7 +2859,7 @@ TrainingTree::train( DataSet& data, const Params params )
 
 	if( nbLeaves() < 2 )  // has to be at least 2 leaves
 	{
-		LOG( 0, "fail, unable to build tree, only " << nbLeaves() << " leaves" );
+		std::cerr << "fail, unable to build tree, only " << nbLeaves() << " leaves\n";
 		std::exit(1);
 	}
 	LOG( 0, "Training done" );

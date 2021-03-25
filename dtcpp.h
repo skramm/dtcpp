@@ -2350,11 +2350,10 @@ struct AttributeData
 	}
 };
 
-
 //---------------------------------------------------------------------
 /// Compute best threshold for attribute \c atIdx, using the Gini Impurity, for the subset of data given by \c v_dpidx.
 /**
-\return Returns an object of type AttributeData
+\return an object of type AttributeData
 
 Details:
 - Uses the Gini impurity coeff: https://en.wikipedia.org/wiki/Decision_tree_learning#Gini_impurity
@@ -2376,7 +2375,7 @@ computeBestThreshold(
 )
 {
 	START;
-	LOG(3, "Searching best threshold for attrib=" << atIdx );
+	LOG( 3, "Searching best threshold for attrib=" << atIdx << " with " << v_dpidx.size() << " datapts");
 
 	std::vector<float> v_thresVal;
 
@@ -2416,9 +2415,6 @@ computeBestThreshold(
 
 		assert( localMapCount.size() > 1 ); // no search needed if we have only one class !
 
-		LOG( 3, "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts");
-	//	std::cout << "Compute Thresholds for attrib " << atIdx << " with " << v_pac.size() << " datapts\n";
-
 		auto pair_vb = getThresholds<float,ClassVal>( v_pac, 20 );
 		v_thresVal = std::move(pair_vb.first);
 		if( pair_vb.second == false )
@@ -2429,7 +2425,7 @@ computeBestThreshold(
 		}
 	}
 
-	LOG(3, "Searching best threshold for attrib=" << atIdx << " among " << v_thresVal.size() << " thresholds, based on " << v_dpidx.size() << " pts" );
+	LOG( 3, "found " << v_thresVal.size() << " thresholds, searching best one" );
 
 // step 2: compute IG for each threshold value
 
@@ -2545,8 +2541,7 @@ struct AttribMap
 /// Finds the best attributes to use, considering the data points of the current node
 /// and compute threshold on that attribute so that the two classes are separated at best.
 /**
-\return A pair holding 1-the index of this attribute and 2-the corresponding threshold value
-\return AttributeData
+\return object of type AttributeData, hoding all the details
 */
 //template<typename T>
 AttributeData
@@ -2560,7 +2555,7 @@ findBestAttribute(
 	START;
 	assert( atMap.nbUnusedAttribs() != 0 );
 
-	LOG( 2, "Searching best attribute among " << atMap.nbUnusedAttribs() );
+	LOG( 2, "Searching all thresholds among " << atMap.nbUnusedAttribs() << " attributes" );
 
 	auto giniCoeff = getGiniImpurity( vIdx, data );
 
@@ -2581,7 +2576,7 @@ findBestAttribute(
 	assert( v_IG.size() );
 
 // step 3 - get the one with max gain value
-	LOG( 2, "search for best attribute among " << v_IG.size() << " attribs" );
+	LOG( 2, "search for best attribute among " << v_IG.size() << " attributes" );
 	auto it_mval = std::max_element(
 		std::begin(v_IG),
 		std::end(v_IG),
@@ -2592,7 +2587,7 @@ findBestAttribute(
 		}
 	);
 
-	LOG( 2, "highest GI with attribute " << it_mval->_atIndex << ", GI=" << it_mval->_gain );
+	LOG( 2, "highest IG with attribute " << it_mval->_atIndex << ", GI=" << it_mval->_gain );
 
 	return *it_mval;
 }
@@ -2672,10 +2667,9 @@ splitNode(
 	bool done = false;
 	do
 	{
-
 	// step 2 - find the best attribute to use to split the data, considering the data points of the current node
 		bestAttrib = findBestAttribute( vIdx, data, params, aMap );
-//		COUT << "best attrib:" << bestAttrib << "\n";
+		LOG( 1, "best attrib: " << bestAttrib );
 
 		aMap.setAsUsed( bestAttrib._atIndex );
 	// before splitting, make sure that one of the childs will not have an insufficient number of points
@@ -2863,7 +2857,11 @@ TrainingTree::train( DataSet& data, const Params params )
 	COUT << "INTIAL ID=" << _graph[_initialVertex]._nodeId << '\n';
 	priv::splitNode( _initialVertex, _graph, data, params, _maxDepth ); // Call the "split" function (recursive)
 
-	assert( nbLeaves() > 1 );  // has to be at least 2 leaves
+	if( nbLeaves() < 2 )  // has to be at least 2 leaves
+	{
+		LOG( 0, "fail, unable to build tree, only " << nbLeaves() << " leaves" );
+		std::exit(1);
+	}
 	LOG( 0, "Training done" );
 }
 

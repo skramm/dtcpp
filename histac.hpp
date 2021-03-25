@@ -576,10 +576,12 @@ VBS_Histogram<T,KEY>::mergeSearch()
 } //namespace histac
 
 //---------------------------------------------------------------------
-/// Compute the thresholds on an attribute value to be used to find the best split
+/// Compute the thresholds on an attribute value to be used to find the best split,
+/// using a histogram binng technique
 /**
- Input: a vector or pairs, size=nb of points in data set.
-first value: the attribute value, second: the class value
+ Input: a vector or pairs, size=nb of points in subset of data set.
+ - first value: the attribute value,
+ - second: the class value
 
 Output: a pair made of the vector of floating point threshold values and a bool.
 If the bool is false, then this means the function was unable to compute the thresholds.
@@ -595,6 +597,7 @@ getThresholds(
 )
 {
 	START;
+	LOG( 4, "Building histogram using " << nbBins << " bins" );
 //	std::cout << "start " << __FUNCTION__ << "()\n";
 // Step 1 - build initial histogram, evenly spaced
 //	std::cout << "build histogram from vector size=" << v_pac.size() << '\n';
@@ -607,7 +610,7 @@ getThresholds(
 
 	histo.splitSearch();
 //	histo.printInfo( std::cout, "AFTER split" );
-	LOG( 2, "after split: nb bins=" << histo.nbBins() );
+	LOG( 4, "after split: nb bins=" << histo.nbBins() );
 
 //	if( histo.nbBins()==38)
 //		histo.print( std::cout );
@@ -615,7 +618,7 @@ getThresholds(
 // Step 3 - merge adjacent bins holding same class
 	auto nb = histo.mergeSearch();
 //	std::cout << "Nb merges = " << nb << '\n';
-	LOG( 2, "after merge: nb bins=" << histo.nbBins() << " _reachedMaxDepth=" << histo._reachedMaxDepth );
+	LOG( 4, "after merge: nb bins=" << histo.nbBins() << " _reachedMaxDepth=" << histo._reachedMaxDepth );
 
 //	histo.printInfo( std::cout, "AFTER merge" );
 
@@ -625,17 +628,17 @@ getThresholds(
 /// \todo maybe we can do that BEFORE the merging operation?
 //	assert( histo.nbBins() > 1 );
 	if( histo.nbBins() < 2 )
+	{
+		LOG( 4, "failure, 1 bin !" );
 		return std::make_pair( std::vector<float>(), false );
+	}
 
 // Step 4 - build thresholds from bins
 	std::vector<float> vThres( histo.nbBins()-1 );
-
 	size_t i=0;
 	for( auto it=histo.begin(); it != histo.end(); it++ )
-	{
 		if( std::next(it) !=  histo.end() )
 			vThres[i++] = it->getBorders().second;
-	}
 
 	return std::make_pair( vThres, true );
 }

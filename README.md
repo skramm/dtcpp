@@ -107,6 +107,10 @@ This software is build from 2 files only:
 
  Tested successfully (march 2021) with releases 1.70 and 1.75
 
+ **Warning**: 1.70 seems to be the minimal required version, and depending on you distribution,
+ `sudo apt install libboost-all-dev` might install an older release.<br>
+ Check  with: `cat /usr/include/boost/version.hpp`
+
 * `argh`: command-line parser, from https://github.com/adishavit/argh<br>
 (version 1.3.1 included for conveniency)
 

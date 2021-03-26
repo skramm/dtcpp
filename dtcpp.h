@@ -106,6 +106,8 @@ openOutputFile( std::string fn, EN_FileType ft, std::string data_fn=std::string(
 /// A template to have strong types, taken from J. Boccara
 /**
  * https://www.fluentcpp.com/2016/12/08/strong-types-for-strong-interfaces/
+
+ Second type (\c Parameter) is needed so that each type is unique (see \ref ClassVal and \ref ThresholdVal types)
 */
 template <typename T, typename Parameter>
 class NamedType
@@ -120,13 +122,13 @@ public:
 	{
 		return get() == nt2.get();
 	}
-	bool operator < ( const NamedType& nt2 ) const
-	{
-		return get() < nt2.get();
-	}
 	bool operator != ( const NamedType& nt2 ) const
 	{
 		return !( *this == nt2 );
+	}
+	bool operator < ( const NamedType& nt2 ) const
+	{
+		return get() < nt2.get();
 	}
 
 	friend std::ostream& operator << ( std::ostream& f, const NamedType& nt )
@@ -2360,82 +2362,18 @@ struct AttributeData
 };
 
 //---------------------------------------------------------------------
-/// Compute best threshold for attribute \c atIdx, using the Gini Impurity, for the subset of data given by \c v_dpidx.
-/**
-\return an object of type AttributeData
-
-Details:
-- Uses the Gini impurity coeff: https://en.wikipedia.org/wiki/Decision_tree_learning#Gini_impurity
-- for details, see
- - https://en.wikipedia.org/wiki/Information_gain_in_decision_trees
- - https://towardsdatascience.com/under-the-hood-decision-tree-454f8581684e
-
- \todo problem: for a given attribute here, we might have (after processing the histogram of attribute values) all the points having same class.
- Thus, unable to find a threshold. How do we manage that
-*/
-//template<typename T>
+/// Computes for each of the given thresholds values (\c v_thresVal) all the
+/// IG values and returns the best one.
 AttributeData
-computeBestThreshold(
-	uint                     atIdx,     ///< attribute index we want to process
-	const std::vector<uint>& v_dpidx,   ///< datapoint indexes to consider
-	const DataSet&           data,      ///< dataset
-	double                   giniCoeff, ///< Global Gini coeff for all the points
-	const Params&            params,    ///< run-time parameters
-	uint                     nodeId
+SearchBestIG(
+	uint                     nodeId,      ///< node Id (only needed to plot data)
+	uint                     atIdx,       ///< current attribute index
+	double                   giniCoeff,   ///< global Gini coeff
+	std::vector<float>&      v_thresVal,  ///< threshold values
+	const DataSet&           data,        ///< dataset
+	const std::vector<uint>& v_dpidx      ///< indexes of considered points in dataset
 )
 {
-	START;
-	LOG( 3, "Searching best threshold for attrib=" << atIdx << " with " << v_dpidx.size() << " datapts");
-
-	std::vector<float> v_thresVal;
-
-	if( params.useSortToFindThresholds )
-	{
-	// step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
-		std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
-		for( size_t i=0; i<v_dpidx.size(); i++ )
-			v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
-
-		auto nbRemoval = removeDuplicates( v_attribVal, params );
-		LOG( 3, "Removal of " << nbRemoval << " attribute values over " << v_dpidx.size() << " points" );
-
-		if( v_attribVal.size() < 2 )         // if only one value, is pointless
-		{
-			LOG( 3, "WARNING, unable to compute best threshold value for attribute " << atIdx << ", maybe check value of 'removalCoeff'" );
-			return AttributeData();
-		}
-
-		v_thresVal.resize( v_attribVal.size()-1 );      // if 10 values, then only 9 thresholds
-		for( uint i=0; i<v_thresVal.size(); i++ )
-			v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
-	}
-	else
-	{
-		std::map<ClassVal,size_t> localMapCount;
-		using PairAtvalClass = std::pair<float,ClassVal>;
-		std::vector<PairAtvalClass> v_pac( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
-		for( size_t i=0; i<v_dpidx.size(); i++ )
-		{
-			const auto& pt = data.getDataPoint( v_dpidx[i] );
-			v_pac[i] = std::make_pair( pt.attribVal( atIdx ), pt.classVal() );
-			localMapCount[ pt.classVal() ]++;
-		}
-
-		assert( localMapCount.size() > 1 ); // no search needed if we have only one class !
-
-		auto pair_vb = getThresholds<float,ClassVal>( v_pac, 20 );
-		v_thresVal = std::move(pair_vb.first);
-		if( pair_vb.second == false )
-		{
-			LOG( 3, "WARNING, unable to fetch threshold value for attribute " << atIdx );
-			return AttributeData();
-		}
-	}
-
-	LOG( 3, "found " << v_thresVal.size() << " thresholds, searching best one" );
-//	::priv::printVector( std::cout, v_thresVal, "*** THRESHOLDS ***" );
-
-// step 2: compute IG for each threshold value
 	static int fc;
 	std::ostringstream oss;
 	oss << "thres_at"<< atIdx << "_n"<< nodeId << "_fc"<<fc++;
@@ -2496,6 +2434,86 @@ computeBestThreshold(
 		ThresholdVal(v_thresVal.at( best_thres_idx ) ),
 		nb_LT.at( best_thres_idx )
 	);
+}
+
+//---------------------------------------------------------------------
+/// Compute best threshold for attribute \c atIdx, using the Gini Impurity, for the subset of data given by \c v_dpidx.
+/**
+\return an object of type AttributeData
+
+Details:
+- Uses the Gini impurity coeff: https://en.wikipedia.org/wiki/Decision_tree_learning#Gini_impurity
+- for details, see
+ - https://en.wikipedia.org/wiki/Information_gain_in_decision_trees
+ - https://towardsdatascience.com/under-the-hood-decision-tree-454f8581684e
+
+ \todo problem: for a given attribute here, we might have (after processing the histogram of attribute values) all the points having same class.
+ Thus, unable to find a threshold. How do we manage that
+*/
+//template<typename T>
+AttributeData
+computeBestThreshold(
+	uint                     atIdx,     ///< attribute index we want to process
+	const std::vector<uint>& v_dpidx,   ///< datapoint indexes to consider
+	const DataSet&           data,      ///< dataset
+	double                   giniCoeff, ///< Global Gini coeff for all the points
+	const Params&            params,    ///< run-time parameters
+	uint                     nodeId
+)
+{
+	START;
+	LOG( 3, "Searching best threshold for node " << nodeId << ", attrib=" << atIdx << " with " << v_dpidx.size() << " datapts");
+
+	std::vector<float> v_thresVal;
+
+	if( params.useSortToFindThresholds )
+	{
+	// step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
+		std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
+		for( size_t i=0; i<v_dpidx.size(); i++ )
+			v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
+
+		auto nbRemoval = removeDuplicates( v_attribVal, params );
+		LOG( 3, "Removal of " << nbRemoval << " attribute values over " << v_dpidx.size() << " points" );
+
+		if( v_attribVal.size() < 2 )         // if only one value, is pointless
+		{
+			LOG( 3, "WARNING, unable to compute best threshold value for attribute " << atIdx << ", maybe check value of 'removalCoeff'" );
+			return AttributeData();
+		}
+
+		v_thresVal.resize( v_attribVal.size()-1 );      // if 10 values, then only 9 thresholds
+		for( uint i=0; i<v_thresVal.size(); i++ )
+			v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
+	}
+	else
+	{
+		std::map<ClassVal,size_t> localMapCount;
+		using PairAtvalClass = std::pair<float,ClassVal>;
+		std::vector<PairAtvalClass> v_pac( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
+		for( size_t i=0; i<v_dpidx.size(); i++ )
+		{
+			const auto& pt = data.getDataPoint( v_dpidx[i] );
+			v_pac[i] = std::make_pair( pt.attribVal( atIdx ), pt.classVal() );
+			localMapCount[ pt.classVal() ]++;
+		}
+
+		assert( localMapCount.size() > 1 ); // no search needed if we have only one class !
+
+		auto pair_vb = getThresholds<float,ClassVal>( v_pac, 20 );
+		v_thresVal = std::move(pair_vb.first);
+		if( pair_vb.second == false )
+		{
+			LOG( 3, "WARNING, unable to fetch threshold value for attribute " << atIdx );
+			return AttributeData();
+		}
+	}
+
+	LOG( 3, "found " << v_thresVal.size() << " thresholds, searching best one" );
+//	::priv::printVector( std::cout, v_thresVal, "*** THRESHOLDS ***" );
+
+// step 2: compute IG for each threshold value
+	return SearchBestIG( nodeId, atIdx, giniCoeff, v_thresVal, data, v_dpidx );
 }
 //---------------------------------------------------------------------
 /// Wrapper around a map holding a bool for each attribute index.

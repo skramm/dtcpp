@@ -2374,12 +2374,12 @@ SearchBestIG(
 	const std::vector<uint>& v_dpidx      ///< indexes of considered points in dataset
 )
 {
-	static int fc;
 	std::ostringstream oss;
-	oss << "thres_at"<< atIdx << "_n"<< nodeId << "_fc"<<fc++;
+	oss << "thres_n" << nodeId << "_at" << atIdx;
 	auto fdata = priv::openOutputFile( oss.str(), priv::FT_DAT, data._fname );
 	char sep = ' ';
 	fdata << "# thres_index thres_value nbPtsLower nbPtsHigher IG\n";
+
 	std::vector<float> deltaGini( v_thresVal.size() );   // one value per threshold
 	std::vector<uint> nb_LT( v_thresVal.size(), 0u );    // will hold the nb of points lying below the threshold
 	for( size_t i=0; i<v_thresVal.size(); i++ )          // for each threshold value
@@ -2513,7 +2513,16 @@ computeBestThreshold(
 //	::priv::printVector( std::cout, v_thresVal, "*** THRESHOLDS ***" );
 
 // step 2: compute IG for each threshold value
-	return SearchBestIG( nodeId, atIdx, giniCoeff, v_thresVal, data, v_dpidx );
+	auto big = SearchBestIG( nodeId, atIdx, giniCoeff, v_thresVal, data, v_dpidx );
+
+	auto n1 = big._nbPtsLessThan;
+	auto n2 = v_dpidx.size() - n1;
+	if( n1 < params.minNbPoints || n2 < params.minNbPoints )
+	{
+		LOG( 1, "not enough points if splitting on best threshold for attribute " << big._atIndex << ": n1=" << n1 << " n2=" << n2 );
+		return AttributeData();  // flag 'unable' is set
+	}
+	return big;
 }
 //---------------------------------------------------------------------
 /// Wrapper around a map holding a bool for each attribute index.
@@ -2608,7 +2617,9 @@ findBestAttribute(
 			else
 				v_IG.push_back( best );
 		}
-	assert( v_IG.size() );
+//	assert( v_IG.size() );
+	if( v_IG.empty() )
+		return AttributeData(); // unable
 
 // step 3 - get the one with max gain value
 	LOG( 2, "search for best attribute among " << v_IG.size() << " attributes" );
@@ -2707,9 +2718,20 @@ splitNode(
 		LOG( 1, "best attrib: " << bestAttrib );
 
 		aMap.setAsUsed( bestAttrib._atIndex );
+		if( bestAttrib._unable )
+		{
+			LOG( 1, "unable to find good attribute" );
+			graph[v]._type = NT_Final_SplitTooSmall;
+			return;
+		}
+
 	// before splitting, make sure that one of the childs will not have an insufficient number of points
 		auto n1 = bestAttrib._nbPtsLessThan;
 		auto n2 = vIdx.size() - n1;
+#if 1
+		assert(  n1 >= params.minNbPoints && n2 >= params.minNbPoints );
+		done = true;
+#else
 		if( n1 < params.minNbPoints || n2 < params.minNbPoints )
 		{
 			LOG( 1, "not enough points if splitting on attribute " << bestAttrib._atIndex << ": n1=" << n1 << " n2=" << n2 << ", trying next attribute" );
@@ -2723,6 +2745,7 @@ splitNode(
 		}
 		else
 			done = true;
+#endif
 	}
 	while( !done );
 //

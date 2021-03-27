@@ -2394,8 +2394,8 @@ SearchBestIG(
 	if( atIdx == 0 )
 		fplot << "set ylabel 'Pt balance ratio'\n"
 			<< "set y2label 'IG'\n";
-	fplot << "plot '" << oss.str() << ".dat' using 1:(1.-abs($3-$4)/($3+$4)) lw 2 noti,"
-		<< " '' using 1:5 lw 2 axes x1y2 noti\n"
+	fplot << "plot '" << oss.str() << ".dat' using 1:(1.-abs($3-$4)/($3+$4)) lw 2 ti 'Pts balance',"
+		<< " '' using 1:5 lw 2 axes x1y2 ti 'IG'\n"
 		<< "unset ylabel\n"
 		<< "unset y2label\n";
 
@@ -2545,6 +2545,7 @@ computeBestThreshold(
 	return big;
 }
 //---------------------------------------------------------------------
+#if 0
 /// Wrapper around a map holding a bool for each attribute index.
 /// Used to check if an attribute has been already used or not.
 /**
@@ -2592,6 +2593,7 @@ struct AttribMap
 			return c;
 		}
 };
+#endif
 //---------------------------------------------------------------------
 /// Finds the best attributes to use, considering the data points of the current node
 /// and compute thresholds on that attribute so that the two classes are separated at best.
@@ -2604,14 +2606,14 @@ findBestAttribute(
 	const std::vector<uint>& vIdx,   ///< indexes of data points we need to consider
 	const DataSet&           data,   ///< whole dataset
 	const Params&            params, ///< parameters
-	AttribMap&               atMap,  ///< Search will be limited to the attributes defined here
+//	AttribMap&               atMap,  ///< Search will be limited to the attributes defined here
 	uint                     nodeId
 )
 {
 	START;
-	assert( atMap.nbUnusedAttribs() != 0 );
+//	assert( atMap.nbUnusedAttribs() != 0 );
 
-	LOG( 2, "Searching all thresholds among " << atMap.nbUnusedAttribs() << " attributes" );
+	LOG( 2, "Searching all thresholds among " << data.nbAttribs() << " attributes" );
 
 	auto giniCoeff = getGiniImpurity( vIdx, data );
 
@@ -2627,27 +2629,27 @@ findBestAttribute(
 		<< "\nset y2range [*:*]"
 		<< "\nset y2tics"
 		<< "\nset style data linespoints"
+		<< "\nset label 'file: " << data._fname << "' at screen 0.01, screen .98 noenhanced\n"
 		<< "\nset output 'thres_n" << nodeId << ".png'"
-		<< "\nset multiplot layout 1," << atMap.getMap().size()
+		<< "\nset multiplot layout 1," << data.nbAttribs()
 		<< "title 'Point balance and IG vs. thresholds for node " << nodeId << " (" << vIdx.size() << " pts)'"
 		<< '\n';
 
 // step 1 - compute best IG/threshold for each attribute, only for the considered points
 	std::vector<AttributeData> v_IG;
-	for( auto& atIdx: atMap.getMap() )  // iterate on all the remaining attributes available
-		if( atIdx.second == false )
-		{
-			auto best = computeBestThreshold( atIdx.first, vIdx, data, giniCoeff.first, params, nodeId, fplot );
-			if( best._unable )        // this means we couldn't find a threshold, so
-			{                         // we forget this one and we switch to the next attribute
-				atIdx.second = true;  //
-				LOG( 2, "unable to compute thresholds for attrib " << atIdx.first );
-			}
-			else
-				v_IG.push_back( best );
+
+	for( size_t atIdx=0; atIdx<data.nbAttribs(); atIdx++ )  // iterate on all the attributes
+	{
+		auto best = computeBestThreshold( atIdx, vIdx, data, giniCoeff.first, params, nodeId, fplot );
+		if( best._unable )        // this means we couldn't find a threshold, so
+		{                         // we forget this one and we switch to the next attribute
+//			atIdx.second = true;  //
+			LOG( 2, "unable to compute thresholds for attrib " << atIdx );
 		}
-	fplot << "set y2label 'IG'\n";
-	fplot << "unset multiplot\n";
+		else
+			v_IG.push_back( best );
+	}
+	fplot << "\nunset multiplot\n";
 
 	if( v_IG.empty() )
 		return AttributeData(); // unable
@@ -2739,49 +2741,19 @@ splitNode(
 		return;
 	}
 
-	AttribMap aMap( data.nbAttribs() );
-	AttributeData bestAttrib;
+//	AttribMap aMap( data.nbAttribs() );
+//	AttributeData bestAttrib;
 
-//	bool done = false;
-//	do
-//	{
 	// step 2 - find the best attribute to use to split the data, considering the data points of the current node
-		bestAttrib = findBestAttribute( vIdx, data, params, aMap, graph[v]._nodeId );
-		LOG( 1, "best attrib: " << bestAttrib );
+	auto bestAttrib = findBestAttribute( vIdx, data, params, /*aMap,*/ graph[v]._nodeId );
+	LOG( 1, "best attrib: " << bestAttrib );
 
-//		aMap.setAsUsed( bestAttrib._atIndex );
-		if( bestAttrib._unable )
-		{
-			LOG( 1, "unable to find good attribute" );
-			graph[v]._type = NT_Final_SplitTooSmall;
-			return;
-		}
-
-	// before splitting, make sure that one of the childs will not have an insufficient number of points
-/*
-		auto n1 = bestAttrib._nbPtsLessThan;
-		auto n2 = vIdx.size() - n1;
-#if 1
-		assert(  n1 >= params.minNbPoints && n2 >= params.minNbPoints );
-		done = true;
-#else
-		if( n1 < params.minNbPoints || n2 < params.minNbPoints )
-		{
-			LOG( 1, "not enough points if splitting on attribute " << bestAttrib._atIndex << ": n1=" << n1 << " n2=" << n2 << ", trying next attribute" );
-
-			if( aMap.nbUnusedAttribs() == 0 )
-			{
-				LOG( 1, "no more attributes to try, STOP" );
-				graph[v]._type = NT_Final_SplitTooSmall;
-				return;
-			}
-		}
-		else
-			done = true;
-#endif
+	if( bestAttrib._unable )
+	{
+		LOG( 1, "unable to find good attribute" );
+		graph[v]._type = NT_Final_SplitTooSmall;
+		return;
 	}
-	while( !done );
-*/
 //
 // !!! from here, a split will occur !!!
 //

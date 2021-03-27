@@ -6,6 +6,9 @@ app=build/bin/dectree
 
 make
 
+echo "WARNING, erasing previous data !"
+make cleanout
+
 if [ $? != 0 ]; then
 	echo "Build failure!"
 	exit 1;

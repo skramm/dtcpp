@@ -97,8 +97,6 @@ openOutputFile( std::string fn, EN_FileType ft, std::string data_fn=std::string(
 	if( !data_fn.empty() )
 		f << "# source data file: " << data_fn << '\n';
 	f << '\n';
-	if( ft == FT_PLT )
-		f << "set terminal pngcairo size 600,600\n";
 	return f;
 }
 
@@ -981,12 +979,14 @@ DataSet::computeStats( uint nbBins ) const
 {
 	START;
 	auto fplot = priv::openOutputFile( "plot_attrib_histo", priv::FT_PLT, _fname );
-	fplot << "set style data histogram\n"
+	fplot << "set terminal pngcairo size 600,600\n"
+		<< "set style data histogram\n"
 		<< "set style histogram cluster gap 1\n"
 		<< "set style fill solid\n"
 		<< "set boxwidth 1\n"
 		<< "set xtic rotate by -70\n"
 		<< "set grid\n";
+
 
 	DatasetStats<T> dstats( nbAttribs() );
 	for( size_t atItx=0; atItx<nbAttribs(); atItx++ )
@@ -1148,6 +1148,7 @@ DataSet::generateAttribPlot(
 	f1 << '\n';
 
 	auto f = priv::openOutputFile( fname, priv::FT_PLT, _fname );
+	f << "\nset terminal pngcairo size 600,600\n";
 
 	if( !_fparams.classAsString )                                   // if class are not strings,
 	{                                                               // they can have numeric labels
@@ -1323,7 +1324,8 @@ DataSet::generateClassDistrib( std::string fname ) const
 			<< '\n';
 
 	auto fplot = priv::openOutputFile( fname, priv::FT_PLT, _fname );
-	fplot << "set output '" << fname << ".png'\n"
+	fplot << "set terminal pngcairo size 600,600\n"
+		<< "set output '" << fname << ".png'\n"
 		<< "set title 'Class distribution'\n"
 		<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n"
 		<< "set ylabel '% of total points'\n"
@@ -2371,7 +2373,8 @@ SearchBestIG(
 	double                   giniCoeff,   ///< global Gini coeff
 	std::vector<float>&      v_thresVal,  ///< threshold values
 	const DataSet&           data,        ///< dataset
-	const std::vector<uint>& v_dpidx      ///< indexes of considered points in dataset
+	const std::vector<uint>& v_dpidx,     ///< indexes of considered points in dataset
+	std::ofstream&           fplot
 )
 {
 	std::ostringstream oss;
@@ -2379,6 +2382,22 @@ SearchBestIG(
 	auto fdata = priv::openOutputFile( oss.str(), priv::FT_DAT, data._fname );
 	char sep = ' ';
 	fdata << "# thres_index thres_value nbPtsLower nbPtsHigher IG\n";
+
+	fplot << "set xtics 1\n";
+	if( v_thresVal.size() > 9 )
+		fplot << "set xtics 2\n";
+	if( v_thresVal.size() > 24 )
+		fplot << "set xtics 5\n";
+
+	fplot << "set title 'Attribute " << atIdx << "'\n"
+		<< "set xlabel '" << v_thresVal.size() << " threshold values'\n";
+	if( atIdx == 0 )
+		fplot << "set ylabel 'Pt balance ratio'\n"
+			<< "set y2label 'IG'\n";
+	fplot << "plot '" << oss.str() << ".dat' using 1:(1.-abs($3-$4)/($3+$4)) lw 2 noti,"
+		<< " '' using 1:5 lw 2 axes x1y2 noti\n"
+		<< "unset ylabel\n"
+		<< "unset y2label\n";
 
 	std::vector<float> deltaGini( v_thresVal.size() );   // one value per threshold
 	std::vector<uint> nb_LT( v_thresVal.size(), 0u );    // will hold the nb of points lying below the threshold
@@ -2458,7 +2477,8 @@ computeBestThreshold(
 	const DataSet&           data,      ///< dataset
 	double                   giniCoeff, ///< Global Gini coeff for all the points
 	const Params&            params,    ///< run-time parameters
-	uint                     nodeId
+	uint                     nodeId,
+	std::ofstream&           fplot
 )
 {
 	START;
@@ -2513,7 +2533,7 @@ computeBestThreshold(
 //	::priv::printVector( std::cout, v_thresVal, "*** THRESHOLDS ***" );
 
 // step 2: compute IG for each threshold value
-	auto big = SearchBestIG( nodeId, atIdx, giniCoeff, v_thresVal, data, v_dpidx );
+	auto big = SearchBestIG( nodeId, atIdx, giniCoeff, v_thresVal, data, v_dpidx, fplot );
 
 	auto n1 = big._nbPtsLessThan;
 	auto n2 = v_dpidx.size() - n1;
@@ -2540,14 +2560,6 @@ struct AttribMap
 			for( uint i=0; i<nbAttribs; i++ )
 				_attribMap[i] = false;
 		}
-/*		std::vector<uint> getUnusedAttribs() const
-		{
-			std::vector<uint> vout;
-			for( auto elem: _attribMap )
-				if( elem.second == false )
-					vout.push_back(elem.first);
-			return vout;
-		}*/
 		const std::map<uint,bool>& getMap() const
 		{
 			return _attribMap;
@@ -2582,7 +2594,7 @@ struct AttribMap
 };
 //---------------------------------------------------------------------
 /// Finds the best attributes to use, considering the data points of the current node
-/// and compute threshold on that attribute so that the two classes are separated at best.
+/// and compute thresholds on that attribute so that the two classes are separated at best.
 /**
 \return object of type AttributeData, holding all the details
 */
@@ -2603,12 +2615,29 @@ findBestAttribute(
 
 	auto giniCoeff = getGiniImpurity( vIdx, data );
 
+	std::ostringstream oss;
+	oss << "thres_n" << nodeId;
+	auto fplot = priv::openOutputFile( oss.str(), priv::FT_PLT, data._fname );
+	fplot << "\nset terminal pngcairo size 1500,600\n"
+		<< "\nset datafile separator ' '"
+		<< "\nset grid"
+		<< "\nset xlabel 'Threshold index'"
+		<< "\nset xtics 1"
+		<< "\nset yrange [0:1]"
+		<< "\nset y2range [*:*]"
+		<< "\nset y2tics"
+		<< "\nset style data linespoints"
+		<< "\nset output 'thres_n" << nodeId << ".png'"
+		<< "\nset multiplot layout 1," << atMap.getMap().size()
+		<< "title 'Point balance and IG vs. thresholds for node " << nodeId << " (" << vIdx.size() << " pts)'"
+		<< '\n';
+
 // step 1 - compute best IG/threshold for each attribute, only for the considered points
 	std::vector<AttributeData> v_IG;
 	for( auto& atIdx: atMap.getMap() )  // iterate on all the remaining attributes available
 		if( atIdx.second == false )
 		{
-			auto best = computeBestThreshold( atIdx.first, vIdx, data, giniCoeff.first, params, nodeId );
+			auto best = computeBestThreshold( atIdx.first, vIdx, data, giniCoeff.first, params, nodeId, fplot );
 			if( best._unable )        // this means we couldn't find a threshold, so
 			{                         // we forget this one and we switch to the next attribute
 				atIdx.second = true;  //
@@ -2617,7 +2646,9 @@ findBestAttribute(
 			else
 				v_IG.push_back( best );
 		}
-//	assert( v_IG.size() );
+	fplot << "set y2label 'IG'\n";
+	fplot << "unset multiplot\n";
+
 	if( v_IG.empty() )
 		return AttributeData(); // unable
 
@@ -2710,14 +2741,15 @@ splitNode(
 
 	AttribMap aMap( data.nbAttribs() );
 	AttributeData bestAttrib;
-	bool done = false;
-	do
-	{
+
+//	bool done = false;
+//	do
+//	{
 	// step 2 - find the best attribute to use to split the data, considering the data points of the current node
 		bestAttrib = findBestAttribute( vIdx, data, params, aMap, graph[v]._nodeId );
 		LOG( 1, "best attrib: " << bestAttrib );
 
-		aMap.setAsUsed( bestAttrib._atIndex );
+//		aMap.setAsUsed( bestAttrib._atIndex );
 		if( bestAttrib._unable )
 		{
 			LOG( 1, "unable to find good attribute" );
@@ -2726,6 +2758,7 @@ splitNode(
 		}
 
 	// before splitting, make sure that one of the childs will not have an insufficient number of points
+/*
 		auto n1 = bestAttrib._nbPtsLessThan;
 		auto n2 = vIdx.size() - n1;
 #if 1
@@ -2748,6 +2781,7 @@ splitNode(
 #endif
 	}
 	while( !done );
+*/
 //
 // !!! from here, a split will occur !!!
 //

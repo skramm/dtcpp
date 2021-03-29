@@ -114,7 +114,7 @@ cleandoc:
 
 cleanout:
 	@-rm out/*
-	@-rm stdout
+
 
 clean: cleandoc
 	@-rm $(OBJ_DIR)/*

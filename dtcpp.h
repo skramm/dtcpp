@@ -643,8 +643,6 @@ class DataSet
 			}
 			return _classIndexMap;
 		}
-		template<typename HISTO>
-		std::vector<std::pair<uint,uint>> countClassPerBin( size_t, const HISTO& ) const;
 
 /// Returns the number of points with class \c val (or number of non-assigned points if \c val=-1)
 		size_t getClassCount( ClassVal val ) const
@@ -659,6 +657,8 @@ class DataSet
 	private:
 		void p_countClasses();
 		void p_parseTokens( std::vector<std::string>&, const Fparams&, uint&, size_t );
+		template<typename HISTO>
+		std::vector<std::pair<uint,uint>> p_countClassPerBin( size_t, const HISTO& ) const;
 
 	private:
 		size_t                  _nbAttribs = 0;
@@ -715,7 +715,7 @@ DataSet::getClassFromIndex( uint idx ) const
 }
 //---------------------------------------------------------------------
 /// Writes in current folder a file named <code>attrib_histo_<i>.dat</code>, holding
-/// the histogram values of attribute \c i. Helper function for DataSet::computeStats()
+/// the histogram of the number of points per bin for attribute \c i. Helper function for DataSet::computeStats()
 /**
 <br>
 - Uses Boost::histogram, see https://www.boost.org/doc/libs/1_70_0/libs/histogram
@@ -724,7 +724,7 @@ template<typename T>
 auto
 genAttribHisto(
 	size_t                    atIdx,       ///< attribute index
-	const std::vector<float>& vat,
+	const std::vector<float>& vat,         ///< vector of all attribute values (size=nb of points)
 	const AttribStats<T>&     atstats,
 	uint                      nbBins,      ///< nb bins of the histogram
 	std::string               data_fn,     ///< input datafile name
@@ -744,7 +744,8 @@ genAttribHisto(
 
 	std::for_each( vat.begin(), vat.end(), std::ref(h) );
 
-	f << "# histogram for attribute " << atIdx << '\n';
+	f << "# histogram for attribute " << atIdx
+		<< "\n# index low_thres high_thres nb_pts percentage_of_total\n";
 	for( const auto& x: boost::histogram::indexed(h) )
 		f << x.index()+1 << sep << x.bin().lower() << sep << x.bin().upper() << sep << *x << sep << 100. * *x/nbPts <<  '\n';
 	return h;
@@ -802,14 +803,14 @@ computeAttribStats( std::vector<float>& vat )
 //---------------------------------------------------------------------
 /// For each bin of the histogram \c histo: count the number of classes in the dataset, for attribute \c attrIdx
 /**
-\return A vector of size equal to the number of bins, holding the number of classes in that bin
+\return A vector of size equal to the number of bins, holding pairs: (number of classes in bin, number of points in bin)
 
 \todo check if not problem here: \c histo has 2 additional bins (first and last, for values higher and lower).
 Isn't that a problem ?
 */
 template<typename HISTO>
 std::vector<std::pair<uint,uint>>
-DataSet::countClassPerBin( size_t attrIdx, const HISTO& histo ) const
+DataSet::p_countClassPerBin( size_t attrIdx, const HISTO& histo ) const
 {
 	auto nbBins = histo.size();
 	std::vector<std::set<ClassVal>> classSets( nbBins ); // one set of classes per bin
@@ -844,26 +845,30 @@ DataSet::countClassPerBin( size_t attrIdx, const HISTO& histo ) const
 
 	return v_ret;
 }
-//---------------------------------------------------------------------
-/// Saves in current folder the histogram of nb of classes per bin, for attribute \c attrIdx.
-/// Related: DataSet::countClassPerBin()
-void
-saveClassCountPerBin( size_t attrIdx, const std::vector<std::pair<uint,uint>>& v_ccpb )
-{
-	char sep = ' ';
 
+
+//---------------------------------------------------------------------
+namespace priv {
+
+/// Saves in current folder the histogram of nb of classes per bin, for attribute \c attrIdx.
+/// Related: DataSet::p_countClassPerBin()
+void
+saveClassCountPerBin(
+	size_t attrIdx,                                    ///< attribute index
+	const std::vector<std::pair<uint,uint>>& v_ccpb    ///< vector of size equal to the number of bins, holding pairs: (number of classes in bin, number of points in bin)
+)
+{
 	auto f = priv::openOutputFile( "histo_ccpb_attrib_" + std::to_string(attrIdx), priv::FT_DAT );
 	assert( f.is_open() );
 	f << "# attribute " << std::to_string(attrIdx)
-		<< "\n# index "
-		<< sep << "nb_of_classes_per_bin"
-		<< sep << "ratio_nb_classes/nb_pts_per_bin\n";
+		<< "\n# index nb_of_classes_per_bin ratio_nb_classes/nb_pts_per_bin\n";
 	assert( v_ccpb.size()>3 );
 /*
 We start at 1 and stop before the last one, because this is build from the
-Boost::histogram object, and that thing always two additional bins, the first for
+Boost::histogram object, and that thing always add two additional bins, the first for
 values lower than the "low" threshold, and one for values above the "high" threshold
 */
+	char sep = ' ';
 	for( size_t i=1; i<v_ccpb.size()-1; i++ )
 	{
 		f << i << sep << v_ccpb[i].first << sep;
@@ -874,6 +879,9 @@ values lower than the "low" threshold, and one for values above the "high" thres
 		f << '\n';
 	}
 }
+
+} // namespace priv
+
 //---------------------------------------------------------------------
 /// Outlier detection for an attribute, returns true if it is detected as so.
 /// Helper function for DataSet::tagOutliers()
@@ -985,8 +993,7 @@ DataSet::computeStats( uint nbBins ) const
 		<< "set style fill solid\n"
 		<< "set boxwidth 1\n"
 		<< "set xtic rotate by -70\n"
-		<< "set grid\n";
-
+		<< "set grid\n\n";
 
 	DatasetStats<T> dstats( nbAttribs() );
 	for( size_t atItx=0; atItx<nbAttribs(); atItx++ )
@@ -1009,8 +1016,8 @@ DataSet::computeStats( uint nbBins ) const
 
 		auto histo = genAttribHisto( atItx, vat, atstats, nbBins, _fname, size() );
 
-		auto v_ccpb = countClassPerBin( atItx, histo );
-		saveClassCountPerBin( atItx, v_ccpb );
+		auto v_ccpb = p_countClassPerBin( atItx, histo );
+		priv::saveClassCountPerBin( atItx, v_ccpb );
 
 		fplot << "set output 'attrib_histo_"<< atItx << ".png'\n"
 			<< "unset label\n"
@@ -1019,16 +1026,10 @@ DataSet::computeStats( uint nbBins ) const
 			<< "set multiplot layout 2,1\n"
 			<< "set logscale y\n"
 			<< "set title '% of pts'\n"
-//			<< "set origin 0,0\n"
-//			<< "set size 1,0.5\n"
-//			<< "plot 'attrib_histo_" << atItx << ".dat' using 4:xtic(1) noti\n"
 			<< "plot 'attrib_histo_" << atItx << ".dat' using 5:xtic(sprintf(\"%.1e\",column(2))) noti\n"
 			<< "set title 'Nb classes/nbpts of bin'\n"
-//			<< "set origin 0,0.5\n"
-//			<< "set size 1,0.5\n"
 			<< "set xtics format ''\n"
 			<< "plot 'histo_ccpb_attrib_" << atItx << ".dat' using 3 noti\n"
-//			<< "plot 'histo_ccpb_attrib_" << atItx << ".dat' using 3:xtic(1) noti\n"
 			<< "unset multiplot\n"
 			<< '\n';
 	}
@@ -1162,6 +1163,8 @@ DataSet::generateAttribPlot(
 		<< "\nclass=" << nbAttribs()+2
 		<< "\nset datafile separator ' '"
 		<< "\nset grid"
+		<< "\nset ytics 0,1," << nbClasses()-1
+		<< "\nset xlabel 'Attribute value'"
 		<< "\n\n";
 
 	for( size_t i=0; i<nbAttribs(); i++ )
@@ -1175,10 +1178,8 @@ DataSet::generateAttribPlot(
 		priv::addVerticalLine( f, "mean-sigma", 0.7, st._meanVal-st._stddevVal, "blue" );
 		priv::addVerticalLine( f, "mean+sigma", 0.7, st._meanVal+st._stddevVal, "blue" );
 		priv::addVerticalLine( f, "median",     0.6, st._medianVal,             "green" );
-		f << "set title 'Class vs. attribute " << i << "'\n"
-			<< "set ytics 0,1," << nbClasses()-1
-			<< "\nplot '" << fname << ".csv' using " << i+1 << ":class notitle\n"
-			<< '\n';
+		f << "set title 'Class vs. attribute " << i
+			<< "'\nplot '" << fname << ".csv' using " << i+1 << ":class notitle\n\n";
 	}
 }
 
@@ -2391,9 +2392,8 @@ SearchBestIG(
 
 	fplot << "set title 'Attribute " << atIdx << "'\n"
 		<< "set xlabel '" << v_thresVal.size() << " threshold values'\n";
-	if( atIdx == 0 )
-		fplot << "set ylabel 'Pt balance ratio'\n"
-			<< "set y2label 'IG'\n";
+//	if( atIdx == 0 )
+//		fplot << "set ylabel 'Pt balance ratio'\n" << "set y2label 'IG'\n";
 	fplot << "plot '" << oss.str() << ".dat' using 1:(1.-abs($3-$4)/($3+$4)) lw 2 ti 'Pts balance',"
 		<< " '' using 1:5 lw 2 axes x1y2 ti 'IG'\n"
 		<< "unset ylabel\n"
@@ -2543,6 +2543,20 @@ computeBestThreshold(
 		return AttributeData();  // flag 'unable' is set
 	}
 	return big;
+}
+//---------------------------------------------------------------------
+/// Dummy version, needed only for tests. See other one.
+AttributeData
+computeBestThreshold(
+	uint                     atIdx,     ///< attribute index we want to process
+	const std::vector<uint>& v_dpidx,   ///< datapoint indexes to consider
+	const DataSet&           data,      ///< dataset
+	double                   giniCoeff, ///< Global Gini coeff for all the points
+	const Params&            params     ///< run-time parameters
+)
+{
+	std::ofstream f;
+	return computeBestThreshold( atIdx, v_dpidx, data, giniCoeff, params, 0, f );
 }
 //---------------------------------------------------------------------
 #if 0

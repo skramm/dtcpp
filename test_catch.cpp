@@ -187,9 +187,8 @@ TEST_CASE( "computeBestThreshold", "[cbt]" )
 	std::cout << "ig0: " << ig0 <<'\n';
 	auto ig1 = computeBestThreshold( 1, v_dpidx, dataset, giniCoeff.first, params );
 	std::cout << "ig1: " << ig1 <<'\n';
-//	AttribMap aMap;
-	AttribMap amap(2);
-	auto ba = findBestAttribute( v_dpidx, dataset, params, amap );
+
+	auto ba = findBestAttribute( v_dpidx, dataset, params, 0 );
 }
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "removeDuplicates", "[RD]" )

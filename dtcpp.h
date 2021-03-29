@@ -714,6 +714,7 @@ uint
 DataSet::getIndexFromClass( ClassVal cval ) const
 {
 //	COUT << "ClassVal=" << cval << '\n';
+	assert( cval.get() >= 0 );
 	const auto& cim = getClassIndexMap();
 	return cim.left.at( cval );
 }
@@ -2387,6 +2388,7 @@ generateClassHistoPerTVal(
 	const std::vector<uint>& v_dpidx      ///< indexes of considered points in dataset
 )
 {
+	START;
 	char sep = ' ';
 
 	std::ostringstream oss;
@@ -2407,35 +2409,35 @@ generateClassHistoPerTVal(
 		fdata << " C" << c;
 	fdata << "\n\n";
 
-
 	for( size_t tIdx=0; tIdx<v_thresVal.size()+1; tIdx++ )
 	{
 		std::map<uint,size_t> ccount;                            // a map to count the number of points of each class in each bin
-//		for( uint i=0; i<(uint)data.nbClasses(); i++ )           // this is needed because will will enumerate all the values
-//			ccount[i] = 0;
 
 		for( size_t i=0; i<v_dpidx.size(); i++ )
 		{
 			const auto& dp = data.getDataPoint(i);
 			const auto& atVal = dp.attribVal(atIdx);
-			const auto& classIdx =  data.getIndexFromClass( dp.classVal() );
+			if( dp.classVal() != ClassVal(-1) )
+			{
+				const auto& classIdx = data.getIndexFromClass( dp.classVal() );
 
-			if( tIdx == 0 )                              // if attribute value is less than first threshold value
-			{
-				if( atVal < v_thresVal.front() )
-					ccount[ classIdx ]++;
-			}
-			else
-			{
-				if( tIdx == v_thresVal.size() )          // if attribute value is higher than last threshold value
+				if( tIdx == 0 )                              // if attribute value is less than first threshold value
 				{
-					if( atVal >= v_thresVal.back() )
+					if( atVal < v_thresVal.front() )
 						ccount[ classIdx ]++;
 				}
-				else                                     // if attribute value is between threshold values
+				else
 				{
-					if( atVal >= v_thresVal[tIdx] && atVal < v_thresVal[tIdx+1] )
-						ccount[ classIdx ]++;
+					if( tIdx == v_thresVal.size() )          // if attribute value is higher than last threshold value
+					{
+						if( atVal >= v_thresVal.back() )
+							ccount[ classIdx ]++;
+					}
+					else                                     // if attribute value is between threshold values
+					{
+						if( atVal >= v_thresVal[tIdx] && atVal < v_thresVal[tIdx+1] )
+							ccount[ classIdx ]++;
+					}
 				}
 			}
 		}
@@ -2455,11 +2457,9 @@ generateClassHistoPerTVal(
 	}
 	fdata << "\n# (EOF)\n";
 
-//	std::ostringstream oss2;
-//	oss2 << "thresClassHisto_n" << nodeId << "_at" << atIdx;
 	auto fplot = priv::openOutputFile( oss.str(), priv::FT_PLT, data._fname );
-
-	fplot << "\nset terminal pngcairo size 600,600"
+	auto imwidth = std::max( 1400, 600 + (int)v_thresVal.size()*20 );
+	fplot << "\nset terminal pngcairo size " << imwidth << ",600"
 		<< "\nset output '" << oss.str() << ".png'"
 		<< "\nset style data histogram"
 		<< "\nset style histogram rowstacked"
@@ -2472,6 +2472,7 @@ generateClassHistoPerTVal(
 	fplot << "\nplot '" << oss.str() << ".dat' using 4:xtic(1) ti '";
 
 	const auto& sibm = data.getStringIndexBimap();
+	LOG( 4, "bimapssize=" << sibm.left.size() << std::endl );
 	if( !sibm.size() )            // if we have string classes
 		fplot << "class 0'";
 	else
@@ -2510,6 +2511,7 @@ SearchBestIG(
 	std::ofstream&           fplot        ///< plot script, opened in caller function
 )
 {
+	START;
 	std::ostringstream oss;
 	oss << "thres_n" << nodeId << "_at" << atIdx;
 	auto fdata = priv::openOutputFile( oss.str(), priv::FT_DAT, data._fname );

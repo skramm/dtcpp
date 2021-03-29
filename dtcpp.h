@@ -569,8 +569,9 @@ class DataSet
 		void print( std::ostream&, const std::vector<uint>& ) const;
 		void printInfo( std::ostream&, const char* name=0 ) const;
 
-		uint getIndexFromClass( ClassVal ) const;
+		uint     getIndexFromClass( ClassVal ) const;
 		ClassVal getClassFromIndex( uint ) const;
+
 		void generateClassDistrib( std::string fname ) const;
 
 		template<typename T>
@@ -817,9 +818,9 @@ DataSet::p_countClassPerBin( size_t attrIdx, const HISTO& histo ) const
 
 	for(size_t idx=0; idx<size(); idx++ )
 	{
-		const auto& pt = getDataPoint(idx);        // for each point
+		const auto& pt = getDataPoint(idx);        // for each data point
 		auto attribVal = pt.attribVal( attrIdx );  // get attribute value
-		auto classVal = pt.classVal();             // and class value
+		auto classVal  = pt.classVal();            // and class value
 
 		if( classVal != ClassVal(-1)               // if not classless, then
 			&& !pointIsOutlier(idx) )              // AND not an outlier
@@ -838,8 +839,8 @@ DataSet::p_countClassPerBin( size_t attrIdx, const HISTO& histo ) const
 	size_t i = 0;
 	for (auto&& x : boost::histogram::indexed(histo) )
 	{
-		v_ret[i].first  = classSets[i].size();
-		v_ret[i].second = *x;
+		v_ret[i].first  = classSets[i].size();         // number of classes in that bin
+		v_ret[i].second = *x;                          // number of points in that bin
 		i++;
 	}
 
@@ -2365,8 +2366,97 @@ struct AttributeData
 };
 
 //---------------------------------------------------------------------
+#ifndef DTCPP_NEED_FOR_SPEED
+void
+generateClassHistoPerTVal(
+	uint                     nodeId,      ///< node Id (only needed to plot data)
+	uint                     atIdx,       ///< current attribute index
+	std::vector<float>&      v_thresVal,  ///< threshold values for that attribute
+	const DataSet&           data,        ///< dataset
+	const std::vector<uint>& v_dpidx      ///< indexes of considered points in dataset
+)
+{
+	char sep = ' ';
+
+	std::ostringstream oss;
+	oss << "thresClassHisto_n" << nodeId << "_at" << atIdx;
+	auto fdata = priv::openOutputFile( oss.str(), priv::FT_DAT, data._fname );
+
+	fdata << "# generated from function " << __FUNCTION__
+		<< "()\n\n# class content for node " << nodeId << ", attribute " << atIdx
+		<< "\n#  - nb of threshold values=" << v_thresVal.size()
+		<< "\n#  - nb of points=" << v_dpidx.size()
+		<< '\n';
+
+	if( v_thresVal.size() < 2 )
+		fdata << "# (empty data)\n";
+
+	fdata << "\n# Columns:\n# thres_index binLow binHigh";
+	for( size_t c=0; c<data.nbClasses(); c++ )
+		fdata << " C" << c;
+	fdata << '\n';
+
+// for points below first threshold value
+
+
+	for( size_t tIdx=0; tIdx<v_thresVal.size()+1; tIdx++ )
+	{
+		std::map<uint,size_t> ccount;                            // a map to count the number of points of each class in each bin
+//		for( uint i=0; i<(uint)data.nbClasses(); i++ )           // this is needed because will will enumerate all the values
+//			ccount[i] = 0;
+
+		for( size_t i=0; i<v_dpidx.size(); i++ )
+		{
+			const auto& dp = data.getDataPoint(i);
+			const auto& atVal = dp.attribVal(atIdx);
+			const auto& classIdx =  data.getIndexFromClass( dp.classVal() );
+
+			if( tIdx == 0 )                              // if attribute value is less than first threshold value
+			{
+				if( atVal < v_thresVal.front() )
+					ccount[ classIdx ]++;
+			}
+			else
+			{
+				if( tIdx == v_thresVal.size() )          // if attribute value is higher than last threshold value
+				{
+					if( atVal >= v_thresVal.back() )
+						ccount[ classIdx ]++;
+				}
+				else                                     // if attribute value is between threshold values
+				{
+					if( atVal >= v_thresVal[tIdx] && atVal < v_thresVal[tIdx+1] )
+						ccount[ classIdx ]++;
+				}
+			}
+		}
+
+		fdata << tIdx << sep;
+		if( tIdx == 0 )
+			fdata << "-inf " << v_thresVal.front();
+		else
+			if( tIdx == v_thresVal.size() )
+				fdata << v_thresVal.back() << " +inf";
+			else
+				fdata << v_thresVal[tIdx] << sep << v_thresVal[tIdx+1];
+
+		for( uint i=0; i<(uint)data.nbClasses(); i++ )
+			fdata << sep << ccount[i];
+		fdata << '\n';
+	}
+	fdata << "\n# (EOF)\n";
+}
+#endif
+
+//---------------------------------------------------------------------
 /// Computes for each of the given thresholds values (\c v_thresVal) all the
 /// IG values and returns the best one.
+/**
+This function also produces a data file named \c out/thres_nX folder
+(with \x X the node ID).
+This file will hold for each threshold value the number of points lower and higher
+than that value, and the associated IG.
+*/
 AttributeData
 SearchBestIG(
 	uint                     nodeId,      ///< node Id (only needed to plot data)
@@ -2375,14 +2465,14 @@ SearchBestIG(
 	std::vector<float>&      v_thresVal,  ///< threshold values
 	const DataSet&           data,        ///< dataset
 	const std::vector<uint>& v_dpidx,     ///< indexes of considered points in dataset
-	std::ofstream&           fplot
+	std::ofstream&           fplot        ///< plot script, opened in caller function
 )
 {
 	std::ostringstream oss;
 	oss << "thres_n" << nodeId << "_at" << atIdx;
 	auto fdata = priv::openOutputFile( oss.str(), priv::FT_DAT, data._fname );
 	char sep = ' ';
-	fdata << "# thres_index thres_value nbPtsLower nbPtsHigher IG\n";
+	fdata << "# thres_index thres_value nbPtsLower nbPtsHigher\n\n";
 
 	fplot << "set xtics 1\n";
 	if( v_thresVal.size() > 9 )
@@ -2398,6 +2488,10 @@ SearchBestIG(
 		<< " '' using 1:5 lw 2 axes x1y2 ti 'IG'\n"
 		<< "unset ylabel\n"
 		<< "unset y2label\n";
+
+#ifndef DTCPP_NEED_FOR_SPEED
+	generateClassHistoPerTVal( nodeId, atIdx, v_thresVal, data, v_dpidx );
+#endif
 
 	std::vector<float> deltaGini( v_thresVal.size() );   // one value per threshold
 	std::vector<uint> nb_LT( v_thresVal.size(), 0u );    // will hold the nb of points lying below the threshold
@@ -2620,8 +2714,7 @@ findBestAttribute(
 	const std::vector<uint>& vIdx,   ///< indexes of data points we need to consider
 	const DataSet&           data,   ///< whole dataset
 	const Params&            params, ///< parameters
-//	AttribMap&               atMap,  ///< Search will be limited to the attributes defined here
-	uint                     nodeId
+	uint                     nodeId  ///< node Id, used to generate data and plot file for that node
 )
 {
 	START;
@@ -2754,9 +2847,6 @@ splitNode(
 		graph[v]._type = NT_Final_GI_Small;
 		return;
 	}
-
-//	AttribMap aMap( data.nbAttribs() );
-//	AttributeData bestAttrib;
 
 	// step 2 - find the best attribute to use to split the data, considering the data points of the current node
 	auto bestAttrib = findBestAttribute( vIdx, data, params, /*aMap,*/ graph[v]._nodeId );

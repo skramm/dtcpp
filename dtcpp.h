@@ -463,6 +463,10 @@ using ClassIndexMap = boost::bimap<
 	size_t        // defaults to boost::bimaps::set_of<size_t>
 >;
 
+using ClassStringIndexBiMap = boost::bimap<
+	std::string,
+	size_t
+>;
 //---------------------------------------------------------------------
 /// Outlier Detection Method. Related to Dataset::tagOutliers()
 enum class En_OD_method
@@ -581,7 +585,8 @@ class DataSet
 		{
 			_data.clear();
 			_classCount.clear();
-			_classStringMap.clear();
+			_classStringIndexBimap.clear();
+
 			_nbNoClassPoints = 0u;
 			_noChange = false;
 			_cimIsUpToDate = false;
@@ -655,6 +660,11 @@ class DataSet
 			return 0u;
 		}
 
+		const ClassStringIndexBiMap& getStringIndexBimap() const
+		{
+			return _classStringIndexBimap;
+		}
+
 	private:
 		void p_countClasses();
 		void p_parseTokens( std::vector<std::string>&, const Fparams&, uint&, size_t );
@@ -664,7 +674,7 @@ class DataSet
 	private:
 		size_t                  _nbAttribs = 0;
 		std::vector<DataPoint>  _data;
-		std::map<std::string,uint> _classStringMap;     ///< maps string labels to indexes
+		ClassStringIndexBiMap   _classStringIndexBimap;  ///< maps string labels to indexes
 		std::map<ClassVal,uint> _classCount;            ///< Holds the number of points for each class value. Does \b NOT count classless points
 		mutable ClassIndexMap   _classIndexMap;		    ///< holds correspondence between real class values (say, 1,4,7) and corresponding indexes (0,1,2)
 		mutable bool            _cimIsUpToDate = false;
@@ -846,7 +856,6 @@ DataSet::p_countClassPerBin( size_t attrIdx, const HISTO& histo ) const
 
 	return v_ret;
 }
-
 
 //---------------------------------------------------------------------
 namespace priv {
@@ -1190,7 +1199,6 @@ void
 DataSet::p_parseTokens(
 	std::vector<std::string>&   v_tok,             ///< string tokens read on line
 	const Fparams&              params,            ///< parameters
-//	std::map<std::string,uint>& classStringMap,    ///< class to string map, used if class is given as a string
 	uint&                       classIndexCounter, ///< the next index value for classes as strings
 	size_t                      nb_lines           ///< in case of error
 )
@@ -1217,14 +1225,15 @@ DataSet::p_parseTokens(
 		}
 		else
 		{
-			if( _classStringMap.find( cla ) == _classStringMap.end() )  // if not registered, then
+			auto it = _classStringIndexBimap.left.find( cla );
+			if( it == _classStringIndexBimap.left.end() )  // if not registered, then
 			{
-				classIndex             = classIndexCounter;
-				_classStringMap[ cla ] = classIndexCounter;             // new class, add it
+				classIndex = classIndexCounter;
+				_classStringIndexBimap.insert( ClassStringIndexBiMap::value_type( cla, classIndexCounter) );             // new class, add it
 				classIndexCounter++;
 			}
 			else
-				classIndex = _classStringMap[ cla ];
+				classIndex = _classStringIndexBimap.left.at( cla );
 		}
 		if( classIndex < 0 )
 			_nbNoClassPoints++;
@@ -1355,7 +1364,7 @@ DataSet::printInfo( std::ostream& f, const char* name ) const
 	if( _fparams.classAsString )
 	{
 		f << "- Class strings => indexes:\n";
-		for( const auto& psi: _classStringMap )
+		for( const auto& psi: _classStringIndexBimap.left )
 			f << " -\"" << psi.first << "\": " << psi.second << '\n';
 	}
 
@@ -2367,6 +2376,8 @@ struct AttributeData
 
 //---------------------------------------------------------------------
 #ifndef DTCPP_NEED_FOR_SPEED
+/// Generates for each node and each attribute a data/plot file to show how classes are distributed,
+/// depending on the threshold values
 void
 generateClassHistoPerTVal(
 	uint                     nodeId,      ///< node Id (only needed to plot data)
@@ -2394,9 +2405,7 @@ generateClassHistoPerTVal(
 	fdata << "\n# Columns:\n# thres_index binLow binHigh";
 	for( size_t c=0; c<data.nbClasses(); c++ )
 		fdata << " C" << c;
-	fdata << '\n';
-
-// for points below first threshold value
+	fdata << "\n\n";
 
 
 	for( size_t tIdx=0; tIdx<v_thresVal.size()+1; tIdx++ )
@@ -2445,6 +2454,39 @@ generateClassHistoPerTVal(
 		fdata << '\n';
 	}
 	fdata << "\n# (EOF)\n";
+
+//	std::ostringstream oss2;
+//	oss2 << "thresClassHisto_n" << nodeId << "_at" << atIdx;
+	auto fplot = priv::openOutputFile( oss.str(), priv::FT_PLT, data._fname );
+
+	fplot << "\nset terminal pngcairo size 600,600"
+		<< "\nset output '" << oss.str() << ".png'"
+		<< "\nset style data histogram"
+		<< "\nset style histogram rowstacked"
+		<< "\nset style fill solid border -1"
+		<< "\nset boxwidth 0.75"
+		<< "\nset grid"
+		<< "\nset title 'Node "<< nodeId << ", Attribute " << atIdx << " (" << v_dpidx.size() << " pts)'"
+		<< "\nset xlabel '" << v_thresVal.size() << " threshold values'";
+
+	fplot << "\nplot '" << oss.str() << ".dat' using 4:xtic(1) ti '";
+
+	const auto& sibm = data.getStringIndexBimap();
+	if( !sibm.size() )            // if we have string classes
+		fplot << "class 0'";
+	else
+		fplot << "0:" << sibm.right.at(0) << "'";
+
+	for( uint i=0; i<(uint)data.nbClasses()-1; i++ )
+	{
+		fplot << ", '' using " << 5+i << " ti '";
+		if( !sibm.size() )                     // if no strings, just print the index
+			fplot << "class " << i+1;
+		else
+			fplot << i+1 << ":" << sibm.right.at(i+1);
+		fplot << "'";
+	}
+	fplot << '\n';
 }
 #endif
 

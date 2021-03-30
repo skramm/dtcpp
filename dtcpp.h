@@ -2001,6 +2001,7 @@ class TrainingTree
 		vertexT_t     _initialVertex;
 		uint          _maxDepth = 1;  ///< defined by training
 		ClassIndexMap _classIndexMap;  ///< maps class values to index values
+		std::string   _dataFileName = "(NO DATA)"; ///< used to print input file name on plot
 
 	public:
 #ifdef TESTMODE
@@ -2029,7 +2030,7 @@ class TrainingTree
 		ConfusionMatrix classify( const DataSet& ) const;
 		ClassVal        classify( const DataPoint& ) const;
 
-		void     printDot( std::string fname ) const;
+		void     printDot( int id ) const;
 		void     printInfo( std::ostream&, const char* msg=0 ) const;
 		uint     maxDepth() const { return _maxDepth; }
 		size_t   nbLeaves() const;
@@ -2114,12 +2115,12 @@ printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 /// Print a DOT file of the tree by calling the recursive function \ref printDotNodeChilds()
 inline
 void
-TrainingTree::printDot( std::string fname ) const
+TrainingTree::printDot( int id ) const
 {
-	auto f = priv::openOutputFile( fname, priv::FT_DOT );
-	f << "# file: " << fname << "\n\n"
+	auto f = priv::openOutputFile( "tree_" + std::to_string(id) , priv::FT_DOT );
+	f << "# file: " << _dataFileName << "\n\n"
 		<< "digraph g {\nnode [shape=\"box\"];\n"
-		<< "title [label=\"data file:\\n" << fname << "\",shape=\"note\",labelloc=\"c\"];\n"
+		<< "title [label=\"data file:\\n" << _dataFileName << "\",shape=\"note\",labelloc=\"c\"];\n"
 		<< _graph[_initialVertex]._nodeId
 		<< " [label=\"n" << _graph[_initialVertex]._nodeId
 		<< " attr="     << _graph[_initialVertex]._attrIndex
@@ -2461,7 +2462,7 @@ generateClassHistoPerTVal(
 	fdata << "\n# (EOF)\n";
 
 	auto fplot = priv::openOutputFile( oss.str(), priv::FT_PLT, data._fname );
-	auto imwidth = std::max( 1400, 600 + (int)v_thresVal.size()*20 );
+	auto imwidth = std::max( 1200, 500 + (int)v_thresVal.size()*20 );
 	fplot << "\nset terminal pngcairo size " << imwidth << ",600"
 		<< "\nset output '" << oss.str() << ".png'"
 		<< "\nset label 'file: " << data._fname << "' at screen 0.01, screen .98 noenhanced"
@@ -2476,7 +2477,6 @@ generateClassHistoPerTVal(
 	fplot << "\nplot '" << oss.str() << ".dat' using 4:xtic(1) ti '";
 
 	const auto& sibm = data.getStringIndexBimap();
-	LOG( 4, "bimapssize=" << sibm.left.size() << std::endl );
 	if( !sibm.size() )            // if we have string classes
 		fplot << "class 0'";
 	else
@@ -3055,6 +3055,7 @@ TrainingTree::train( DataSet& data, const Params params )
 	START;
 	LOG( 0, "Start training" );
 
+	_dataFileName = data._fname;
 	NodeT::resetNodeId();
 	auto nbAttribs = data.nbAttribs();
 	if( !nbAttribs )

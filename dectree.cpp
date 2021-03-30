@@ -128,11 +128,11 @@ int main( int argc, const char** argv )
 //		auto cm = tt.classify( dataset );
 //		std::cout << cm << "\n";
 		tt.printInfo( std::cout, "Before Pruning" );
-		tt.printDot( "dectree" );
+		tt.printDot( 0 );
 
 		tt.pruning();
 		tt.printInfo( std::cout, "After pruning" );
-		tt.printDot( "dectree_p" );
+		tt.printDot( 1 );
 		auto cm = tt.classify( dataset );
 		std::cout << cm << "\n";
 		if( dataset.nbClasses() == 2 )
@@ -158,7 +158,7 @@ int main( int argc, const char** argv )
 			data_train.printInfo( std::cout, "train" );
 			data_test.printInfo(  std::cout, "test" );
 			tt.train( data_train, params );
-			tt.printDot( "dectree_" + std::to_string(i) );
+			tt.printDot( i );
 
 			auto cm_train = tt.classify( data_train );
 			auto cm_test  = tt.classify( data_test );

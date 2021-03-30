@@ -271,12 +271,12 @@ TEST_CASE( "pruning", "[pru]" )
 	CHECK( boost::num_edges( g ) == 8 );
 	CHECK( tt.nbLeaves() == 5 );
 	tt.printInfo( std::cout );
-	tt.printDot( "test_A" );
+	tt.printDot( 0 );
 
 	CHECK( tt.pruning() == 4 );
 	CHECK( tt.nbLeaves() == 0 );
 	tt.printInfo( std::cout );
-	tt.printDot( "test_B" );
+	tt.printDot( 1 );
 }
 
 //-------------------------------------------------------------------------------------------

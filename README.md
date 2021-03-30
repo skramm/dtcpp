@@ -11,14 +11,8 @@ Naive attempt of a Decision Tree implementation for continuous variables (WIP !!
 
 ## current status 20210322:
 
-Failure on one of the demos:<br>
-$ ./run_demo.sh b
 
-
- try:<br>
-$ ./run_demo.sh b -ll 4<br>
-for details
-
+WIP: histogram of classes vs trheshfold values
 
 ## Features
 

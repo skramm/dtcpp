@@ -47,3 +47,7 @@ $app sample_data/balance-scale.csv -fl -sep ',' $2 $3 $4 $5
 
 esac
 
+make dot
+make plt
+
+

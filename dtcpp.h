@@ -1431,6 +1431,7 @@ enum NodeType
 	 ,NT_Root                 ///< Root node
 	 ,NT_Decision             ///< Decision Node
 	 ,NT_Final_MD             ///< Leave, cause: reached Max Depth
+	 ,NT_Final_SC             ///< Leave, single class in dataset considered points
 	 ,NT_Final_GI_Small       ///< Leave, cause: Information Gain is small enough
 	 ,NT_Final_SplitTooSmall  ///< Leave, cause: unable to split, nb of points would be too small
 	 ,NT_Merged               ///< Leave than has been merge with another at pruning step
@@ -1447,6 +1448,7 @@ getString( NodeType nt )
 		case NT_Root:     s="Root";     break;
 		case NT_Decision: s="Decision"; break;
 //		case NT_Final:    s="Final";    break;
+		case NT_Final_SC:            s="SC";  break;
 		case NT_Final_MD:            s="MD";  break;
 		case NT_Final_GI_Small:      s="MGI"; break;
 		case NT_Final_SplitTooSmall: s="STS"; break;
@@ -2249,20 +2251,20 @@ getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
 /// Describes how a node holds different classes, see getNodeContent()
 struct NodeContent
 {
-	double   ncGiniImpurity = 0.;
-	ClassVal dominantClass;
-	size_t   datasize = 0u;
-	size_t   nbPtsOtherClasses = 0u;
-	size_t   nbClasses = 0u;
+	double   _ncGiniImpurity = 0.;
+	ClassVal _dominantClass;
+	size_t   _datasize = 0u;
+	size_t   _nbPtsOtherClasses = 0u;
+	size_t   _nbClasses = 0u;
 
 	friend std::ostream& operator << ( std::ostream& f, const NodeContent& nc )
 	{
 		f << "NodeContent: "
-		<< " GiniImpurity="      << nc.ncGiniImpurity
-		<< " dominantClass="     << nc.dominantClass
-		<< " datasize="          << nc.datasize
-		<< " nbPtsOtherClasses=" << nc.nbPtsOtherClasses
-		<< " nbClasses="         << nc.nbClasses
+		<< " GiniImpurity="      << nc._ncGiniImpurity
+		<< " dominantClass="     << nc._dominantClass
+		<< " datasize="          << nc._datasize
+		<< " nbPtsOtherClasses=" << nc._nbPtsOtherClasses
+		<< " nbClasses="         << nc._nbClasses
 		<< '\n';
 		return f;
 	}
@@ -2401,8 +2403,9 @@ generateClassHistoPerTVal(
 		<< "\n#  - nb of points=" << v_dpidx.size()
 		<< '\n';
 
-	if( v_thresVal.size() < 2 )
-		fdata << "# (empty data)\n";
+	assert( v_thresVal.size() );
+//	if( v_thresVal.size() < 2 )
+//		fdata << "# (empty data)\n";
 
 	fdata << "\n# Columns:\n# thres_index binLow binHigh";
 	for( size_t c=0; c<data.nbClasses(); c++ )
@@ -2461,6 +2464,7 @@ generateClassHistoPerTVal(
 	auto imwidth = std::max( 1400, 600 + (int)v_thresVal.size()*20 );
 	fplot << "\nset terminal pngcairo size " << imwidth << ",600"
 		<< "\nset output '" << oss.str() << ".png'"
+		<< "\nset label 'file: " << data._fname << "' at screen 0.01, screen .98 noenhanced"
 		<< "\nset style data histogram"
 		<< "\nset style histogram rowstacked"
 		<< "\nset style fill solid border -1"
@@ -2875,8 +2879,15 @@ splitNode(
 
 	auto nodeContent = getNodeContent( vIdx, data );
 
-	graph[v]._class = nodeContent.dominantClass;
-	graph[v]._giniImpurity = nodeContent.ncGiniImpurity;
+	graph[v]._class = nodeContent._dominantClass;
+	graph[v]._giniImpurity = nodeContent._ncGiniImpurity;
+
+	if( nodeContent._nbClasses == 1 )
+	{
+		LOG( 1, "node has single class, STOP" );
+		graph[v]._type = NT_Final_SC;
+		return;
+	}
 
 	if( graph[v]._depth > params.maxTreeDepth )
 	{
@@ -2885,9 +2896,9 @@ splitNode(
 		return;
 	}
 
-	if( nodeContent.ncGiniImpurity < params.minGiniCoeffForSplitting )
+	if( nodeContent._ncGiniImpurity < params.minGiniCoeffForSplitting )
 	{
-		LOG( 1, "dataset is (almost or completely) pure, gini coeff=" << nodeContent.ncGiniImpurity << ", STOP" );
+		LOG( 1, "dataset is (almost or completely) pure, gini coeff=" << nodeContent._ncGiniImpurity << ", STOP" );
 		graph[v]._type = NT_Final_GI_Small;
 		return;
 	}

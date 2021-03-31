@@ -38,7 +38,11 @@ MULTILINE_CPP_IS_BRIEF = YES
 INHERIT_DOCS           = YES
 SEPARATE_MEMBER_PAGES  = NO
 TAB_SIZE               = 4
-ALIASES                =
+
+ALIASES += "todoH=\xrefitem todo1 \"High Priority Todo\" \"Todo high priority list\""
+ALIASES += "todoM=\xrefitem todo2 \"Medium Priority Todo\" \"Todo medium priority list\""
+ALIASES += "todoL=\xrefitem todo3 \"Low Priority Todo\" \"Todo low priority list\""
+
 TCL_SUBST              =
 OPTIMIZE_OUTPUT_FOR_C  = NO
 OPTIMIZE_OUTPUT_JAVA   = NO

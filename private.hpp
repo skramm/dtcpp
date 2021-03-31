@@ -63,7 +63,6 @@ void spaceLog( int n )
 
 //---------------------------------------------------------------------
 /// Holds timing
-/// \todo add level to have a timing PER log level
 struct Timer
 {
 	std::string getDuration(int level)

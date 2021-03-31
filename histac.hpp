@@ -295,7 +295,7 @@ Steps:
  # if ok, check if the computed middle point respects the order constraint
  # if yes, split the bin into two bins, add assigns attributes
 
- \todo check what happens when max depth is reached: is dominant class relevant??? (tip: probably not)
+ \todoM check what happens when max depth is reached: is dominant class relevant??? (tip: probably not)
 */
 template<typename T,typename KEY>
 bool
@@ -629,7 +629,7 @@ getThresholds(
 // if the split operations made the histogram have only one class, then
 // we can't provide a threshold, we just return an empty vector and set
 // the flag to false
-/// \todo maybe we can do that BEFORE the merging operation?
+/// \todoL maybe we can do that BEFORE the merging operation?
 //	assert( histo.nbBins() > 1 );
 	if( histo.nbBins() < 2 )
 	{

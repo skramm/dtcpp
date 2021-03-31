@@ -825,7 +825,7 @@ computeAttribStats( std::vector<float>& vat )
 /**
 \return A vector of size equal to the number of bins, holding pairs: (number of classes in bin, number of points in bin)
 
-\todo check if not problem here: \c histo has 2 additional bins (first and last, for values higher and lower).
+\todoL check if not problem here: \c histo has 2 additional bins (first and last, for values higher and lower).
 Isn't that a problem ?
 */
 template<typename HISTO>
@@ -1469,7 +1469,7 @@ getString( NodeType nt )
 struct NodeT
 {
 	static uint s_Counter;           ///< Node counter, incremented at each node creation, reset with resetNodeId()
-	uint     _nodeId = 0;            ///< Id of the node. Needed to print the dot file. \todo could be removed if graph switches to \c VecS
+	uint     _nodeId = 0;            ///< Id of the node. Needed to print the dot file. \todoL could be removed if graph switches to \c VecS
 	NodeType _type = NT_undef;       ///< Type of the node (Root, leaf, or decision)
 	ClassVal _class = ClassVal(-1);  ///< Class (only for terminal nodes)
 	size_t   _attrIndex = 0;         ///< Attribute Index that this nodes classifies
@@ -1524,7 +1524,7 @@ Thus, re-training a tree will need to start at index=1
 we use the current node's vector as a reference (to avoid copying the whole vector).
 BUT: if we where using \c vectS, adding new nodes may invalidate the current vertex descriptor.
 Thus, we use \c listS
-\todo: actually, maybe we need to use ListS only for ONE of the two containers. Check BGL doc
+\todoL: actually, maybe we need to use ListS only for ONE of the two containers. Check BGL doc
 to see what these two template parameters are used for.
 
 \note 2021-03-01: changed from \c directedS to \c bidirectionalS: required to be able to get in_edges (see TraingTree::pruning())
@@ -2188,7 +2188,9 @@ computeClassVotes( const std::vector<uint>& v_Idx, const DataSet& data )
 /**
 Returns a pair holding as first:the Gini Impurity, second: the class votes
 
-\todo handle the case where all the points are classless !
+\todoM handle the case where all the points are classless !
+
+\todoH This function gets called from two functions, this should not be!
 */
 std::pair<double,std::map<ClassVal,uint>>
 getGiniImpurity(
@@ -2217,8 +2219,8 @@ getGiniImpurity(
 		auto v = 1. * elem.second / (v_dpidx.size() - nbClassLess);
 		giniCoeff -= v*v;
 	}
-//	COUT << "global Gini Coeff=" << giniCoeff << '\n';
-
+	COUT << "global Gini Coeff=" << giniCoeff << " nbClassLess=" << nbClassLess << " nb pts total=" << v_dpidx.size() << '\n';
+	assert( giniCoeff >= 0. );                        // has to be !!!
 	return std::make_pair(
 		giniCoeff,
 		classVotes
@@ -2507,7 +2509,7 @@ generateClassHistoPerTVal(
 /// IG values and returns the best one.
 /**
 This function also produces a data file named \c out/thres_nX folder
-(with \x X the node ID).
+(with \c X the node ID).
 This file will hold for each threshold value the number of points lower and higher
 than that value, and the associated IG.
 */
@@ -2618,8 +2620,8 @@ Details:
  - https://en.wikipedia.org/wiki/Information_gain_in_decision_trees
  - https://towardsdatascience.com/under-the-hood-decision-tree-454f8581684e
 
- \todo problem: for a given attribute here, we might have (after processing the histogram of attribute values) all the points having same class.
- Thus, unable to find a threshold. How do we manage that
+\todoM problem: for a given attribute here, we might have (after processing the histogram of attribute values) all the points having same class.
+Thus, unable to find a threshold. How do we manage that
 */
 //template<typename T>
 AttributeData
@@ -2739,7 +2741,7 @@ struct AttribMap
 			return _attribMap;
 		}
 /// Set attribute \c idx as used, so we will not use it again
-/// \todo maybe add some checking here...
+/// \todoL maybe add some checking here...
 		void setAsUsed( uint idx )
 		{
 			_attribMap[idx] = true;

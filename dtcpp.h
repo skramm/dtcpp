@@ -1465,13 +1465,13 @@ getString( NodeType nt )
 	return std::string(s);
 }
 //---------------------------------------------------------------------
-/// A node of the training tree
+/// A node of the training tree, this is used in the graph (see \ref GraphT)
 struct NodeT
 {
 	static uint s_Counter;           ///< Node counter, incremented at each node creation, reset with resetNodeId()
 	uint     _nodeId = 0;            ///< Id of the node. Needed to print the dot file. \todoL could be removed if graph switches to \c VecS
 	NodeType _type = NT_undef;       ///< Type of the node (Root, leaf, or decision)
-	ClassVal _class = ClassVal(-1);  ///< Class (only for terminal nodes)
+	ClassVal _nClass = ClassVal(-1); ///< Class, relevant only for terminal nodes (leaves of the tree)
 	size_t   _attrIndex = 0;         ///< Attribute Index that this nodes classifies
 	float    _threshold = 0.f;       ///< Threshold on the attribute value (only for decision nodes)
 	uint     _depth = 0;             ///< Depth of the node in the tree
@@ -1480,7 +1480,7 @@ struct NodeT
 
 	friend std::ostream& operator << ( std::ostream& f, const NodeT& n )
 	{
-		f << "C=" << n._class
+		f << "C=" << n._nClass
 			<< "\ntype=" << getString(n._type)
 			<< "\nattr=" << n._attrIndex
 			<< "\nthres=" << n._threshold
@@ -2096,7 +2096,7 @@ printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 			f << "attr=" << graph[target]._attrIndex
 				<< " thres=" << graph[target]._threshold << "\\n";
 		else
-			f << "C" << graph[target]._class
+			f << "C" << graph[target]._nClass
 				<< " GI=" << graph[target]._giniImpurity
 				<< "\\nSR=" << getString( graph[target]._type );
 
@@ -2159,31 +2159,62 @@ TrainingTree::printInfo( std::ostream& f, const char* msg ) const
 }
 
 //---------------------------------------------------------------------
-// deprecated
-#if 0
-/// Computes the nb of votes for each class, for the points defined in \c v_Idx
+/// Computes the class counting and returns it along with the number of classless points in node
 /**
-\warning This does not take into account class value -1, as it means point is "classless"
+See related getGiniImpurity()
 */
-std::map<ClassVal,uint>
-computeClassVotes( const std::vector<uint>& v_Idx, const DataSet& data )
+std::pair<std::map<ClassVal,size_t>,size_t>
+getNodeClassCount(
+	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
+	const DataSet&           data     ///< dataset
+)
 {
-	START;
-	assert( v_Idx.size()>0 );
+	std::map<ClassVal,size_t> m;
 	size_t nbClassLess = 0;
-	std::map<ClassVal,uint> classVotes; // key: class index, value: votes
-	for( auto idx: v_Idx )
+	for( auto idx: v_dpidx )
 	{
 		const auto& dp = data.getDataPoint( idx );
-		if( dp.classVal() == ClassVal(-1) )
+		if( dp.isClassLess() )
 			nbClassLess++;
 		else
-			classVotes[ dp.classVal() ]++;
+			m[ dp.classVal() ]++;
 	}
-	return classVotes;
+	assert( nbClassLess < v_dpidx.size() );
+
+	return std::make_pair(
+		m,                              // the class counts
+		v_dpidx.size() - nbClassLess    // the number of relevant points
+	);
 }
-#endif
 //---------------------------------------------------------------------
+/// Computes the Gini impurity value
+/**
+Input arg: map of class counts and relevant number of points
+
+See related getNodeClassCount()
+*/
+double
+getGiniImpurity(
+	const std::pair<std::map<ClassVal,size_t>,size_t>& pmap
+)
+{
+	const auto& classVotes  = pmap.first;
+	const auto& nbpts = pmap.second;
+	assert( classVotes.size() > 1 );
+
+	double giniCoeff = 1.;
+	for( auto elem: classVotes )
+	{
+		auto v = 1. * elem.second / nbpts;
+		giniCoeff -= v*v;
+	}
+	COUT << "global Gini Coeff=" << giniCoeff << '\n';
+	assert( giniCoeff >= 0. );                        // has to be !!!
+	return giniCoeff;
+}
+
+//---------------------------------------------------------------------
+#if 0
 /// Computes the Gini coefficient for points listed in \c vdpidx
 /**
 Returns a pair holding as first:the Gini Impurity, second: the class votes
@@ -2226,6 +2257,7 @@ getGiniImpurity(
 		classVotes
 	);
 }
+#endif
 //---------------------------------------------------------------------
 #if 0
 // DEPRECATED
@@ -2258,23 +2290,38 @@ getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
 #endif
 
 //---------------------------------------------------------------------
+#if 0
 /// Describes how a node holds different classes, see getNodeContent()
+/**
+The _nAmbig (relevant only for leaves of the tree) describes how the assigned class value is ambiguous.
+It is defined as the ratio of max count over second max count.
+
+For example if in a leave we have:
+- 5 points of class '1'
+- 2 points of class '2'
+then the ambiguity will be 5/2 = 2.5
+
+\todoM find a normalized formulae, independent of cardinality
+*/
 struct NodeContent
 {
 	double   _ncGiniImpurity = 0.;
-	ClassVal _dominantClass;
+//	ClassVal _dominantClass;
 	size_t   _datasize = 0u;
-	size_t   _nbPtsOtherClasses = 0u;
+//	size_t   _nbPtsOtherClasses = 0u;
 	size_t   _nbClasses = 0u;
+	float    _nAmbig = -1.f;                 ///< ambiguity of the class value
+	std::map<ClassVal,size_t> _nClassCount;
 
 	friend std::ostream& operator << ( std::ostream& f, const NodeContent& nc )
 	{
 		f << "NodeContent: "
 		<< " GiniImpurity="      << nc._ncGiniImpurity
-		<< " dominantClass="     << nc._dominantClass
+//		<< " dominantClass="     << nc._dominantClass
 		<< " datasize="          << nc._datasize
-		<< " nbPtsOtherClasses=" << nc._nbPtsOtherClasses
+//		<< " nbPtsOtherClasses=" << nc._nbPtsOtherClasses
 		<< " nbClasses="         << nc._nbClasses
+		<< " nbAmbig="           << nc._nAmbig
 		<< '\n';
 		return f;
 	}
@@ -2295,7 +2342,7 @@ getNodeContent(
 //	priv::printMap( std::cout, classVotes, "classvotes" );
 //	COUT << "global Gini Impurity=" << gImp.first << '\n';
 
-	using Pair = std::pair<ClassVal,uint>;
+/*	using Pair = std::pair<ClassVal,uint>;
 	auto it_max = std::max_element(  // search max value based on nb of votes
 		std::begin( classVotes ),
 		std::end( classVotes ),
@@ -2306,16 +2353,44 @@ getNodeContent(
 
 	auto idx_maj = it_max->first;
 	COUT << "idx_maj=" << idx_maj << "\n";
+*/
 
 	return NodeContent{
-		gImp.first,
-		idx_maj,
-		v_dpidx.size(),
-		v_dpidx.size() - classVotes.at(idx_maj),
-		classVotes.size()
+		gImp.first,                                // Gini Impurity
+//		idx_maj,                                   // dominant class
+		v_dpidx.size(),                            // data size
+//		v_dpidx.size() - classVotes.at(idx_maj),   // nb of points other than dominant class
+		classVotes.size(),                         // nb of classes
+		std::move(gImp.second)                     // class count
 	};
 }
+#endif
+//---------------------------------------------------------------------
+/// Finds class holding max value (first) and ambiguity of that max value (second)
+template<typename T>
+std::pair<T,float>
+findDominantClass( const std::map<T,size_t>& mcount )
+{
+	assert( mcount.size() > 1 );
 
+	size_t vmax  = 0u;
+	size_t vmax2 = vmax;
+	T cmax  = T(-1);
+	T cmax2 = cmax;
+
+	for( const auto& p: mcount )
+	{
+		if( p.second > vmax )
+		{
+			vmax2 = vmax;
+			cmax2 = cmax;
+			vmax = p.second;
+			cmax = p.first;
+		}
+	}
+	assert( vmax>0 );
+	return std::make_pair( cmax, 1. * vmax2/vmax );
+}
 
 //---------------------------------------------------------------------
 /// Utility function, sort vector and removes values whose difference is small
@@ -2662,20 +2737,14 @@ computeBestThreshold(
 	}
 	else
 	{
-		std::map<ClassVal,size_t> localMapCount;
 		using PairAtvalClass = std::pair<float,ClassVal>;
 		std::vector<PairAtvalClass> v_pac( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
 		for( size_t i=0; i<v_dpidx.size(); i++ )
 		{
 			const auto& pt = data.getDataPoint( v_dpidx[i] );
 			if( !pt.isClassLess() )
-			{
 				v_pac[i] = std::make_pair( pt.attribVal( atIdx ), pt.classVal() );
-				localMapCount[ pt.classVal() ]++;
-			}
 		}
-
-		assert( localMapCount.size() > 1 ); // no search needed if we have only one class !
 
 		auto pair_vb = getThresholds<float,ClassVal>( v_pac, 20 );
 		v_thresVal = std::move(pair_vb.first);
@@ -2777,7 +2846,9 @@ findBestAttribute(
 	const std::vector<uint>& vIdx,   ///< indexes of data points we need to consider
 	const DataSet&           data,   ///< whole dataset
 	const Params&            params, ///< parameters
-	uint                     nodeId  ///< node Id, used to generate data and plot file for that node
+	uint                     nodeId, ///< node Id, used to generate data and plot file for that node
+	const std::map<ClassVal,size_t>& ccount, ///< class count (only non-classless points)
+	double giniImpurity
 )
 {
 	START;
@@ -2785,7 +2856,7 @@ findBestAttribute(
 
 	LOG( 2, "Searching all thresholds among " << data.nbAttribs() << " attributes" );
 
-	auto giniCoeff = getGiniImpurity( vIdx, data );
+//	auto giniCoeff = getGiniImpurity( vIdx, data );
 
 	std::ostringstream oss;
 	oss << "thres_n" << nodeId;
@@ -2810,7 +2881,7 @@ findBestAttribute(
 
 	for( size_t atIdx=0; atIdx<data.nbAttribs(); atIdx++ )  // iterate on all the attributes
 	{
-		auto best = computeBestThreshold( atIdx, vIdx, data, giniCoeff.first, params, nodeId, fplot );
+		auto best = computeBestThreshold( atIdx, vIdx, data, giniImpurity, params, nodeId, fplot );
 		if( best._unable )        // this means we couldn't find a threshold, so
 		{                         // we forget this one and we switch to the next attribute
 //			atIdx.second = true;  //
@@ -2892,15 +2963,21 @@ splitNode(
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done
 
-	auto nodeContent = getNodeContent( vIdx, data );
+//	auto nodeContent = getNodeContent( vIdx, data );
+	const auto classCountInfo = getNodeClassCount( vIdx, data );
+	const auto& classCount = classCountInfo.first;
 
-	graph[v]._class = nodeContent._dominantClass;
-	graph[v]._giniImpurity = nodeContent._ncGiniImpurity;
+//	graph[v]._nClass = nodeContent._dominantClass;
+//	graph[v]._giniImpurity = nodeContent._ncGiniImpurity;
+	graph[v]._giniImpurity = getGiniImpurity( classCountInfo );
 
-	if( nodeContent._nbClasses == 1 )
+	bool nodeIsLeave = false;
+	if( classCount.size() == 1 )
 	{
 		LOG( 1, "node has single class, STOP" );
 		graph[v]._type = NT_Final_SC;
+		graph[v]._nClass = *classCount.begin().first;          // no need to search for dominant class, there is only one !
+		graph[v]._nAmbig = 0.f;
 		return;
 	}
 
@@ -2908,18 +2985,24 @@ splitNode(
 	{
 		LOG( 1, "tree reached max depth (=" << params.maxTreeDepth << "), STOP" );
 		graph[v]._type = NT_Final_MD;
-		return;
+		nodeIsLeave = true;
 	}
+	else
+		if( graph[v]._giniImpurity < params.minGiniCoeffForSplitting )
+		{
+			LOG( 1, "dataset is (almost or completely) pure, gini coeff=" << graph[v]._giniImpurity << ", STOP" );
+			graph[v]._type = NT_Final_GI_Small;
+			nodeIsLeave = true;
+		}
 
-	if( nodeContent._ncGiniImpurity < params.minGiniCoeffForSplitting )
+	if( nodeIsLeave )
 	{
-		LOG( 1, "dataset is (almost or completely) pure, gini coeff=" << nodeContent._ncGiniImpurity << ", STOP" );
-		graph[v]._type = NT_Final_GI_Small;
+		std::tie( graph[v]._nClass, graph[v]._nAmbig ) = findDominantClass( classCount );
 		return;
 	}
 
 	// step 2 - find the best attribute to use to split the data, considering the data points of the current node
-	auto bestAttrib = findBestAttribute( vIdx, data, params, /*aMap,*/ graph[v]._nodeId );
+	auto bestAttrib = findBestAttribute( vIdx, data, params, graph[v]._nodeId, classCount );
 	LOG( 1, "best attrib: " << bestAttrib );
 
 	if( bestAttrib._unable )
@@ -3038,9 +3121,9 @@ TrainingTree::pruning()
 				{
 					nodeSet.insert( node2._nodeId );                  // then, add it to the set of nodes already parsed
 					if( node2.isLeave() )                             // if node is a leave of the tree
-						if( node1._class == node2._class )            // and is same class !
+						if( node1._nClass == node2._nClass )            // and is same class !
 						{
-							_graph[v0]._class = node1._class;  // change status of source node
+							_graph[v0]._nClass = node1._nClass;  // change status of source node
 							if( _graph[v0]._type != NT_Root )
 								_graph[v0]._type = NT_Merged;
 							boost::clear_vertex(  v1, _graph );
@@ -3128,7 +3211,7 @@ TrainingTree::classify( const DataPoint& point ) const
 		if( _graph[v]._type != NT_Root && _graph[v]._type != NT_Decision ) // then, we are done !
 		{
 			done = true;
-			retval = _graph[v]._class;
+			retval = _graph[v]._nClass;
 //			COUT << "Final node: class = " << retval << "\n";
 		}
 		else

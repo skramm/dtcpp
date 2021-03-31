@@ -167,18 +167,22 @@ template<typename T>
 int VBS_Histogram<U,KEY>::HBin<T>::sBinIdCounter=0;
 //---------------------------------------------------------------------
 /// Constructor, creates bins evenly spaced
+/**
+Precondition: no classless points here !
+*/
 template<typename T,typename KEY>
 VBS_Histogram<T,KEY>::VBS_Histogram( const std::vector<std::pair<T,KEY>>& v_pac, size_t nbBins )
 	: p_src( &v_pac )
 {
-	assert( v_pac.size() );
-	auto it_mm = std::minmax_element(
+	assert( v_pac.size() > 1 );
+	auto it_mm = std::minmax_element(  // get min and max value, so we can set the range
 		v_pac.begin(),
 		v_pac.end(),
 		[]                                                          // lambda
 		( const auto& p1, const auto& p2 )
 		{
 			return p1.first < p2.first;
+			assert( p1.second != KEY(-1) );  /// \todo 20210331: I think this assert can be (in a while) safely removed to speed up things
 		}
 	);
 	HBin<T>::sBinIdCounter = 0;
@@ -202,8 +206,8 @@ VBS_Histogram<T,KEY>::VBS_Histogram( const std::vector<std::pair<T,KEY>>& v_pac,
 	}
 
 	for( size_t i=0; i<v_pac.size(); i++ )
-		if( v_pac[i].second != KEY(-1) )      // so we don not put points having no class in the bins
-			p_assignToBin( v_pac[i], i );
+//		if( v_pac[i].second != KEY(-1) )      // so we don not put points having no class in the bins
+		p_assignToBin( v_pac[i], i );
 
 	_nbPts = v_pac.size();
 }

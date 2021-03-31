@@ -153,13 +153,13 @@ TEST_CASE( "maj vote", "[majv]" )
 
 	{
 		auto nc = getNodeContent( std::vector<uint>{0,1,2,3,4}, dataset );
-		CHECK( nc.dominantClass.get() == 0 );
-		CHECK( nc.nbPtsOtherClasses   == 2 );
+		CHECK( nc._dominantClass.get() == 0 );
+		CHECK( nc._nbPtsOtherClasses   == 2 );
 	}
 	{
 		auto nc = getNodeContent( std::vector<uint>{0,3,4}, dataset );
-		CHECK( nc.dominantClass.get() == 1 );
-		CHECK( nc.nbPtsOtherClasses   == 1 );
+		CHECK( nc._dominantClass.get() == 1 );
+		CHECK( nc._nbPtsOtherClasses   == 1 );
 	}
 }
 

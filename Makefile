@@ -87,8 +87,9 @@ doc:
 	@doxygen misc/Doxyfile 1>build/doxygen_stdout 2>build/doxygen_stderr
 	@xdg-open build/html/index.html
 
+# add --success to see successful tests
 test: build/bin/test_catch
-	$(BIN_DIR)/test_catch
+	$(BIN_DIR)/test_catch --success
 
 #$(BIN_DIR)/test_catch: build/obj/test_catch.o
 #	$(CXX) -o $(BIN_DIR)/test_catch build/obj/test_catch.o -s
@@ -99,7 +100,7 @@ test: build/bin/test_catch
 plt: $(PLOT_OUT_FILES)
 
 out/%.png:out/%.plt
-	chmod u+x out/*.plt
+	@chmod u+x out/*.plt
 	@echo "processing file $<"
 	cd out; ./$(notdir $<)
 

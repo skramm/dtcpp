@@ -355,7 +355,15 @@ class DataPoint
 		{
 			return _attrValue.size();
 		}
-		ClassVal classVal() const { return _class; }
+		ClassVal classVal() const
+		{
+			assert( _class != ClassVal(-1) );
+			return _class;
+		}
+		bool isClassLess() const
+		{
+			return _class == ClassVal(-1);
+		}
 		void setSize( size_t n ) { _attrValue.resize(n); }
 
 		const float& attribVal( size_t idx ) const
@@ -536,11 +544,12 @@ class DataSet
 				);
 #endif // DTCPP_ERRORS_ASSERT
 			_data.push_back( dp );
-
-			if( dp.classVal().get() >= 0 )
-				_classCount[dp.classVal()]++;
+			if( !dp.isClassLess() )
+//			if( dp.classVal().get() >= 0 )
+				_classCount[ dp.classVal() ]++;
 			else
 				_nbNoClassPoints++;
+
 			_noChange = false;
 			_cimIsUpToDate = false;
 		}
@@ -698,13 +707,12 @@ DataPoint::print( std::ostream& f ) const
 {
 	for( const auto& v: _attrValue )
 		f << v << ' ';
-	f << classVal();
 	if( g_params.p_dataset )
 	{
-		if( classVal() == ClassVal(-1) )
+		if( isClassLess() )
 			f << " -1";
 		else
-			f << ' ' << g_params.p_dataset->getIndexFromClass( classVal() );
+			f << classVal() << ' ' << g_params.p_dataset->getIndexFromClass( classVal() );
 	}
 	f << '\n';
 }
@@ -831,16 +839,15 @@ DataSet::p_countClassPerBin( size_t attrIdx, const HISTO& histo ) const
 	{
 		const auto& pt = getDataPoint(idx);        // for each data point
 		auto attribVal = pt.attribVal( attrIdx );  // get attribute value
-		auto classVal  = pt.classVal();            // and class value
 
-		if( classVal != ClassVal(-1)               // if not classless, then
+		if( !pt.isClassLess()                      // if not classless, then
 			&& !pointIsOutlier(idx) )              // AND not an outlier
 		{                                          // then assign it to the correct bin
 			size_t i = 0;
 			for (auto&& x : boost::histogram::indexed(histo) )
 			{
 				if( attribVal > x.bin().lower() && attribVal <= x.bin().upper() )
-					classSets[i].insert( classVal );
+					classSets[i].insert( pt.classVal() );
 				i++;
 			}
 		}
@@ -933,7 +940,7 @@ DataSet::p_countClasses()
 		const auto& pt = getDataPoint(p);
 		if( !pointIsOutlier(p) )
 		{
-			if( pt.classVal() == ClassVal(-1) )
+			if( pt.isClassLess() )
 				_nbNoClassPoints++;
 			else
 				_classCount[ pt.classVal() ]++;
@@ -1056,7 +1063,7 @@ DataSet::nbClasses( const std::vector<uint>& vIdx ) const
 	for( const auto idx: vIdx )
 	{
 		const auto& pt = getDataPoint( idx );
-		if( pt.classVal() != ClassVal(-1) )
+		if( !pt.isClassLess() )
 			classSet.insert( pt.classVal() );
 	}
 	return classSet.size();
@@ -1467,7 +1474,7 @@ struct NodeT
 	ClassVal _class = ClassVal(-1);  ///< Class (only for terminal nodes)
 	size_t   _attrIndex = 0;         ///< Attribute Index that this nodes classifies
 	float    _threshold = 0.f;       ///< Threshold on the attribute value (only for decision nodes)
-	uint     _depth = 0;              ///< Depth of the node in the tree
+	uint     _depth = 0;             ///< Depth of the node in the tree
 	float    _giniImpurity = 0.f;
 	std::vector<uint> v_Idx;         ///< Data point indexes
 
@@ -2197,7 +2204,7 @@ getGiniImpurity(
 	for( auto idx: v_dpidx )
 	{
 		const auto& dp = data.getDataPoint( idx );
-		if( dp.classVal() == ClassVal(-1) )
+		if( dp.isClassLess() )
 			nbClassLess++;
 		else
 			classVotes[ dp.classVal() ]++;
@@ -2421,7 +2428,7 @@ generateClassHistoPerTVal(
 		{
 			const auto& dp = data.getDataPoint(i);
 			const auto& atVal = dp.attribVal(atIdx);
-			if( dp.classVal() != ClassVal(-1) )
+			if( !dp.isClassLess() )
 			{
 				const auto& classIdx = data.getIndexFromClass( dp.classVal() );
 
@@ -2552,16 +2559,19 @@ SearchBestIG(
 		for( auto ptIdx: v_dpidx )                         // for each data point
 		{
 			const auto& point = data.getDataPoint(ptIdx);
-			auto attribVal = point.attribVal( atIdx );
-			if( attribVal < v_thresVal[i] )
+			if( !point.isClassLess() )
 			{
-				m_LT[ point.classVal() ]++;
-				nb_LT[i]++;
-			}
-			else
-			{
-				m_HT[ point.classVal() ]++;
-				nb_HT++;
+				auto attribVal = point.attribVal( atIdx );
+				if( attribVal < v_thresVal[i] )
+				{
+					m_LT[ point.classVal() ]++;
+					nb_LT[i]++;
+				}
+				else
+				{
+					m_HT[ point.classVal() ]++;
+					nb_HT++;
+				}
 			}
 		}
 
@@ -2656,8 +2666,11 @@ computeBestThreshold(
 		for( size_t i=0; i<v_dpidx.size(); i++ )
 		{
 			const auto& pt = data.getDataPoint( v_dpidx[i] );
-			v_pac[i] = std::make_pair( pt.attribVal( atIdx ), pt.classVal() );
-			localMapCount[ pt.classVal() ]++;
+			if( !pt.isClassLess() )
+			{
+				v_pac[i] = std::make_pair( pt.attribVal( atIdx ), pt.classVal() );
+				localMapCount[ pt.classVal() ]++;
+			}
 		}
 
 		assert( localMapCount.size() > 1 ); // no search needed if we have only one class !
@@ -3095,6 +3108,7 @@ TrainingTree::train( DataSet& data, const Params params )
 ClassVal
 TrainingTree::classify( const DataPoint& point ) const
 {
+	START;
 	ClassVal retval{-1};
 	if( !nbLeaves() )
 	{
@@ -3146,18 +3160,18 @@ TrainingTree::classify( const DataSet& dataset ) const
 {
 //	if( _nbClasses < 2 )  // if 0 or 1 class, then nothing to classify
 //		throw std::runtime_error( "nothing to classify, dataset holds " + std::to_string(_nbClasses) + " classes" );
-
+	START;
 	ConfusionMatrix confmat( _classIndexMap );
-	if( nbLeaves() )
+	if( nbLeaves() > 1)
 		for( const auto& datapoint: dataset )
-		{
-			auto cla1 = datapoint.classVal();
-			auto cla2 = classify( datapoint );
-			if( cla1 != ClassVal(-1) )
+			if( !datapoint.isClassLess() )
+			{
+				auto cla1 = datapoint.classVal();
+				auto cla2 = classify( datapoint );
 				confmat.add( cla1, cla2 );
-		}
+			}
 	else
-		std::cerr << "Error, unable to classify dataset, tree has no leaves!\n";
+		std::cerr << "Error, unable to classify dataset, tree has " << nbLeaves() << " leave!\n";
 	return confmat;
 }
 

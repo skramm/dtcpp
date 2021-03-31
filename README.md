@@ -26,11 +26,12 @@ During the training step, it also analyses the input data and produces different
 
 
 * Input dataset format: csv style
- * class values: string or numerical (integer values)
+ * class values: string or numerical (integer values), see [`-cs` option](#ss_clswitch)
  * attribute values: only numerical at present
  * class value position: either first or last element of the line
  * field separator character adjustable
  * decimal character for floating-point values can be either '`.`'' or '`,`', does not matter.
+ * handles classless points: default behavior is to consider negative values as classless
 
 ### Training algorithm
 
@@ -70,6 +71,7 @@ that are freely available on any OS/architecture:
 
 `$ dtcpp <switches> input_datafile`
 
+<a name="ss_clswitch"></a>
 ### Switches
 
 * `-cs` : class value is a string. Numerical indexes will be automatically associated to each string value.
@@ -101,7 +103,7 @@ This software is build from 2 files only:
 ### Dependencies:
 
 * Boost:
-  * [Boost::Graph](https://www.boost.org/doc/libs/1_75_0/libs/graph/doc/index.html)<br>
+  * [Boost::graph](https://www.boost.org/doc/libs/1_75_0/libs/graph/doc/index.html)<br>
   * [Boost::histogram](https://www.boost.org/doc/libs/1_75_0/libs/histogram)
   * [Boost::bimap](https://www.boost.org/doc/libs/1_75_0/libs/bimap/)
 

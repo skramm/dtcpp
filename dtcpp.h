@@ -1476,6 +1476,7 @@ struct NodeT
 	float    _threshold = 0.f;       ///< Threshold on the attribute value (only for decision nodes)
 	uint     _depth = 0;             ///< Depth of the node in the tree
 	float    _giniImpurity = 0.f;
+	float    _nAmbig = -1.f;
 	std::vector<uint> v_Idx;         ///< Data point indexes
 
 	friend std::ostream& operator << ( std::ostream& f, const NodeT& n )
@@ -2200,7 +2201,7 @@ getGiniImpurity(
 {
 	const auto& classVotes  = pmap.first;
 	const auto& nbpts = pmap.second;
-	assert( classVotes.size() > 1 );
+	assert( classVotes.size() > 0 );
 
 	double giniCoeff = 1.;
 	for( auto elem: classVotes )
@@ -2975,8 +2976,8 @@ splitNode(
 	if( classCount.size() == 1 )
 	{
 		LOG( 1, "node has single class, STOP" );
+		graph[v]._nClass = classCount.begin()->first;          // no need to search for dominant class, there is only one !
 		graph[v]._type = NT_Final_SC;
-		graph[v]._nClass = *classCount.begin().first;          // no need to search for dominant class, there is only one !
 		graph[v]._nAmbig = 0.f;
 		return;
 	}
@@ -3002,7 +3003,7 @@ splitNode(
 	}
 
 	// step 2 - find the best attribute to use to split the data, considering the data points of the current node
-	auto bestAttrib = findBestAttribute( vIdx, data, params, graph[v]._nodeId, classCount );
+	auto bestAttrib = findBestAttribute( vIdx, data, params, graph[v]._nodeId, classCount, graph[v]._giniImpurity );
 	LOG( 1, "best attrib: " << bestAttrib );
 
 	if( bestAttrib._unable )

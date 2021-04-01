@@ -1943,14 +1943,9 @@ ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
 //---------------------------------------------------------------------
 template<typename T>
 double
-ConfusionMatrix::getScoreT( T ) const
+ConfusionMatrix::getScoreT( T pc ) const
 {
-	assert(0);
-}
-template<>
-double
-ConfusionMatrix::getScoreT<PerfScore_MC>( PerfScore_MC pc ) const
-{
+	static_assert( std::is_same<T,PerfScore_MC>::value, "invalid type" );
 	return getScore_MC( pc );
 }
 template<>
@@ -1960,21 +1955,6 @@ ConfusionMatrix::getScoreT<PerfScore>( PerfScore pc ) const
 	return getScore( pc );
 }
 
-//---------------------------------------------------------------------
-#if 0
-/// This will probably be expanded
-void
-ConfusionMatrix::printAverageScores( std::ostream& f, const char* msg ) const
-{
-	f << "Average performance scores";
-	if( msg )
-		f << " - " << msg;
-	f << ":\n";
-
-	f << " - " << getString(PerfScore_MC::PRECIS_M) << "=" << getScore_MC( PerfScore_MC::PRECIS_M ) << '\n';
-	f << " - " << getString(PerfScore_MC::RECALL_M) << "=" << getScore_MC( PerfScore_MC::RECALL_M ) << '\n';
-}
-#endif
 //---------------------------------------------------------------------
 /// Prints all the performance scores
 void

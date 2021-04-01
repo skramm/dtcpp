@@ -173,22 +173,9 @@ int main( int argc, const char** argv )
 		}
 
 		if( dataset.nbClasses() > 2 )
-		{
-			for( int pc=0; pc<static_cast<int>(PerfScore_MC::SCORE_END); pc++ )
-			{
-				std::cout << "* Criterion: " << getString( static_cast<PerfScore_MC>(pc) ) << ":\n";
-				for( size_t i=0; i<nbFolds; i++ )
-					std::cout << " - fold " << i+1 << ": " << vec_cm_test[i].getScore_MC(static_cast<PerfScore_MC>(pc) ) << '\n';
-			}
-		}
+			printScores<PerfScore_MC>( vec_cm_test );
         else
-        {
-			for( int pc=0; pc<static_cast<int>(PerfScore::SCORE_END); pc++ )
-			{
-				std::cout << "* Criterion: " << getString( static_cast<PerfScore>(pc) ) << ":\n";
-				for( size_t i=0; i<nbFolds; i++ )
-					std::cout << " - fold " << i+1 << ": " << vec_cm_test[i].getScore(static_cast<PerfScore>(pc) ) << '\n';
-			}
+			printScores<PerfScore>( vec_cm_test );
         }
 	}
 }

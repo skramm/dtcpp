@@ -1711,6 +1711,9 @@ struct ConfusionMatrix
     double getScore( PerfScore ) const;
 	double getScore_MC( PerfScore_MC scoreId ) const;
 
+	template<typename T>
+	double getScoreT( T ) const;
+
 /// Returns total number of values in matrix
 	size_t nbValues() const
 	{
@@ -1935,6 +1938,26 @@ ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
 		default : assert(0);
 	}
 	return sum;
+}
+
+//---------------------------------------------------------------------
+template<typename T>
+double
+ConfusionMatrix::getScoreT( T ) const
+{
+	assert(0);
+}
+template<>
+double
+ConfusionMatrix::getScoreT<PerfScore_MC>( PerfScore_MC pc ) const
+{
+	return getScore_MC( pc );
+}
+template<>
+double
+ConfusionMatrix::getScoreT<PerfScore>( PerfScore pc ) const
+{
+	return getScore( pc );
 }
 
 //---------------------------------------------------------------------
@@ -3197,6 +3220,18 @@ TrainingTree::classify( const DataSet& dataset ) const
 	else
 		std::cerr << "Error, unable to classify dataset, tree has " << nbLeaves() << " leave!\n";
 	return confmat;
+}
+//---------------------------------------------------------------------
+template<typename T>
+void
+printScores( const std::vector<ConfusionMatrix>& vcm )
+{
+	for( int pc=0; pc<static_cast<int>(T::SCORE_END); pc++ )
+	{
+		std::cout << "* Criterion: " << getString( static_cast<T>(pc) ) << ":\n";
+		for( size_t i=0; i<vcm.size(); i++ )
+			std::cout << " - fold " << i+1 << ": " << vcm[i].getScoreT<T>( static_cast<T>(pc) ) << '\n';
+	}
 }
 
 } // namespace dtcpp

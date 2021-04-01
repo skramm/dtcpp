@@ -3010,6 +3010,7 @@ splitNode(
 	{
 		LOG( 1, "unable to find good attribute" );
 		graph[v]._type = NT_Final_SplitTooSmall;
+		std::tie( graph[v]._nClass, graph[v]._nAmbig ) = findDominantClass( classCount );
 		return;
 	}
 //

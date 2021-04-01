@@ -135,10 +135,10 @@ int main( int argc, const char** argv )
 		tt.printDot( 1 );
 		auto cm = tt.classify( dataset );
 		std::cout << cm << "\n";
-		if( dataset.nbClasses() == 2 )
+//		if( dataset.nbClasses() == 2 )
 			cm.printAllScores( std::cout );
-		else
-			cm.printAverageScores( std::cout );
+//		else
+//			cm.printAverageScores( std::cout );
 
 	}
 	else
@@ -171,11 +171,9 @@ int main( int argc, const char** argv )
 			cm_test.printAllScores( std::cout, "test" );
 */
 		}
-
 		if( dataset.nbClasses() > 2 )
 			printScores<PerfScore_MC>( vec_cm_test );
         else
 			printScores<PerfScore>( vec_cm_test );
-        }
 	}
 }

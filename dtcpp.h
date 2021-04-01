@@ -1746,7 +1746,7 @@ struct ConfusionMatrix
 	}
 
 	void printAllScores( std::ostream&, const char* msg=0 ) const;
-	void printAverageScores( std::ostream&, const char* msg=0 ) const;
+//	void printAverageScores( std::ostream&, const char* msg=0 ) const;
 
 #ifdef TESTMODE
 	void setVal( size_t li, size_t col, uint v )
@@ -1961,6 +1961,7 @@ ConfusionMatrix::getScoreT<PerfScore>( PerfScore pc ) const
 }
 
 //---------------------------------------------------------------------
+#if 0
 /// This will probably be expanded
 void
 ConfusionMatrix::printAverageScores( std::ostream& f, const char* msg ) const
@@ -1973,35 +1974,30 @@ ConfusionMatrix::printAverageScores( std::ostream& f, const char* msg ) const
 	f << " - " << getString(PerfScore_MC::PRECIS_M) << "=" << getScore_MC( PerfScore_MC::PRECIS_M ) << '\n';
 	f << " - " << getString(PerfScore_MC::RECALL_M) << "=" << getScore_MC( PerfScore_MC::RECALL_M ) << '\n';
 }
-
+#endif
 //---------------------------------------------------------------------
 /// Prints all the performance scores
 void
 ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 {
-	constexpr auto maxenum = static_cast<int>(PerfScore::SCORE_END);
 	f << "Performance scores";
 	if( msg )
 		f << " - " << msg;
 	f << ":\n";
 	if( nbClasses() > 2 )
 	{
-		for( size_t c=0; c<nbClasses(); c++ )
+		for( auto i=0; i<static_cast<int>(PerfScore_MC::SCORE_END); i++ )
 		{
-			f << " * class label=" <<_cmClassIndexMap.right.at(c) << ":\n";
-			for( auto i=0; i<maxenum; i++ )
-			{
-				auto eni = static_cast<PerfScore>(i);
-				f << "   - " << getString( eni ) << " = " << getScore( eni, ClassVal(c) ) << '\n';
-			}
+			auto eni = static_cast<PerfScore_MC>(i);
+			f << "   - " << getString( eni ) << " = " << getScoreT<PerfScore_MC>( eni ) << '\n';
 		}
 	}
 	else
 	{
-		for( auto i=0; i<maxenum; i++ )
+		for( auto i=0; i<static_cast<int>(PerfScore::SCORE_END); i++ )
 		{
 			auto eni = static_cast<PerfScore>(i);
-			f << " - " << getString( eni ) << " = " << getScore( eni ) << '\n';
+			f << " - " << getString( eni ) << " = " << getScoreT<PerfScore>( eni ) << '\n';
 		}
 	}
 }
@@ -3222,6 +3218,10 @@ TrainingTree::classify( const DataSet& dataset ) const
 	return confmat;
 }
 //---------------------------------------------------------------------
+/// Print the scores for all available performance criterions
+/**
+Type \c T will be either \ref PerfScore_MC (for multiclass) or \ref PerfScore (for 2-class problems)
+*/
 template<typename T>
 void
 printScores( const std::vector<ConfusionMatrix>& vcm )

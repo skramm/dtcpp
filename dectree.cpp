@@ -57,6 +57,7 @@ int main( int argc, const char** argv )
 // optional boolean arg: -cs => the class value in the datafile is given as a string value
 	if( cmdl["cs"] )
 		fparams.classAsString = true;
+	std::cout << " - classes: " << (fparams.classAsString?"strings":"numeric labels") << '\n';
 
 	uint nbBins = 15;
 	auto str_histoBins = cmdl("nbh").str();
@@ -89,7 +90,6 @@ int main( int argc, const char** argv )
 	if( cmdl["sd"] )
 		params.useSortToFindThresholds = true;
 	std::cout << " - threshold finding technique: " << (params.useSortToFindThresholds?"sort points":"histogram binning") << '\n';
-
 
 
 	DataSet dataset;
@@ -144,7 +144,8 @@ int main( int argc, const char** argv )
 	else
 	{
 		dataset.shuffle();
-
+        std::vector<ConfusionMatrix> vec_cm_train;
+        std::vector<ConfusionMatrix> vec_cm_test;
 		for( uint i=0; i<(uint)nbFolds; i++ )
 		{
 			TrainingTree tt( dataset.getClassIndexMap() );
@@ -155,18 +156,39 @@ int main( int argc, const char** argv )
 			data_train.generateClassDistrib( "histo_tr_" + std::to_string(i) );
 			data_test.generateClassDistrib(  "histo_te_" + std::to_string(i) );
 
-			data_train.printInfo( std::cout, "train" );
-			data_test.printInfo(  std::cout, "test" );
+//			data_train.printInfo( std::cout, "train" );
+//			data_test.printInfo(  std::cout, "test" );
 			tt.train( data_train, params );
-			tt.printDot( i );
+//			tt.printDot( i );
 
-			auto cm_train = tt.classify( data_train );
-			auto cm_test  = tt.classify( data_test );
-			std::cout << "\n* Fold " << i+1 << "/" << nbFolds << '\n';
-			std::cout << "Confusion Matrix (train):" << cm_train << "\n";
+			vec_cm_train.push_back( tt.classify( data_train ) );
+			vec_cm_test.push_back( tt.classify( data_test ) );
+//			std::cout << "\n* Fold " << i+1 << "/" << nbFolds << '\n';
+
+/*			std::cout << "Confusion Matrix (train):" << cm_train << "\n";
 			cm_train.printAllScores( std::cout, "train" );
 			std::cout << "Confusion Matrix (test):"  << cm_test << "\n";
 			cm_test.printAllScores( std::cout, "test" );
+*/
 		}
+
+		if( dataset.nbClasses() > 2 )
+		{
+			for( int pc=0; pc<static_cast<int>(PerfScore_MC::SCORE_END); pc++ )
+			{
+				std::cout << "* Criterion: " << getString( static_cast<PerfScore_MC>(pc) ) << ":\n";
+				for( size_t i=0; i<nbFolds; i++ )
+					std::cout << " - fold " << i+1 << ": " << vec_cm_test[i].getScore_MC(static_cast<PerfScore_MC>(pc) ) << '\n';
+			}
+		}
+        else
+        {
+			for( int pc=0; pc<static_cast<int>(PerfScore::SCORE_END); pc++ )
+			{
+				std::cout << "* Criterion: " << getString( static_cast<PerfScore>(pc) ) << ":\n";
+				for( size_t i=0; i<nbFolds; i++ )
+					std::cout << " - fold " << i+1 << ": " << vec_cm_test[i].getScore(static_cast<PerfScore>(pc) ) << '\n';
+			}
+        }
 	}
 }

@@ -57,15 +57,15 @@ make cleanout
 doplot=YES
 if [ "$1" == "" ]; then
 	doplot=NO
-	runone a
-	runone b
-	runone c
-	runone d
-	runone e
+	runone a $2 $3 $4 $5
+	runone b $2 $3 $4 $5
+	runone c $2 $3 $4 $5
+	runone d $2 $3 $4 $5
+	runone e $2 $3 $4 $5
 	exit
 fi
 
-runone $1
+runone $1 $2 $3 $4 $5
 
 
 

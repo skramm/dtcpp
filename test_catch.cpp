@@ -139,6 +139,7 @@ TEST_CASE( "confusion matrix", "[cmat]" )
 //	CHECK( m4.getScore( PerfScore::TPR, ClassVal(0) ) == 0. ); // TODO
 }
 //-------------------------------------------------------------------------------------------
+/*
 TEST_CASE( "maj vote", "[majv]" )
 {
 	std::cout << "Running tests with catch " << CATCH_VERSION_MAJOR << '.' << CATCH_VERSION_MINOR << '.' << CATCH_VERSION_PATCH << '\n';
@@ -162,7 +163,10 @@ TEST_CASE( "maj vote", "[majv]" )
 		CHECK( nc._nbPtsOtherClasses   == 1 );
 	}
 }
+*/
 
+
+//-------------------------------------------------------------------------------------------
 std::vector<uint>
 setAllDataPoints( const DataSet& dataset )
 {
@@ -171,7 +175,6 @@ setAllDataPoints( const DataSet& dataset )
 	return v;
 }
 
-//-------------------------------------------------------------------------------------------
 TEST_CASE( "computeBestThreshold", "[cbt]" )
 {
 	DataSet dataset;
@@ -180,12 +183,13 @@ TEST_CASE( "computeBestThreshold", "[cbt]" )
 
 	auto v_dpidx = setAllDataPoints( dataset );    // all the points
 
-	auto giniCoeff = getGiniImpurity( v_dpidx, dataset );
+	auto pm = getNodeClassCount( v_dpidx, dataset );
+	auto giniCoeff = getGiniImpurity( pm );
 
 	Params params;
-	auto ig0 = computeBestThreshold( 0, v_dpidx, dataset, giniCoeff.first, params );
+	auto ig0 = computeBestThreshold( 0, v_dpidx, dataset, giniCoeff, params );
 	std::cout << "ig0: " << ig0 <<'\n';
-	auto ig1 = computeBestThreshold( 1, v_dpidx, dataset, giniCoeff.first, params );
+	auto ig1 = computeBestThreshold( 1, v_dpidx, dataset, giniCoeff, params );
 	std::cout << "ig1: " << ig1 <<'\n';
 
 	auto ba = findBestAttribute( v_dpidx, dataset, params, 0 );
@@ -240,8 +244,8 @@ addChildPairT( vertexT_t v, GraphT& g )
 	if( g[v]._type != NT_Root )   // so the root... stays the root !
 		g[v]._type = NT_Decision;
 
-	g[pv.first]._class  = ClassVal(5);
-	g[pv.second]._class = ClassVal(5);
+	g[pv.first]._nClass  = ClassVal(5);
+	g[pv.second]._nClass = ClassVal(5);
 	g[pv.first]._type   = NT_Final_MD;
 	g[pv.second]._type  = NT_Final_MD;
 	return pv;

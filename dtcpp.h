@@ -1584,9 +1584,11 @@ enum class PerfScore
 /// Multiclass performance score, see ConfusionMatrix::getScore_MC()
 enum class PerfScore_MC
 {
-	PRECIS_M,    ///< Macro Precision
-	RECALL_M,    ///< Macro Recall
-	PREC_REC_m   ///< Mico precision-recall (is the same)
+	PRECIS_M      ///< Macro Precision
+	,RECALL_M     ///< Macro Recall
+	,PREC_REC_m   ///< Micro precision-recall (is the same)
+
+	,SCORE_END    ///< only used to iterate
 };
 //---------------------------------------------------------------------
 std::string

@@ -5,20 +5,18 @@ set +x
 app=build/bin/dectree
 
 make
+if [ $? != 0 ]; then
+	echo "==============================================> build failed !"
+	exit 1
+fi
 
 echo "WARNING, erasing previous data !"
 make cleanout
-
-if [ $? != 0 ]; then
-	echo "Build failure!"
-	exit 1;
-fi
 
 if [ "$1" == "" ]; then
 	echo "missing arg, add one of these: a,b,c,d,e,f"
 	exit
 fi
-
 
 case $1 in
 a)
@@ -43,9 +41,14 @@ $app sample_data/wine.data -sep ',' -cf $2 $3 $4 $5
 
 f)
 $app sample_data/balance-scale.csv -fl -sep ',' $2 $3 $4 $5
+
 ;;
 
 esac
+if [ $? != 0 ]; then
+	echo "==============================================> program failed !"
+	exit 1
+fi
 
 make dot
 make plt

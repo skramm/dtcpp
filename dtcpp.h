@@ -1432,7 +1432,7 @@ DataSet::print( std::ostream& f, const std::vector<uint>& vIdx ) const
 
 //---------------------------------------------------------------------
 /// Holds the node type, see NodeT
-enum NodeType
+enum NodeType : char
 {
 	 NT_undef = 0
 	 ,NT_Root                 ///< Root node
@@ -1454,7 +1454,6 @@ getString( NodeType nt )
 		case NT_undef:    s="UNDEF";    break;
 		case NT_Root:     s="Root";     break;
 		case NT_Decision: s="Decision"; break;
-//		case NT_Final:    s="Final";    break;
 		case NT_Final_SC:            s="SC";  break;
 		case NT_Final_MD:            s="MD";  break;
 		case NT_Final_GI_Small:      s="MGI"; break;
@@ -1469,10 +1468,11 @@ getString( NodeType nt )
 struct NodeT
 {
 	static uint s_Counter;           ///< Node counter, incremented at each node creation, reset with resetNodeId()
+
 	uint     _nodeId = 0;            ///< Id of the node. Needed to print the dot file. \todoL could be removed if graph switches to \c VecS
 	NodeType _type = NT_undef;       ///< Type of the node (Root, leaf, or decision)
 	ClassVal _nClass = ClassVal(-1); ///< Class, relevant only for terminal nodes (leaves of the tree)
-	size_t   _attrIndex = 0;         ///< Attribute Index that this nodes classifies
+	size_t   _attrIndex = 0;         ///< Attribute Index that this nodes classifies (only for decision nodes)
 	float    _threshold = 0.f;       ///< Threshold on the attribute value (only for decision nodes)
 	uint     _depth = 0;             ///< Depth of the node in the tree
 	float    _giniImpurity = 0.f;
@@ -2093,17 +2093,17 @@ printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 
 		f << graph[target]._nodeId
 			<< " [label=\"n" << graph[target]._nodeId << ' ';
+
 		if( graph[target]._type == NT_Decision )
 			f << "attr=" << graph[target]._attrIndex
-				<< " thres=" << graph[target]._threshold << "\\n";
+				<< " thres=" << graph[target]._threshold;
 		else
 			f << "C" << graph[target]._nClass
-				<< " GI=" << graph[target]._giniImpurity
-				<< "\\nSR=" << getString( graph[target]._type );
+				<< ' ' << getString( graph[target]._type )
+				<< "\\nGI=" << graph[target]._giniImpurity
+				<< " A=" << graph[target]._nAmbig;
 
-		f //<< "\\ndepth=" << graph[target].depth
-			<< " #" << graph[target].v_Idx.size()
-			<< "\"";
+		f << "\\n#pts=" << graph[target].v_Idx.size() << "\"";
 		switch( graph[target]._type )
 		{
 			case NT_Decision: f << ",color=green"; break;
@@ -2128,13 +2128,22 @@ TrainingTree::printDot( int id ) const
 	auto f = priv::openOutputFile( "tree_" + std::to_string(id) , priv::FT_DOT );
 	f << "# file: " << _dataFileName << "\n\n"
 		<< "digraph g {\nnode [shape=\"box\"];\n"
-		<< "title [label=\"data file:\\n" << _dataFileName << "\",shape=\"note\",labelloc=\"c\"];\n"
+		<< "title [label=\"data file: " << _dataFileName
+		<< "\\n" << nbLeaves()
+		<< " leaves\",shape=\"note\",labelloc=\"c\"];\n"
 		<< _graph[_initialVertex]._nodeId
 		<< " [label=\"n" << _graph[_initialVertex]._nodeId
 		<< " attr="     << _graph[_initialVertex]._attrIndex
 		<< " thres="    << _graph[_initialVertex]._threshold
 		<< "\\n#"      << _graph[_initialVertex].v_Idx.size()
 		<< "\",color = blue];\n";
+
+	f << "legend [label=\""
+		<< "MGI: Min Gini Impurity\\n"
+		<< "SC: Single Class\\n"
+		<< "MD: Max Depth\\n"
+		<< "STS: Split Too Small"
+		<< "\",shape=\"note\",labelloc=\"l\"];\n";
 
 	priv::printDotNodeChilds( f, _initialVertex, _graph );
 	f << "}\n";
@@ -2290,82 +2299,6 @@ getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
 }
 #endif
 
-//---------------------------------------------------------------------
-#if 0
-/// Describes how a node holds different classes, see getNodeContent()
-/**
-The _nAmbig (relevant only for leaves of the tree) describes how the assigned class value is ambiguous.
-It is defined as the ratio of max count over second max count.
-
-For example if in a leave we have:
-- 5 points of class '1'
-- 2 points of class '2'
-then the ambiguity will be 5/2 = 2.5
-
-\todoM find a normalized formulae, independent of cardinality
-*/
-struct NodeContent
-{
-	double   _ncGiniImpurity = 0.;
-//	ClassVal _dominantClass;
-	size_t   _datasize = 0u;
-//	size_t   _nbPtsOtherClasses = 0u;
-	size_t   _nbClasses = 0u;
-	float    _nAmbig = -1.f;                 ///< ambiguity of the class value
-	std::map<ClassVal,size_t> _nClassCount;
-
-	friend std::ostream& operator << ( std::ostream& f, const NodeContent& nc )
-	{
-		f << "NodeContent: "
-		<< " GiniImpurity="      << nc._ncGiniImpurity
-//		<< " dominantClass="     << nc._dominantClass
-		<< " datasize="          << nc._datasize
-//		<< " nbPtsOtherClasses=" << nc._nbPtsOtherClasses
-		<< " nbClasses="         << nc._nbClasses
-		<< " nbAmbig="           << nc._nAmbig
-		<< '\n';
-		return f;
-	}
-};
-
-//---------------------------------------------------------------------
-/// Returns some info on what a node holding the points defined by \c v_dpidx holds.
-NodeContent
-getNodeContent(
-	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
-	const DataSet&           data     ///< dataset
-)
-{
-	START;
-	auto gImp = getGiniImpurity( v_dpidx, data );
-
-	const auto& classVotes = gImp.second;
-//	priv::printMap( std::cout, classVotes, "classvotes" );
-//	COUT << "global Gini Impurity=" << gImp.first << '\n';
-
-/*	using Pair = std::pair<ClassVal,uint>;
-	auto it_max = std::max_element(  // search max value based on nb of votes
-		std::begin( classVotes ),
-		std::end( classVotes ),
-		[]                                      // lambda
-		(const Pair& a, const Pair& b)->bool
-		{ return a.second < b.second; }
-	);
-
-	auto idx_maj = it_max->first;
-	COUT << "idx_maj=" << idx_maj << "\n";
-*/
-
-	return NodeContent{
-		gImp.first,                                // Gini Impurity
-//		idx_maj,                                   // dominant class
-		v_dpidx.size(),                            // data size
-//		v_dpidx.size() - classVotes.at(idx_maj),   // nb of points other than dominant class
-		classVotes.size(),                         // nb of classes
-		std::move(gImp.second)                     // class count
-	};
-}
-#endif
 //---------------------------------------------------------------------
 /// Finds class holding max value (first) and ambiguity of that max value (second)
 template<typename T>
@@ -3250,6 +3183,7 @@ TrainingTree::classify( const DataSet& dataset ) const
 	START;
 	ConfusionMatrix confmat( _classIndexMap );
 	if( nbLeaves() > 1)
+	{
 		for( const auto& datapoint: dataset )
 			if( !datapoint.isClassLess() )
 			{
@@ -3257,6 +3191,7 @@ TrainingTree::classify( const DataSet& dataset ) const
 				auto cla2 = classify( datapoint );
 				confmat.add( cla1, cla2 );
 			}
+	}
 	else
 		std::cerr << "Error, unable to classify dataset, tree has " << nbLeaves() << " leave!\n";
 	return confmat;

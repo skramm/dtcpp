@@ -4,6 +4,47 @@ set +x
 
 app=build/bin/dectree
 
+function runone
+{
+	case $1 in
+	a)
+	$app sample_data/iris.data -sep ',' -cs $2 $3 $4 $5
+	;;
+
+	b)
+	$app sample_data/winequality-white.csv -sep ';' $2 $3 $4 $5
+	;;
+
+	c)
+	$app sample_data/dummy_1.dat $2 $3 $4 $5
+	;;
+
+	d)
+	$app sample_data/dummy_2.dat $2 $3 $4 $5
+	;;
+
+	e)
+	$app sample_data/wine.data -sep ',' -cf $2 $3 $4 $5
+	;;
+
+	f)
+	$app sample_data/balance-scale.csv -fl -sep ',' $2 $3 $4 $5
+
+	;;
+
+	esac
+	if [ $? != 0 ]; then
+		echo "==============================================> program failed !"
+		exit 1
+	fi
+
+	if [ "$doplot" == "YES" ]; then
+		make dot
+		make plt
+	fi
+}
+
+
 make
 if [ $? != 0 ]; then
 	echo "==============================================> build failed !"
@@ -13,44 +54,18 @@ fi
 echo "WARNING, erasing previous data !"
 make cleanout
 
+doplot=YES
 if [ "$1" == "" ]; then
-	echo "missing arg, add one of these: a,b,c,d,e,f"
+	doplot=NO
+	runone a
+	runone b
+	runone c
+	runone d
+	runone e
 	exit
 fi
 
-case $1 in
-a)
-$app sample_data/iris.data -sep ',' -cs $2 $3 $4 $5
-;;
+runone $1
 
-b)
-$app sample_data/winequality-white.csv -sep ';' $2 $3 $4 $5
-;;
-
-c)
-$app sample_data/dummy_1.dat $2 $3 $4 $5
-;;
-
-d)
-$app sample_data/dummy_2.dat $2 $3 $4 $5
-;;
-
-e)
-$app sample_data/wine.data -sep ',' -cf $2 $3 $4 $5
-;;
-
-f)
-$app sample_data/balance-scale.csv -fl -sep ',' $2 $3 $4 $5
-
-;;
-
-esac
-if [ $? != 0 ]; then
-	echo "==============================================> program failed !"
-	exit 1
-fi
-
-make dot
-make plt
 
 

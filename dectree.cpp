@@ -170,7 +170,10 @@ int main( int argc, const char** argv )
 		}
 		std::cout << "* Folding: tree data:\n";
 		for( int i=0; i<nbFolds; i++ )
-			std::cout << " - Fold " << i+1 << ": #leaves=" << vec_tree[i].nbLeaves() << '\n';
+			std::cout << " - Fold " << i+1
+				<< ": #leaves=" << vec_tree[i].nbLeaves()
+				<< ", max depth=" << vec_tree[i].maxDepth()
+				<< '\n';
 
 		std::cout << "* Folding test results:\n";
 		if( dataset.nbClasses() > 2 )

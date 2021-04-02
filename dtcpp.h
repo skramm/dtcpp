@@ -622,7 +622,7 @@ class DataSet
 		template<typename T>
 		void tagOutliers( const DatasetStats<T>&, En_OD_method odm=En_OD_method::fixedSigma, En_OR_method orm=En_OR_method::disablePoint, float param=3.f );
 
-/// Returns true if point has been tagged has outlier, see tagOutliers()
+/// Returns true if point has been tagged as outlier, see tagOutliers()
 		bool pointIsOutlier( size_t i ) const
 		{
 			if( _vIsOutlier.size() )
@@ -815,7 +815,6 @@ computeAttribStats( std::vector<float>& vat )
 		const auto e2 = *median_it2;
 
 		at_stat._medianVal = (e1 + e2) / 2;
-
 	}
 	else                // if odd
 	{
@@ -1276,7 +1275,6 @@ DataSet::load( std::string fname, const Fparams params )
 	_fname   = fname;
 	clear();
 
-//	std::map<std::string,uint> classStringMap;  // maps string to class Idx used only if classes are given as strings
 	uint classIndexCounter = 0;
 
 	size_t nb_lines     = 0;
@@ -1592,6 +1590,7 @@ enum class PerfScore_MC
 	PRECIS_M      ///< Macro Precision
 	,RECALL_M     ///< Macro Recall
 	,PREC_REC_m   ///< Micro precision-recall (is the same)
+	,FSCORE_M     ///< FScore
 
 	,SCORE_END    ///< only used to iterate
 };
@@ -1622,6 +1621,7 @@ getString( PerfScore_MC n )
 		case PerfScore_MC::RECALL_M: s="(macro) Recall";  break;
 		case PerfScore_MC::PRECIS_M: s="(macro) Precision";  break;
 		case PerfScore_MC::PREC_REC_m: s="(micro) Precision/Recall";  break;
+		case PerfScore_MC::FSCORE_M: s="(macro) Fscore";  break;
 		default: assert(0);
 	}
 	return std::string(s);
@@ -1900,6 +1900,8 @@ ConfusionMatrix::getScore( PerfScore scoreId, ClassVal cval ) const
 - Reference:
 Sokolova, M., & Lapalme, G. (2009), "A systematic analysis of performance measures for classification tasks". Information Processing and Management, 45, p. 427-437
 
+- for the Fscore, we use beta=1 (see https://en.wikipedia.org/wiki/F-score#Definition)
+
 \image html Sokolova_2009_table.png
 */
 double
@@ -1908,7 +1910,7 @@ ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
 	assert( nbValues() > 2 );
 	assert( nbClasses() > 2 );
 
-	auto sum = 0.;
+	auto val = 0.;
 	switch( scoreId )
 	{
 		case PerfScore_MC::PRECIS_M:                   // macro precision
@@ -1916,9 +1918,9 @@ ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
 			{
 				auto sum_li = std::accumulate( std::begin(_mat[i]), std::end(_mat[i]), 0. );
 				if( sum_li > 0 )
-					sum += _mat[i][i] / std::accumulate( std::begin(_mat[i]), std::end(_mat[i]), 0. );
+					val += _mat[i][i] / std::accumulate( std::begin(_mat[i]), std::end(_mat[i]), 0. );
 			}
-			sum /= nbClasses();
+			val /= nbClasses();
 			break;
 
 		case PerfScore_MC::RECALL_M:                  // macro recall
@@ -1928,20 +1930,28 @@ ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
 				for( size_t li=0; li<nbClasses(); li++ )
 					sum_col += _mat[li][i];
 				if( sum_col > 0 )
-					sum += _mat[i][i] / sum_col;
+					val += _mat[i][i] / sum_col;
 			}
-			sum /= nbClasses();
+			val /= nbClasses();
 		break;
 
 		case PerfScore_MC::PREC_REC_m:                  // micro precision-recall
 			for( size_t i=0; i<nbClasses(); i++ )
-				sum += _mat[i][i];
-			sum /= nbValues();
+				val += _mat[i][i];
+			val /= nbValues();
+		break;
+
+		case PerfScore_MC::FSCORE_M:
+		{
+			auto p = getScore_MC( PerfScore_MC::PRECIS_M );
+			auto r = getScore_MC( PerfScore_MC::PRECIS_M );
+			val = 2. * p * r / ( p + r );
+		}
 		break;
 
 		default : assert(0);
 	}
-	return sum;
+	return val;
 }
 
 //---------------------------------------------------------------------
@@ -3316,7 +3326,6 @@ printBestCriterionFold(
 		{
 			f << "  - Classifying whole data set with that tree:\n";
 			auto cm_all = vec_tree[best].classify( dataset );
-			f << "  - Results:\n";
 			printScores<T>( f, cm_all );
 			bestSet.insert( best );
 		}

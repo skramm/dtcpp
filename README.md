@@ -59,6 +59,11 @@ see
 * https://en.wikipedia.org/wiki/C4.5_algorithm
 * https://en.wikipedia.org/wiki/Information_gain_in_decision_trees
 
+
+### Related software:
+
+* https://rulequest.com/download.html : C5 algorithm
+
 ## Recommended tools
 
 While not mandatory, this software will greatly benefit from some additional standard tools,

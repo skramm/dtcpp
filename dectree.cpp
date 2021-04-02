@@ -143,16 +143,15 @@ int main( int argc, const char** argv )
 //        sConfusionMatrix cm_train;
         std::vector<ConfusionMatrix> vec_cm_test;
         std::vector<TrainingTree> vec_tree(nbFolds);
-		for( uint i=0; i<(uint)nbFolds; i++ )
+		for( int i=0; i<nbFolds; i++ )
 		{
 			vec_tree[i].assignCIM( dataset.getClassIndexMap() );
-//			TrainingTree tt( dataset.getClassIndexMap() );
 			auto p_data_subsets = dataset.getFolds( i, nbFolds );
 			auto data_train = p_data_subsets.first;
 			auto data_test  = p_data_subsets.second;
 
-			data_train.generateClassDistrib( "histo_tr_" + std::to_string(i) );
-			data_test.generateClassDistrib(  "histo_te_" + std::to_string(i) );
+//			data_train.generateClassDistrib( "histo_tr_" + std::to_string(i) );
+//			data_test.generateClassDistrib(  "histo_te_" + std::to_string(i) );
 
 //			data_train.printInfo( std::cout, "train" );
 //			data_test.printInfo(  std::cout, "test" );
@@ -169,18 +168,21 @@ int main( int argc, const char** argv )
 			cm_test.printAllScores( std::cout, "test" );
 */
 		}
+		std::cout << "* Folding: tree data:\n";
+		for( int i=0; i<nbFolds; i++ )
+			std::cout << " - Fold " << i+1 << ": #leaves=" << vec_tree[i].nbLeaves() << '\n';
+
+		std::cout << "* Folding test results:\n";
 		if( dataset.nbClasses() > 2 )
 		{
-			printScores<PerfScore_MC>( vec_cm_test );
-			printBestCriterionFold<PerfScore_MC>( vec_tree, vec_cm_test, dataset );
+			printAllScores<PerfScore_MC>( std::cout, vec_cm_test );
+			printBestCriterionFold<PerfScore_MC>( std::cout, vec_tree, vec_cm_test, dataset );
 		}
         else
 		{
-			printScores<PerfScore>( vec_cm_test );
-			printBestCriterionFold<PerfScore>( vec_tree, vec_cm_test, dataset );
+			printAllScores<PerfScore>( std::cout, vec_cm_test );
+			printBestCriterionFold<PerfScore>( std::cout, vec_tree, vec_cm_test, dataset );
 		}
-
-
 
 	}
 }

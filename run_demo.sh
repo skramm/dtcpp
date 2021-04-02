@@ -54,7 +54,7 @@ fi
 echo "WARNING, erasing previous data !"
 make cleanout
 
-doplot=YES
+doplot=NO
 if [ "$1" == "" ]; then
 	doplot=NO
 	runone a $2 $3 $4 $5

@@ -3256,57 +3256,70 @@ TrainingTree::classify( const DataSet& dataset ) const
 	return confmat;
 }
 //---------------------------------------------------------------------
-/// Print the scores for all available performance criterions
+/// Print the scores for all available performance criterions, for the given ConfusionMatrix
 /**
 Type \c T will be either \ref PerfScore_MC (for multiclass) or \ref PerfScore (for 2-class problems)
 */
 template<typename T>
 void
-printScores( const ConfusionMatrix& cm )
+printScores( std::ostream& f, const ConfusionMatrix& cm )
 {
 	for( int pc=0; pc<static_cast<int>(T::SCORE_END); pc++ )
 	{
 		auto crit = static_cast<T>(pc);
-		std::cout << "* Criterion: " << getString( crit ) << " => "
+		f << "   - Criterion: " << getString( crit ) << " => "
 			<< cm.getScoreT<T>( crit ) << '\n';
 	}
 }
 //---------------------------------------------------------------------
-/// Print the scores for all available performance criterions
+/// Print the scores for all available performance criterions, for all
+/// the given ConfusionMatrix in \c vcm
 /**
 Type \c T will be either \ref PerfScore_MC (for multiclass) or \ref PerfScore (for 2-class problems)
 */
 template<typename T>
 void
-printScores( const std::vector<ConfusionMatrix>& vcm )
+printAllScores(
+	std::ostream& f,
+	const std::vector<ConfusionMatrix>& vcm
+)
 {
+	assert( vcm.size()>1 );
 	for( int pc=0; pc<static_cast<int>(T::SCORE_END); pc++ )
 	{
-		std::cout << "* Criterion: " << getString( static_cast<T>(pc) ) << ":\n";
+		f << " * Criterion: " << getString( static_cast<T>(pc) ) << ":\n";
 		for( size_t i=0; i<vcm.size(); i++ )
-			std::cout << " - fold " << i+1 << ": "
-				<< vcm[i].getScoreT<T>( static_cast<T>(pc) ) << '\n';
+			f << "  - fold " << i+1 << ": "
+				<< vcm[i].getScoreT<T>( static_cast<T>(pc) )
+				<< '\n';
 	}
 }
-
 //---------------------------------------------------------------------
 template<typename T>
 void
 printBestCriterionFold(
+	std::ostream&                       f,
 	const std::vector<TrainingTree>&    vec_tree,
 	const std::vector<ConfusionMatrix>& vec_cm_test,
 	const DataSet&                      dataset
 )
 {
+	std::set<size_t> bestSet;
+	f << "*** Folding best performance ***\n";
 	for( int ps=0; ps<static_cast<int>(T::SCORE_END); ps++ )
 	{
 		auto perfCrit = static_cast<T>(ps);
 		auto best = findMaxPerformance( vec_cm_test, perfCrit );
-		std::cout << "- Criterion: " << getString( perfCrit ) << " => best fold index=" << best+1
-			<< "\n- Classifying whole data set with that tree:\n";
-		auto cm_all = vec_tree[best].classify( dataset );
-		std::cout << "- Results:\n";
-		printScores<T>( cm_all );
+		f << " * Criterion: " << getString( perfCrit ) << " => best: fold " << best+1 << '\n';
+
+		if( bestSet.find( best ) == std::end( bestSet ) )
+		{
+			f << "  - Classifying whole data set with that tree:\n";
+			auto cm_all = vec_tree[best].classify( dataset );
+			f << "  - Results:\n";
+			printScores<T>( f, cm_all );
+			bestSet.insert( best );
+		}
 	}
 }
 

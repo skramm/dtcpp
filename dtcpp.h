@@ -36,6 +36,11 @@ See doc on https://github.com/skramm/dtcpp
 #include <boost/bimap.hpp>
 #include <boost/bimap/vector_of.hpp>
 
+#ifdef GRAPH_SERIALIZATION
+	#include <boost/archive/text_oarchive.hpp>
+	#include <boost/archive/text_iarchive.hpp>
+#endif
+
 //#include "private.hpp"
 #include "histac.hpp"
 
@@ -2009,7 +2014,7 @@ class TrainingTree
 		GraphT        _graph;
 		vertexT_t     _initialVertex;
 		uint          _maxDepth = 1;  ///< defined by training
-		ClassIndexMap _classIndexMap;  ///< maps class values to index values
+		ClassIndexMap _tClassIndexMap;  ///< maps class values to index values
 		std::string   _dataFileName = "(NO DATA)"; ///< used to print input file name on plot
 
 	public:
@@ -2022,7 +2027,7 @@ class TrainingTree
 #endif
 /// Constructor 2, to be used if class values can not be used as indexes.
 		explicit TrainingTree( const ClassIndexMap& cim )
-			: _classIndexMap( cim )
+			: _tClassIndexMap( cim )
 		{
 			clear();
 		}
@@ -2034,6 +2039,9 @@ class TrainingTree
 			_initialVertex = boost::add_vertex(_graph);  // create initial vertex
 			_graph[_initialVertex]._type = NT_Root;
 		}
+
+		void saveToFile( std::string fname ) const;
+		void readFromFile( std::string fname );
 
 		void     train( DataSet&, Params params=Params() );
 		ConfusionMatrix classify( const DataSet& ) const;
@@ -2047,6 +2055,44 @@ class TrainingTree
 		size_t pruning();
 };
 
+
+//---------------------------------------------------------------------
+#ifdef GRAPH_SERIALIZATION
+} // namespace dtcpp
+namespace boost {
+namespace serialization {
+
+    template<class Archive>
+    void serialize( Archive& ar, dtcpp::NodeT& n, unsigned /*int version*/ )
+    {
+        ar & n._nodeId;
+//        ar & n._type;
+    }
+
+} // namespace serialization
+} // namespace boost
+namespace dtcpp {
+//---------------------------------------------------------------------
+void
+TrainingTree::saveToFile( std::string fname ) const
+{
+	std::ofstream f( fname );
+	if( !f.is_open() )
+		throw std::runtime_error( "unable to open file " + fname + " for saving tree" );
+	boost::archive::text_oarchive oa( f );
+    oa << _graph;
+}
+//---------------------------------------------------------------------
+void
+TrainingTree::readFromFile( std::string fname )
+{
+	std::ifstream f( fname );
+	if( !f.is_open() )
+		throw std::runtime_error( "unable to open file: " + fname + " for reading tree" );
+	boost::archive::text_iarchive ia( f );
+    ia >> _graph;
+}
+#endif // GRAPH_SERIALIZATION
 //---------------------------------------------------------------------
 /// Iterates on all nodes and counts the one that are not root, nor "decision" nodes
 inline
@@ -3182,7 +3228,7 @@ TrainingTree::classify( const DataSet& dataset ) const
 //	if( _nbClasses < 2 )  // if 0 or 1 class, then nothing to classify
 //		throw std::runtime_error( "nothing to classify, dataset holds " + std::to_string(_nbClasses) + " classes" );
 	START;
-	ConfusionMatrix confmat( _classIndexMap );
+	ConfusionMatrix confmat( _tClassIndexMap );
 	if( nbLeaves() > 1)
 	{
 		for( const auto& datapoint: dataset )

@@ -192,7 +192,7 @@ TEST_CASE( "computeBestThreshold", "[cbt]" )
 	auto ig1 = computeBestThreshold( 1, v_dpidx, dataset, giniCoeff, params );
 	std::cout << "ig1: " << ig1 <<'\n';
 
-	auto ba = findBestAttribute( v_dpidx, dataset, params, 0 );
+	auto ba = findBestAttribute( v_dpidx, dataset, params, 0, pm.first, giniCoeff );
 }
 //-------------------------------------------------------------------------------------------
 TEST_CASE( "removeDuplicates", "[RD]" )

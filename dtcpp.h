@@ -1751,7 +1751,6 @@ struct ConfusionMatrix
 	}
 
 	void printAllScores( std::ostream&, const char* msg=0 ) const;
-//	void printAverageScores( std::ostream&, const char* msg=0 ) const;
 
 #ifdef TESTMODE
 	void setVal( size_t li, size_t col, uint v )
@@ -2018,13 +2017,13 @@ class TrainingTree
 		std::string   _dataFileName = "(NO DATA)"; ///< used to print input file name on plot
 
 	public:
-#ifdef TESTMODE
+//#ifdef TESTMODE
 /// Constructor 1, only for testing
 		TrainingTree()
 		{
 			clear();
 		}
-#endif
+//#endif
 /// Constructor 2, to be used if class values can not be used as indexes.
 		explicit TrainingTree( const ClassIndexMap& cim )
 			: _tClassIndexMap( cim )
@@ -2032,6 +2031,11 @@ class TrainingTree
 			clear();
 		}
 		TrainingTree( const TrainingTree& ) = delete;
+
+		void assignCIM( const ClassIndexMap& cim )
+		{
+			_tClassIndexMap = cim;
+		}
 
 		void clear()
 		{
@@ -2053,6 +2057,14 @@ class TrainingTree
 		size_t   nbLeaves() const;
 
 		size_t pruning();
+	private:
+		void p_check() const
+		{
+//			assert( _tClassIndexMap.size() > 0 );
+			if( _tClassIndexMap.size() == 0 )
+				throw std::runtime_error( "program error, tree has no Class to Index map assigned" );
+		}
+
 };
 
 
@@ -2944,12 +2956,9 @@ splitNode(
 // step 1.1 - check if there are different output classes in the given data points
 // if not, then we are done
 
-//	auto nodeContent = getNodeContent( vIdx, data );
 	const auto classCountInfo = getNodeClassCount( vIdx, data );
 	const auto& classCount = classCountInfo.first;
 
-//	graph[v]._nClass = nodeContent._dominantClass;
-//	graph[v]._giniImpurity = nodeContent._ncGiniImpurity;
 	graph[v]._giniImpurity = getGiniImpurity( classCountInfo );
 
 	bool nodeIsLeave = false;
@@ -3134,6 +3143,7 @@ TrainingTree::train( DataSet& data, const Params params )
 {
 	START;
 	LOG( 0, "Start training" );
+	p_check();
 
 	_dataFileName = data._fname;
 	NodeT::resetNodeId();
@@ -3228,6 +3238,8 @@ TrainingTree::classify( const DataSet& dataset ) const
 //	if( _nbClasses < 2 )  // if 0 or 1 class, then nothing to classify
 //		throw std::runtime_error( "nothing to classify, dataset holds " + std::to_string(_nbClasses) + " classes" );
 	START;
+	p_check();
+
 	ConfusionMatrix confmat( _tClassIndexMap );
 	if( nbLeaves() > 1)
 	{
@@ -3250,14 +3262,73 @@ Type \c T will be either \ref PerfScore_MC (for multiclass) or \ref PerfScore (f
 */
 template<typename T>
 void
+printScores( const ConfusionMatrix& cm )
+{
+	for( int pc=0; pc<static_cast<int>(T::SCORE_END); pc++ )
+	{
+		auto crit = static_cast<T>(pc);
+		std::cout << "* Criterion: " << getString( crit ) << " => "
+			<< cm.getScoreT<T>( crit ) << '\n';
+	}
+}
+//---------------------------------------------------------------------
+/// Print the scores for all available performance criterions
+/**
+Type \c T will be either \ref PerfScore_MC (for multiclass) or \ref PerfScore (for 2-class problems)
+*/
+template<typename T>
+void
 printScores( const std::vector<ConfusionMatrix>& vcm )
 {
 	for( int pc=0; pc<static_cast<int>(T::SCORE_END); pc++ )
 	{
 		std::cout << "* Criterion: " << getString( static_cast<T>(pc) ) << ":\n";
 		for( size_t i=0; i<vcm.size(); i++ )
-			std::cout << " - fold " << i+1 << ": " << vcm[i].getScoreT<T>( static_cast<T>(pc) ) << '\n';
+			std::cout << " - fold " << i+1 << ": "
+				<< vcm[i].getScoreT<T>( static_cast<T>(pc) ) << '\n';
 	}
+}
+
+//---------------------------------------------------------------------
+template<typename T>
+void
+printBestCriterionFold(
+	const std::vector<TrainingTree>&    vec_tree,
+	const std::vector<ConfusionMatrix>& vec_cm_test,
+	const DataSet&                      dataset
+)
+{
+	for( int ps=0; ps<static_cast<int>(T::SCORE_END); ps++ )
+	{
+		auto perfCrit = static_cast<T>(ps);
+		auto best = findMaxPerformance( vec_cm_test, perfCrit );
+		std::cout << "- Criterion: " << getString( perfCrit ) << " => best fold index=" << best+1
+			<< "\n- Classifying whole data set with that tree:\n";
+		auto cm_all = vec_tree[best].classify( dataset );
+		std::cout << "- Results:\n";
+		printScores<T>( cm_all );
+	}
+}
+
+//---------------------------------------------------------------------
+/// Finds among all the confusion matrics the one achieving highest performance
+/// based on criterion T
+template<typename T>
+size_t
+findMaxPerformance( const std::vector<ConfusionMatrix>& vcm, T crit )
+{
+	double maxp = std::numeric_limits<double>::min();
+	size_t best = 0;
+	for( size_t i=0; i<vcm.size(); i++ )
+	{
+		auto score = vcm[i].getScoreT<T>( crit );
+		if( maxp < score )
+		{
+			maxp = score;
+			best = i;
+		}
+	}
+	return best;
 }
 
 } // namespace dtcpp

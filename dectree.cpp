@@ -135,20 +135,18 @@ int main( int argc, const char** argv )
 		tt.printDot( 1 );
 		auto cm = tt.classify( dataset );
 		std::cout << cm << "\n";
-//		if( dataset.nbClasses() == 2 )
-			cm.printAllScores( std::cout );
-//		else
-//			cm.printAverageScores( std::cout );
-
+		cm.printAllScores( std::cout );
 	}
 	else
 	{
 		dataset.shuffle();
-        std::vector<ConfusionMatrix> vec_cm_train;
+//        sConfusionMatrix cm_train;
         std::vector<ConfusionMatrix> vec_cm_test;
+        std::vector<TrainingTree> vec_tree(nbFolds);
 		for( uint i=0; i<(uint)nbFolds; i++ )
 		{
-			TrainingTree tt( dataset.getClassIndexMap() );
+			vec_tree[i].assignCIM( dataset.getClassIndexMap() );
+//			TrainingTree tt( dataset.getClassIndexMap() );
 			auto p_data_subsets = dataset.getFolds( i, nbFolds );
 			auto data_train = p_data_subsets.first;
 			auto data_test  = p_data_subsets.second;
@@ -158,11 +156,11 @@ int main( int argc, const char** argv )
 
 //			data_train.printInfo( std::cout, "train" );
 //			data_test.printInfo(  std::cout, "test" );
-			tt.train( data_train, params );
+			vec_tree[i].train( data_train, params );
 //			tt.printDot( i );
 
-			vec_cm_train.push_back( tt.classify( data_train ) );
-			vec_cm_test.push_back( tt.classify( data_test ) );
+//			vec_cm_train.push_back( tt.classify( data_train ) );
+			vec_cm_test.push_back( vec_tree[i].classify( data_test ) );
 //			std::cout << "\n* Fold " << i+1 << "/" << nbFolds << '\n';
 
 /*			std::cout << "Confusion Matrix (train):" << cm_train << "\n";
@@ -172,8 +170,17 @@ int main( int argc, const char** argv )
 */
 		}
 		if( dataset.nbClasses() > 2 )
+		{
 			printScores<PerfScore_MC>( vec_cm_test );
+			printBestCriterionFold<PerfScore_MC>( vec_tree, vec_cm_test, dataset );
+		}
         else
+		{
 			printScores<PerfScore>( vec_cm_test );
+			printBestCriterionFold<PerfScore>( vec_tree, vec_cm_test, dataset );
+		}
+
+
+
 	}
 }

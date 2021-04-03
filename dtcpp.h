@@ -313,6 +313,9 @@ class DataPoint
 		ClassVal _class = ClassVal(-1);  ///< Class of the datapoint, -1 for undefined
 
 #ifdef HANDLE_MISSING_VALUES
+/// \name Missing Values handling
+/// (enabled only if \c HANDLE_MISSING_VALUES enabled, see build options)
+///@{
 		std::set<uint> _missingValues;  ///< holds indexes of the attributes with missing values
 	public:
 		size_t nbMissingValues() const
@@ -326,6 +329,7 @@ class DataPoint
 
 		}
 		bool isMissingValue( std::string str ) const;
+///@}
 #endif
 
 	public:
@@ -400,7 +404,7 @@ class DataPoint
 			assert( idx<_attrValue.size() );
 			return _attrValue[idx];
 		}
-/// This (fetch by ref) is needed when tagging outliers, see \page p_outliers
+/// This (fetch by ref) is needed when tagging outliers
 		float& attribVal( size_t idx )
 		{
 			assert( idx<_attrValue.size() );

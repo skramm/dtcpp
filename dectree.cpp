@@ -27,7 +27,7 @@ int main( int argc, const char** argv )
 #else
 		<< "NO"
 #endif
-		<< "\n - DEBUG: "
+/*		<< "\n - DEBUG: "
 #ifdef DEBUG
 		<< "YES"
 #else
@@ -38,12 +38,12 @@ int main( int argc, const char** argv )
 		<< "YES"
 #else
 		<< "NO"
-#endif
+#endif*/
 	<< "\n* RunTime parameters:\n";
 
 	Fparams fparams;
 	Params  params;
-	argh::parser cmdl; //({ "-sep"});
+	argh::parser cmdl;
 	cmdl.parse(argc, argv, argh::parser::PREFER_PARAM_FOR_UNREG_OPTION );
 
 	if( cmdl.size() < 2 )

@@ -14,7 +14,10 @@ This can be handled with this software.
 All these features need to be enabled at build time, by defining the symbol `HANDLE_MISSING_VALUES`
 (done with `make HMS=Y`)
 
-
+If enabled, the class DataPoint has these member functions:
+* `size_t nbMissingValues() const`
+* `bool valueIsMissing( size_t idx ) const;`
+* `bool isMissingValue( std::string str ) const;`
 
 
 */

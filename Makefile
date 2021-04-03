@@ -90,7 +90,7 @@ doc:
 
 # add --success to see successful tests
 test: build/bin/test_catch
-	$(BIN_DIR)/test_catch --success
+	$(BIN_DIR)/test_catch
 
 #$(BIN_DIR)/test_catch: build/obj/test_catch.o
 #	$(CXX) -o $(BIN_DIR)/test_catch build/obj/test_catch.o -s

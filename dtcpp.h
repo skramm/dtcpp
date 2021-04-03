@@ -1525,7 +1525,7 @@ getString( NodeType nt )
 		case NT_Final_MD:            s="MD";  break;
 		case NT_Final_GI_Small:      s="MGI"; break;
 		case NT_Final_SplitTooSmall: s="STS"; break;
-		case NT_Merged:              s="ME";  break;
+		case NT_Merged:              s="MP";  break;
 		default: assert(0);
 	}
 	return std::string(s);
@@ -1700,7 +1700,7 @@ struct Scores
 };
 #endif
 //---------------------------------------------------------------------
-/// Confusion Matrix, handles both 2 class and multiclass problems, but usage will be different
+/// Confusion Matrix, handles both 2 class and multiclass problems, but usage will be different.
 /**
 
 Instanciated in TrainingTree::classify()
@@ -2130,7 +2130,7 @@ class TrainingTree
 		uint     maxDepth() const { return _maxDepth; }
 		size_t   nbLeaves() const;
 
-		size_t pruning();
+		size_t pruning( const DataSet& );
 	private:
 		void p_check() const
 		{
@@ -2275,7 +2275,8 @@ TrainingTree::printDot( int id ) const
 		<< "MGI: Min Gini Impurity\\n"
 		<< "SC: Single Class\\n"
 		<< "MD: Max Depth\\n"
-		<< "STS: Split Too Small"
+		<< "STS: Split Too Small\\n"
+		<< "MP: Merged at Pruning step"
 		<< "\",shape=\"note\",labelloc=\"l\"];\n";
 
 	priv::printDotNodeChilds( f, _initialVertex, _graph );
@@ -2302,9 +2303,10 @@ TrainingTree::printInfo( std::ostream& f, const char* msg ) const
 }
 
 //---------------------------------------------------------------------
-/// Computes the class counting and returns it along with the number of classless points in node
+/// Computes the class counting and returns it along with the number of relevant
+/// points (that is, without the classless points)
 /**
-See related getGiniImpurity()
+- See related getGiniImpurity()
 */
 std::pair<std::map<ClassVal,size_t>,size_t>
 getNodeClassCount(
@@ -2334,7 +2336,7 @@ getNodeClassCount(
 /**
 Input arg: map of class counts and relevant number of points
 
-See related getNodeClassCount()
+- See related getNodeClassCount()
 */
 double
 getGiniImpurity(
@@ -3133,8 +3135,6 @@ splitNode(
 //---------------------------------------------------------------------
 /// Pruning of the graph: removal of child leaves pair that hold the same class
 /**
-\todo Maybe we should recompute the Gini Impurity coeff when merging ?
-
 \return The number of removal operations (\b not the number of removed nodes!)
 
 Algorithm:
@@ -3156,9 +3156,11 @@ WHILE( no more removals )
 \note Could have tried something else:
 check each node one by one and find if there is another node of same depth AND same class
 that has the same parent.
+
+\todoM integrate this in the main training function, so for end-user it gets automatically done.
 */
 size_t
-TrainingTree::pruning()
+TrainingTree::pruning( const DataSet& data )
 {
 	START;
 
@@ -3179,7 +3181,7 @@ TrainingTree::pruning()
 		)
 		{
 			auto v1    = *pit.first;
-			const auto& node1 = _graph[v1];
+			auto& node1 = _graph[v1];  // not const because in case of merging, the indexes vector will be added with the one from the other node
 //			COUT << "current node:" << node1._nodeId << " class=" << node1._class << " depth="<< node1._depth << '\n';
 			nodeSet.insert( node1._nodeId );
 			if( node1.isLeave() && boost::num_vertices( _graph ) != 1)    // we only care about the leaves (and quit if only 1 node left)
@@ -3207,7 +3209,17 @@ TrainingTree::pruning()
 						{
 							_graph[v0]._nClass = node1._nClass;  // change status of source node
 							if( _graph[v0]._type != NT_Root )
+							{
 								_graph[v0]._type = NT_Merged;
+
+								auto n1size = node1.v_Idx.size();
+								node1.v_Idx.resize( n1size + node2.v_Idx.size() );
+								std::copy( node2.v_Idx.begin(), node2.v_Idx.end(), node1.v_Idx.begin()+n1size );
+
+								auto pm = getNodeClassCount( node1.v_Idx, data );
+								_graph[v0]._giniImpurity = getGiniImpurity( pm );
+								_graph[v0]._nAmbig       = findDominantClass( pm.first ).second;
+							}
 							boost::clear_vertex(  v1, _graph );
 							boost::clear_vertex(  v2, _graph );
 							boost::remove_vertex( v1, _graph );

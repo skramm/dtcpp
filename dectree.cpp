@@ -160,7 +160,7 @@ int main( int argc, const char** argv )
 		tt.printInfo( std::cout, "Before Pruning" );
 		tt.printDot( 0 );
 
-		tt.pruning();
+		tt.pruning( dataset );
 		tt.printInfo( std::cout, "After pruning" );
 		tt.printDot( 1 );
 		auto cm = tt.classify( dataset );
@@ -170,7 +170,7 @@ int main( int argc, const char** argv )
 	else
 	{
 		dataset.shuffle();
-//        sConfusionMatrix cm_train;
+
         std::vector<ConfusionMatrix> vec_cm_test;
         std::vector<TrainingTree> vec_tree(nbFolds);
 		for( int i=0; i<nbFolds; i++ )
@@ -186,6 +186,7 @@ int main( int argc, const char** argv )
 //			data_train.printInfo( std::cout, "train" );
 //			data_test.printInfo(  std::cout, "test" );
 			vec_tree[i].train( data_train, params );
+			vec_tree[i].pruning( data_train );
 //			tt.printDot( i );
 
 //			vec_cm_train.push_back( tt.classify( data_train ) );

@@ -253,6 +253,7 @@ addChildPairT( vertexT_t v, GraphT& g )
 
 //-------------------------------------------------------------------------------------------
 /// test of pruning
+/// 20210403: disabled, because prubning now requires a dataset (to recompute GI for a merged node)
 TEST_CASE( "pruning", "[pru]" )
 {
 	g_params.verbose = true;
@@ -277,10 +278,10 @@ TEST_CASE( "pruning", "[pru]" )
 	tt.printInfo( std::cout );
 	tt.printDot( 0 );
 
-	CHECK( tt.pruning() == 4 );
+/*	CHECK( tt.pruning() == 4 );
 	CHECK( tt.nbLeaves() == 0 );
 	tt.printInfo( std::cout );
-	tt.printDot( 1 );
+	tt.printDot( 1 );*/
 }
 
 //-------------------------------------------------------------------------------------------
@@ -387,4 +388,33 @@ TEST_CASE( "vbs_histogram2", "[vbsh2]" )
 	CHECK( h.nbBins() == 3 );
 	CHECK( h.nbPts()  == 6 );
 }
+//-------------------------------------------------------------------------------------------
+#ifdef HANDLE_MISSING_VALUES
+TEST_CASE( "missing_data", "[missdata]" )
+{
+	DataSet data( 3 ); // 3 attributes
+	DataPoint dp( std::vector<std::string>{"1.1","2.2","3.3"} ); // regular point
+	data.addPoint( dp );
+	CHECK( data.nbAttribs() == 3 );
+	CHECK( data.size() == 1 );
+	CHECK( dp.nbMissingValues() == 0 );
+	CHECK( !dp.valueIsMissing(0) );
+	CHECK( !dp.valueIsMissing(1) );
+	CHECK( !dp.valueIsMissing(2) );
+
+	DataPoint dp2( std::vector<std::string>{"1.1","?","3.3"} ); // point with missing value
+	CHECK( !dp2.valueIsMissing(0) );
+	CHECK(  dp2.valueIsMissing(1) );
+	CHECK( !dp2.valueIsMissing(2) );
+
+	data.addPoint( dp2 );
+	CHECK( data.size() == 2 );
+	const auto& pt = data.getDataPoint (1);
+	CHECK( pt.nbMissingValues() == 1 );
+	CHECK( !pt.valueIsMissing(0) );
+	CHECK(  pt.valueIsMissing(1) );
+	CHECK( !pt.valueIsMissing(2) );
+}
+#endif
+
 //-------------------------------------------------------------------------------------------

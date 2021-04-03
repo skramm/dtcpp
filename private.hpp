@@ -12,16 +12,18 @@
 //#include <list>
 //#include <vector>
 
-#ifdef DEBUG
-	#define COUT if(1) std::cout << __FUNCTION__ << "(), l." << __LINE__ << ": "
-#else
-	#define COUT if(0) std::cout
-#endif // DEBUG
 
 #ifdef DEBUG_START
 	#define START if(1) std::cout << "* Start: " << __FUNCTION__ << "()\n"
 #else
 	#define START
+	#define DEBUG
+#endif // DEBUG
+
+#ifdef DEBUG
+	#define COUT if(1) std::cout << __FUNCTION__ << "(), l." << __LINE__ << ": "
+#else
+	#define COUT if(0) std::cout
 #endif // DEBUG
 
 #define LOG( level, msg ) \

@@ -13,7 +13,22 @@ using namespace dtcpp;
 
 int main( int argc, const char** argv )
 {
-	std::cout << argv[0] << ": build on " << __DATE__ << " with boost " << BOOST_VERSION << '\n';
+	std::cout << "* Build information:\n - build on " << __DATE__
+		<< "\n - boost version: " << BOOST_VERSION
+		<< "\n - missing values handling: "
+#ifdef HANDLE_MISSING_VALUES
+		<< "YES"
+#else
+		<< "NO"
+#endif // HANDLE_MISSING_VALUES
+		<< "\n - run-time checks: "
+#ifndef NDEBUG
+		<< "YES"
+#else
+		<< "NO"
+#endif // HANDLE_MISSING_VALUES
+	<< "\n* RunTime parameters:\n";
+
 	Fparams fparams;
 	Params  params;
 	argh::parser cmdl; //({ "-sep"});

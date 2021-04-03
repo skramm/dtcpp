@@ -313,8 +313,19 @@ class DataPoint
 		ClassVal _class = ClassVal(-1);  ///< Class of the datapoint, -1 for undefined
 
 #ifdef HANDLE_MISSING_VALUES
-		std::set<uint> _missingValues;
+		std::set<uint> _missingValues;  ///< holds indexes of the attributes with missing values
 	public:
+		size_t nbMissingValues() const
+		{
+			return _missingValues.size();
+		}
+		bool valueIsMissing( size_t idx ) const
+		{
+			assert( idx < nbAttribs() );
+			return ( _missingValues.find( idx ) != _missingValues.end() );
+
+		}
+/// This one is used when loading the data into memory
 		bool isMissingValue( std::string str ) const
 		{
 			for( const auto& mvs: DataSet::sv_MissingValueStrings )
@@ -514,6 +525,15 @@ enum class En_OR_method
 };
 
 //---------------------------------------------------------------------
+#ifdef HANDLE_MISSING_VALUES
+/// Missing value Strategy
+enum class En_MVS
+{
+	disablePoint,
+	setToMean
+};
+#endif
+//---------------------------------------------------------------------
 /// A dataset, holds a set of \ref DataPoint
 //template<typename T>
 class DataSet
@@ -521,11 +541,17 @@ class DataSet
 	public:
 		DataSet() : _nbAttribs(0)
 		{
+#ifdef HANDLE_MISSING_VALUES
+			DataSet::sv_MissingValueStrings.push_back("?");
+#endif
 //			g_params.p_dataset = this;
 		}
 		explicit DataSet( size_t nbAttribs ) : _nbAttribs(nbAttribs)
 		{
 			assert( nbAttribs );
+#ifdef HANDLE_MISSING_VALUES
+			DataSet::sv_MissingValueStrings.push_back("?");
+#endif
 //			g_params.p_dataset = this;
 		}
 
@@ -721,6 +747,7 @@ class DataSet
 
 #ifdef HANDLE_MISSING_VALUES
 		static std::vector<std::string> sv_MissingValueStrings;
+		static En_MVS                   s_MissingValueStrategy;
 #endif
 };
 //using DataSetf = DataSet<float>;
@@ -730,6 +757,7 @@ class DataSet
 //---------------------------------------------------------------------
 #ifdef HANDLE_MISSING_VALUES
 std::vector<std::string> DataSet::sv_MissingValueStrings;
+En_MVS                   DataSet::s_MissingValueStrategy = En_MVS::disablePoint;
 #endif
 //---------------------------------------------------------------------
 void
@@ -1049,12 +1077,20 @@ DataSet::computeStats( uint nbBins ) const
 		vat.reserve( size() );               // guarantees we won't have any reallocating
 		if( nbOutliers() == 0 )
 			for( const auto& point: _data )
+			{
+#ifdef HANDLE_MISSING_VALUES
+				if( !point.valueIsMissing( atIdx ) )
+#endif
 				vat.push_back( point.attribVal(atItx) );
+			}
 		else
 			for( size_t ptIdx=0; ptIdx<size(); ptIdx++ )
 			{
 				const auto& point = getDataPoint(ptIdx);
 				if( !pointIsOutlier(ptIdx) )
+#ifdef HANDLE_MISSING_VALUES
+				if( !point.valueIsMissing( atIdx ) )
+#endif
 					vat.push_back( point.attribVal(atItx) );
 			}
 
@@ -2666,16 +2702,32 @@ SearchBestIG(
 			const auto& point = data.getDataPoint(ptIdx);
 			if( !point.isClassLess() )
 			{
-				auto attribVal = point.attribVal( atIdx );
-				if( attribVal < v_thresVal[i] )
+#ifdef HANDLE_MISSING_VALUES
+				bool usePoint = true;
+				if( point.valueIsMissing( atIdx ) )
 				{
-					m_LT[ point.classVal() ]++;
-					nb_LT[i]++;
+					switch( DataSet::s_MissingValueStrategy )
+					{
+						case En_MVS::disablePoint: usePoint=false; break
+						case En_MVS::setToMean: assert(0);
+							break;
+						default: assert(0);
+					}
 				}
-				else
+				if( usePoint )
+#endif
 				{
-					m_HT[ point.classVal() ]++;
-					nb_HT++;
+					auto attribVal = point.attribVal( atIdx );
+					if( attribVal < v_thresVal[i] )
+					{
+						m_LT[ point.classVal() ]++;
+						nb_LT[i]++;
+					}
+					else
+					{
+						m_HT[ point.classVal() ]++;
+						nb_HT++;
+					}
 				}
 			}
 		}

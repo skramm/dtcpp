@@ -126,18 +126,25 @@ For the test build only:
 * Catch2: https://github.com/catchorg/Catch2/
 (tested with catch 2.13.4)
 
-### Build option
+### Build
 
 The build is make based.
 Several options are available and can be passe to make in the form: <br>
 ```
-* make <target> <option={Y|N}
+$ make <target> <option={Y|N}>
 ```
 ### Targets
 
+* `all`
+* `doc`: builds Doxygen pages (please do, lots of additional info !). Needs the Graphviz package
+* `cleandoc`: erases Doxygen pages
+* `dot`: calls Graphviz to build the rendering of the tree, from the generated dot files (see [Graphical rendering](misc/graphical_rendering.md) )
+* `plt`: calls gnuplot to build the graphs from the generated plot scripts
 * `clean`
 * `cleanout`
 * `cleanall`
+* `test`: runs the tests
+* `check`: runs cppcheck (light static analysis)
 
 ### Options
 

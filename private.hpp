@@ -15,16 +15,16 @@
 
 #ifdef DEBUG_START
 	#define START if(1) std::cout << "* Start: " << __FUNCTION__ << "()\n"
+	#define DEBUG
 #else
 	#define START
-	#define DEBUG
-#endif // DEBUG
+#endif
 
 #ifdef DEBUG
 	#define COUT if(1) std::cout << __FUNCTION__ << "(), l." << __LINE__ << ": "
 #else
 	#define COUT if(0) std::cout
-#endif // DEBUG
+#endif
 
 #define LOG( level, msg ) \
 	{ \

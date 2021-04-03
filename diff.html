@@ -1,0 +1,521 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<!-- This file was created with the aha Ansi HTML Adapter. http://ziz.delphigl.com/tool_aha.php -->
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="application/xml+xhtml; charset=UTF-8" />
+<title>stdin</title>
+</head>
+<body>
+<pre>
+commit 55b63b47baa732ecee40d234f0c32bc9a4d1dee0
+Author: skramm &lt;sebastien.kramm@univ-rouen.fr&gt;
+Date:   Wed Mar 17 00:02:29 2021 +0100
+
+    attempt to create SrcDataset, probably dead branch
+
+<span style="color:teal;font-weight:bold;">diff --git a/dectree.cpp b/dectree.cpp</span>
+index fae691c..8f344ce 100755
+<span style="color:red;">--- a/dectree.cpp</span>
+<span style="color:green;">+++ b/dectree.cpp</span>
+<span style="color:teal;">@@ -26,6 +26,8 @@ using namespace dtcpp;</span>
+ 
+ int main( int argc, const char** argv )
+ {
+<span style="color:green;">+	std::cout &lt;&lt; &quot;argv2=&quot; &lt;&lt; argv[2]  &lt;&lt; &quot; argv[3]&quot; &lt;&lt; argv[3]  &lt;&lt; '\n';</span>
+<span style="color:green;">+//	std::exit(0);</span>
+ 	std::cout &lt;&lt; argv[0] &lt;&lt; &quot;: build on &quot; &lt;&lt; __DATE__ &lt;&lt; &quot; with boost &quot; &lt;&lt; BOOST_VERSION &lt;&lt; '\n';
+ 	Fparams fparams;
+ 	Params  params;
+<span style="color:teal;">@@ -100,7 +102,7 @@ int main( int argc, const char** argv )</span>
+ 		doRemoveOutliers = true;
+ 	std::cout &lt;&lt; &quot; - removal of outliers: &quot; &lt;&lt; std::boolalpha &lt;&lt; doRemoveOutliers &lt;&lt; '\n';
+ 
+<span style="color:red;">-	DataSet dataset;</span>
+<span style="color:green;">+	SrcDataSet dataset;</span>
+ 	if( !dataset.load( fname, fparams ) )
+ 	{
+ 		std::cerr &lt;&lt; &quot;Error, unable to load data file: &quot; &lt;&lt; fname &lt;&lt; '\n';
+<span style="color:teal;font-weight:bold;">diff --git a/dtcpp.h b/dtcpp.h</span>
+index 1cdc895..12108e9 100755
+<span style="color:red;">--- a/dtcpp.h</span>
+<span style="color:green;">+++ b/dtcpp.h</span>
+<span style="color:teal;">@@ -66,6 +66,9 @@ namespace dtcpp {</span>
+ 	}
+ 
+ 
+<span style="color:green;">+//forward declaration</span>
+<span style="color:green;">+class SrcDataSet;</span>
+<span style="color:green;">+</span>
+ // % % % % % % % % % % % % % %
+ /// private namespace; not part of API
+ namespace priv {
+<span style="color:teal;">@@ -117,6 +120,7 @@ struct Gparams</span>
+ 	{
+ 		timer.start();
+ 	}
+<span style="color:green;">+	const SrcDataSet* p_dataset = nullptr;  ///&lt; pointer on current dataset</span>
+ };
+ 
+ //---------------------------------------------------------------------
+<span style="color:teal;">@@ -372,6 +376,7 @@ public:</span>
+ class DataPoint
+ {
+ //	template&lt;typename U&gt;
+<span style="color:green;">+//	friend class SrcDataSet;</span>
+ 	friend class DataSet;
+ 
+ 	private:
+<span style="color:teal;">@@ -447,12 +452,8 @@ class DataPoint</span>
+ 			assert( vec.size() == nbAttribs() );
+ 			_attrValue = vec;
+ 		}
+<span style="color:red;">-		void print( std::ostream&amp; f ) const</span>
+<span style="color:red;">-		{</span>
+<span style="color:red;">-			for( const auto&amp; v: _attrValue )</span>
+<span style="color:red;">-				f &lt;&lt; v &lt;&lt; ' ';</span>
+<span style="color:red;">-			f &lt;&lt; classVal() &lt;&lt; '\n';</span>
+<span style="color:red;">-		}</span>
+<span style="color:green;">+		void print( std::ostream&amp; f ) const;</span>
+<span style="color:green;">+</span>
+ 		friend std::ostream&amp; operator &lt;&lt; ( std::ostream&amp; f, const DataPoint&amp; pt )
+ 		{
+ 			f &lt;&lt; &quot;Datapoint: &quot;;
+<span style="color:teal;">@@ -530,7 +531,8 @@ struct DatasetStats</span>
+ 		}
+ };
+ //---------------------------------------------------------------------
+<span style="color:red;">-/// Used in TrainingTree to map a class value to an index in the \ref ConfusionMatrix</span>
+<span style="color:green;">+/// Used in TrainingTree to map a class value to an index in the \ref ConfusionMatrix.</span>
+<span style="color:green;">+/// See DataSet::getClassIndexMap()</span>
+ using ClassIndexMap = boost::bimap&lt;
+ 	ClassVal,     // defaults to boost::bimaps::set_of&lt;ClassVal&gt;
+ 	size_t        // defaults to boost::bimaps::set_of&lt;size_t&gt;
+<span style="color:teal;">@@ -556,11 +558,19 @@ enum class En_OR_method</span>
+ //template&lt;typename T&gt;
+ class DataSet
+ {
+<span style="color:green;">+	friend class DataPoint;</span>
+ 	public:
+ 		DataSet() : _nbAttribs(0)
+<span style="color:red;">-		{}</span>
+<span style="color:green;">+		{</span>
+<span style="color:green;">+//			g_params.p_dataset = this;</span>
+<span style="color:green;">+		}</span>
+ 		DataSet( size_t nbAttribs ) : _nbAttribs(nbAttribs)
+<span style="color:red;">-		{ assert( nbAttribs ); }</span>
+<span style="color:green;">+		{</span>
+<span style="color:green;">+			assert( nbAttribs );</span>
+<span style="color:green;">+//			g_params.p_dataset = this;</span>
+<span style="color:green;">+		}</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+//		DataSet(const DataSet&amp; ) = delete;</span>
+ 
+ 		size_t size() const
+ 		{ return _data.size(); }
+<span style="color:teal;">@@ -587,26 +597,6 @@ class DataSet</span>
+ 			return _data.end();
+ 		}
+ 
+<span style="color:red;">-//		template&lt;typename U&gt;</span>
+<span style="color:red;">-		void addPoint( const DataPoint&amp; dp )</span>
+<span style="color:red;">-		{</span>
+<span style="color:red;">-#ifdef DTCPP_ERRORS_ASSERT</span>
+<span style="color:red;">-			assert( dp.nbAttribs() == _nbAttribs );</span>
+<span style="color:red;">-#else</span>
+<span style="color:red;">-			if( dp.nbAttribs() != _nbAttribs )</span>
+<span style="color:red;">-				throw std::runtime_error(</span>
+<span style="color:red;">-					&quot;nb attrib: point=&quot; + std::to_string( dp.nbAttribs() )</span>
+<span style="color:red;">-					+ &quot; dataset=&quot; + std::to_string( _nbAttribs )</span>
+<span style="color:red;">-				);</span>
+<span style="color:red;">-#endif // DTCPP_ERRORS_ASSERT</span>
+<span style="color:red;">-			_data.push_back( dp );</span>
+<span style="color:red;">-</span>
+<span style="color:red;">-			if( dp.classVal().get() &gt;= 0 )</span>
+<span style="color:red;">-				_classCount[dp.classVal()]++;</span>
+<span style="color:red;">-			else</span>
+<span style="color:red;">-				_nbNoClassPoints++;</span>
+<span style="color:red;">-			_noChange = false;</span>
+<span style="color:red;">-		}</span>
+ //		template&lt;typename U&gt;
+ 		DataPoint&amp; getDataPoint( size_t idx )
+ 		{
+<span style="color:teal;">@@ -629,33 +619,140 @@ class DataSet</span>
+ 			assert( idx &lt; _data.size() );
+ 			return _data[idx];
+ 		}
+<span style="color:red;">-		bool load( std::string fname, const Fparams=Fparams() );</span>
+ 		void print( std::ostream&amp; ) const;
+ 		void print( std::ostream&amp;, const std::vector&lt;uint&gt;&amp; ) const;
+ 		void printInfo( std::ostream&amp;, const char* name=0 ) const;
+<span style="color:red;">-		void generateClassDistrib( std::string fname ) const;</span>
+<span style="color:red;">-</span>
+<span style="color:red;">-		template&lt;typename T&gt;</span>
+<span style="color:red;">-		void generateAttribPlot( std::string fname, const DatasetStats&lt;T&gt;&amp; ) const;</span>
+ 
+ 		void clear()
+ 		{
+ 			_data.clear();
+<span style="color:green;">+			_nbNoClassPoints = 0u;</span>
+ 			_classCount.clear();
+ 			_nbNoClassPoints = 0u;
+<span style="color:red;">-			clearOutliers();</span>
+<span style="color:red;">-			_noChange = false;</span>
+<span style="color:green;">+//			_noChange = false;</span>
+ 		}
+ 		std::pair&lt;DataSet,DataSet&gt; getFolds( uint i, uint nbFolds ) const;
+ 
+<span style="color:green;">+		void addPoint( const DataPoint&amp; dp )</span>
+<span style="color:green;">+		{</span>
+<span style="color:green;">+#ifdef DTCPP_ERRORS_ASSERT</span>
+<span style="color:green;">+			assert( dp.nbAttribs() == _nbAttribs );</span>
+<span style="color:green;">+#else</span>
+<span style="color:green;">+			if( dp.nbAttribs() != nbAttribs() )</span>
+<span style="color:green;">+				throw std::runtime_error(</span>
+<span style="color:green;">+					&quot;nb attrib: point=&quot; + std::to_string( dp.nbAttribs() )</span>
+<span style="color:green;">+					+ &quot; dataset=&quot; + std::to_string( nbAttribs() )</span>
+<span style="color:green;">+				);</span>
+<span style="color:green;">+#endif // DTCPP_ERRORS_ASSERT</span>
+<span style="color:green;">+			_data.push_back( dp );</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+			if( dp.classVal().get() &gt;= 0 )</span>
+<span style="color:green;">+				_classCount[dp.classVal()]++;</span>
+<span style="color:green;">+			else</span>
+<span style="color:green;">+				_nbNoClassPoints++;</span>
+<span style="color:green;">+//			_noChange = false;</span>
+<span style="color:green;">+		}</span>
+<span style="color:green;">+</span>
+ /// Shuffle the data (taken from https://stackoverflow.com/a/6926473/193789)
+ 		void shuffle()
+ 		{
+ 			std::shuffle(std::begin(_data), std::end(_data), std::random_device() );
+ 		}
+<span style="color:green;">+</span>
+<span style="color:green;">+		size_t nbClasses( const std::vector&lt;uint&gt;&amp; ) const;</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+/// Returns nb of classes in the dataset, \b NOT considering the points without any class assigned</span>
+<span style="color:green;">+		size_t nbClasses() const</span>
+<span style="color:green;">+		{</span>
+<span style="color:green;">+			return _classCount.size();</span>
+<span style="color:green;">+		}</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+/// Returns the number of points with class \c val (or number of non-assigned points if \c val=-1)</span>
+<span style="color:green;">+		size_t getClassCount( ClassVal val ) const</span>
+<span style="color:green;">+		{</span>
+<span style="color:green;">+			if( val == ClassVal(-1) )</span>
+<span style="color:green;">+				return _nbNoClassPoints;</span>
+<span style="color:green;">+			if( _classCount.count( val ) )    // we test first, because it might not be present</span>
+<span style="color:green;">+				return _classCount.at(val);</span>
+<span style="color:green;">+			return 0u;</span>
+<span style="color:green;">+		}</span>
+<span style="color:green;">+		const auto&amp; getClassCountMap() const</span>
+<span style="color:green;">+		{</span>
+<span style="color:green;">+			return _classCount;</span>
+<span style="color:green;">+		}</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+	private:</span>
+<span style="color:green;">+		void p_countClasses();</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+	private:</span>
+<span style="color:green;">+		std::map&lt;ClassVal,uint&gt; _classCount;            ///&lt; Holds the number of points for each class value. Does \b NOT count classless points</span>
+<span style="color:green;">+		size_t                  _nbAttribs = 0;</span>
+<span style="color:green;">+		std::vector&lt;DataPoint&gt;  _data;</span>
+<span style="color:green;">+		uint                    _nbNoClassPoints = 0u;</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+};</span>
+<span style="color:green;">+//using DataSetf = DataSet&lt;float&gt;;</span>
+<span style="color:green;">+//using DataSetd = DataSet&lt;double&gt;;</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+//---------------------------------------------------------------------</span>
+<span style="color:green;">+/// Source dataset</span>
+<span style="color:green;">+class SrcDataSet : public DataSet</span>
+<span style="color:green;">+{</span>
+<span style="color:green;">+	public:</span>
+<span style="color:green;">+/*		SrcDataSet() : _nbAttribs(0)</span>
+<span style="color:green;">+		{</span>
+<span style="color:green;">+			g_params.p_dataset = this;</span>
+<span style="color:green;">+		}*/</span>
+<span style="color:green;">+		SrcDataSet( size_t nbAttribs ) : DataSet(nbAttribs)</span>
+<span style="color:green;">+		{</span>
+<span style="color:green;">+			g_params.p_dataset = this;</span>
+<span style="color:green;">+		}</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+		void clear()</span>
+<span style="color:green;">+		{</span>
+<span style="color:green;">+			DataSet::clear();</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+			clearOutliers();</span>
+<span style="color:green;">+			_noChange = false;</span>
+<span style="color:green;">+		}</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+		bool load( std::string fname, const Fparams=Fparams() );</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+//		template&lt;typename U&gt;</span>
+<span style="color:green;">+		void addPoint( const DataPoint&amp; dp )</span>
+<span style="color:green;">+		{</span>
+<span style="color:green;">+			DataSet::addPoint( dp );</span>
+<span style="color:green;">+		}</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+		uint getIndexFromClass( ClassVal ) const;</span>
+<span style="color:green;">+		ClassVal getClassFromIndex( uint ) const;</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+		template&lt;typename HISTO&gt;</span>
+<span style="color:green;">+		std::vector&lt;std::pair&lt;uint,uint&gt;&gt; countClassPerBin( size_t, const HISTO&amp; ) const;</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+		template&lt;typename T&gt;</span>
+<span style="color:green;">+		void generateAttribPlot( std::string fname, const DatasetStats&lt;T&gt;&amp; ) const;</span>
+<span style="color:green;">+</span>
+ 		template&lt;typename T&gt;
+ 		DatasetStats&lt;T&gt; computeStats( uint nbBins ) const;
+ 
+<span style="color:green;">+		void generateClassDistrib( std::string fname ) const;</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+/// Builds (if needed) and return a map giving for each class value (say 1,4,7) the corresponding index (0,1,2)</span>
+<span style="color:green;">+		ClassIndexMap getClassIndexMap() const</span>
+<span style="color:green;">+		{</span>
+<span style="color:green;">+			if( _noChange )</span>
+<span style="color:green;">+				return _classIndexMap;</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+			_classIndexMap.clear();</span>
+<span style="color:green;">+			size_t i = 0;</span>
+<span style="color:green;">+			for( const auto&amp; cc: getClassCountMap() )  // for each class value, fill</span>
+<span style="color:green;">+//				cim[cc.first] = i++;            // the map with an incremental index</span>
+<span style="color:green;">+				_classIndexMap.insert( ClassIndexMap::value_type( cc.first, i++ ) );            // the map with an incremental index</span>
+<span style="color:green;">+			return _classIndexMap;</span>
+<span style="color:green;">+		}</span>
+<span style="color:green;">+</span>
+ /// \name Outlier handling
+ ///@{
+ 		template&lt;typename T&gt;
+<span style="color:teal;">@@ -681,55 +778,49 @@ class DataSet</span>
+ 			return _nbOutliers;
+ 		}
+ 		DataSet getSetWithoutOutliers() const;
+<span style="color:red;">-</span>
+ ///@}
+<span style="color:red;">-		size_t nbClasses( const std::vector&lt;uint&gt;&amp; ) const;</span>
+<span style="color:red;">-</span>
+<span style="color:red;">-/// Returns nb of classes in the dataset, \b NOT considering the points without any class assigned</span>
+<span style="color:red;">-		size_t nbClasses() const</span>
+<span style="color:red;">-		{</span>
+<span style="color:red;">-			return _classCount.size();</span>
+<span style="color:red;">-		}</span>
+<span style="color:red;">-</span>
+<span style="color:red;">-		ClassIndexMap getClassIndexMap() const</span>
+<span style="color:red;">-		{</span>
+<span style="color:red;">-			ClassIndexMap cim;</span>
+<span style="color:red;">-			size_t i = 0;</span>
+<span style="color:red;">-			for( const auto&amp; cc: _classCount )  // for each class value, fill</span>
+<span style="color:red;">-//				cim[cc.first] = i++;            // the map with an incremental index</span>
+<span style="color:red;">-				cim.insert( ClassIndexMap::value_type( cc.first, i++ ) );            // the map with an incremental index</span>
+<span style="color:red;">-			return cim;</span>
+<span style="color:red;">-		}</span>
+<span style="color:red;">-		template&lt;typename HISTO&gt;</span>
+<span style="color:red;">-		std::vector&lt;std::pair&lt;uint,uint&gt;&gt; countClassPerBin( size_t, const HISTO&amp; ) const;</span>
+<span style="color:red;">-</span>
+<span style="color:red;">-/// Returns the number of points with class \c val (or number of non-assigned points if \c val=-1)</span>
+<span style="color:red;">-		size_t getClassCount( ClassVal val ) const</span>
+<span style="color:red;">-		{</span>
+<span style="color:red;">-			if( val == ClassVal(-1) )</span>
+<span style="color:red;">-				return _nbNoClassPoints;</span>
+<span style="color:red;">-			if( _classCount.count( val ) )    // we test first, because it might not be present</span>
+<span style="color:red;">-				return _classCount.at(val);</span>
+<span style="color:red;">-			return 0u;</span>
+<span style="color:red;">-		}</span>
+ 
+ 	private:
+<span style="color:red;">-		void p_countClasses();</span>
+ 		void p_parseTokens( std::vector&lt;std::string&gt;&amp;, const Fparams&amp;, std::map&lt;std::string,uint&gt;&amp;, uint&amp;, size_t );
+ 
+<span style="color:green;">+	public:</span>
+<span style="color:green;">+		static bool sPrintRealClassValue;</span>
+<span style="color:green;">+</span>
+ 	private:
+<span style="color:red;">-		size_t                  _nbAttribs = 0;</span>
+<span style="color:red;">-		std::vector&lt;DataPoint&gt;  _data;</span>
+<span style="color:red;">-		std::map&lt;ClassVal,uint&gt; _classCount;            ///&lt; Holds the number of points for each class value. Does \b NOT count classless points</span>
+<span style="color:red;">-		uint                    _nbNoClassPoints = 0u;</span>
+<span style="color:red;">-		std::vector&lt;bool&gt;       _vIsOutlier;            ///&lt; Will be allocated ONLY if tagOutliers() is called, with En_OR_method::disablePoint</span>
+<span style="color:green;">+		mutable ClassIndexMap   _classIndexMap;         ///&lt; holds correspondence between real class values (say, 1,4,7) and corresponding indexes (0,1,2)</span>
+<span style="color:green;">+		bool                    _noChange = false;</span>
+ 		size_t                  _nbOutliers = 0;        ///&lt; to avoid recounting them when unneeded
+ 		std::string             _fname;                 ///&lt; file name (saved so it can be printed out in output files)
+<span style="color:red;">-		bool                    _noChange = false;</span>
+<span style="color:green;">+		std::vector&lt;bool&gt;       _vIsOutlier;            ///&lt; Will be allocated ONLY if tagOutliers() is called, with En_OR_method::disablePoint</span>
+ };
+<span style="color:red;">-//using DataSetf = DataSet&lt;float&gt;;</span>
+<span style="color:red;">-//using DataSetd = DataSet&lt;double&gt;;</span>
+ 
+<span style="color:green;">+bool SrcDataSet::sPrintRealClassValue = true;</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+//---------------------------------------------------------------------</span>
+<span style="color:green;">+void</span>
+<span style="color:green;">+DataPoint::print( std::ostream&amp; f ) const</span>
+<span style="color:green;">+{</span>
+<span style="color:green;">+	for( const auto&amp; v: _attrValue )</span>
+<span style="color:green;">+		f &lt;&lt; v &lt;&lt; ' ';</span>
+<span style="color:green;">+	if( SrcDataSet::sPrintRealClassValue )</span>
+<span style="color:green;">+		f &lt;&lt; classVal();</span>
+<span style="color:green;">+	else</span>
+<span style="color:green;">+		f &lt;&lt; g_params.p_dataset-&gt;getIndexFromClass( classVal() );</span>
+<span style="color:green;">+	f &lt;&lt; '\n';</span>
+<span style="color:green;">+}</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+//---------------------------------------------------------------------</span>
+<span style="color:green;">+uint</span>
+<span style="color:green;">+SrcDataSet::getIndexFromClass( ClassVal cval ) const</span>
+<span style="color:green;">+{</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+}</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+ClassVal</span>
+<span style="color:green;">+SrcDataSet::getClassFromIndex( uint idx ) const</span>
+<span style="color:green;">+{</span>
+<span style="color:green;">+</span>
+<span style="color:green;">+}</span>
+ 
+ //---------------------------------------------------------------------
+ /// Writes in current folder a file named &lt;code&gt;attrib_histo_&lt;i&gt;.dat&lt;/code&gt;, holding
+<span style="color:teal;">@@ -762,7 +853,8 @@ genAttribHisto(</span>
+ 
+ 	std::for_each( vat.begin(), vat.end(), std::ref(h) );
+ 
+<span style="color:red;">-	f &lt;&lt; &quot;# histogram for attribute &quot; &lt;&lt; atIdx &lt;&lt; '\n';</span>
+<span style="color:green;">+	f &lt;&lt; &quot;# histogram for attribute &quot; &lt;&lt; atIdx</span>
+<span style="color:green;">+		&lt;&lt; &quot;\n# index - low thres - high thres - Nb values - %\n&quot;;</span>
+ 	for( const auto&amp; x: boost::histogram::indexed(h) )
+ 		f &lt;&lt; x.index()+1 &lt;&lt; sep &lt;&lt; x.bin().lower() &lt;&lt; sep &lt;&lt; x.bin().upper() &lt;&lt; sep &lt;&lt; *x &lt;&lt; sep &lt;&lt; 100. * *x/nbPts &lt;&lt;  '\n';
+ 	return h;
+<span style="color:teal;">@@ -827,7 +919,7 @@ Isn't that a problem ?</span>
+ */
+ template&lt;typename HISTO&gt;
+ std::vector&lt;std::pair&lt;uint,uint&gt;&gt;
+<span style="color:red;">-DataSet::countClassPerBin( size_t attrIdx, const HISTO&amp; histo ) const</span>
+<span style="color:green;">+SrcDataSet::countClassPerBin( size_t attrIdx, const HISTO&amp; histo ) const</span>
+ {
+ 	auto nbBins = histo.size();
+ 	std::vector&lt;std::set&lt;ClassVal&gt;&gt; classSets( nbBins ); // one set of classes per bin
+<span style="color:teal;">@@ -950,7 +1042,7 @@ Default behavior is to discard dataset points that have an attribute more than 2</span>
+ */
+ template&lt;typename T&gt;
+ void
+<span style="color:red;">-DataSet::tagOutliers( const DatasetStats&lt;T&gt;&amp; stats, En_OD_method odm, En_OR_method orm, float param )</span>
+<span style="color:green;">+SrcDataSet::tagOutliers( const DatasetStats&lt;T&gt;&amp; stats, En_OD_method odm, En_OR_method orm, float param )</span>
+ {
+ 	_nbOutliers = 0;
+ 	if( orm == En_OR_method::disablePoint )
+<span style="color:teal;">@@ -993,7 +1085,7 @@ Done by storing for a given attribute all the values in a vector, then computing</span>
+ */
+ template&lt;typename T&gt;
+ DatasetStats&lt;T&gt;
+<span style="color:red;">-DataSet::computeStats( uint nbBins ) const</span>
+<span style="color:green;">+SrcDataSet::computeStats( uint nbBins ) const</span>
+ {
+ 	START;
+ 	auto fplot = priv::openOutputFile( &quot;plot_attrib_histo&quot;, priv::FT_PLT, _fname );
+<span style="color:teal;">@@ -1094,13 +1186,13 @@ The \c index defines which fraction of the points are returned in the test set</span>
+ 
+ If some points have been tagged as outliers, then they will \b not be included in the two returned sets.
+ */
+<span style="color:red;">-std::pair&lt;DataSet,DataSet&gt;</span>
+<span style="color:red;">-DataSet::getFolds( uint index, uint nbFolds ) const</span>
+<span style="color:green;">+std::pair&lt;SrcDataSet,SrcDataSet&gt;</span>
+<span style="color:green;">+SrcDataSet::getFolds( uint index, uint nbFolds ) const</span>
+ {
+<span style="color:red;">- 	DataSet ds_train( nbAttribs() );</span>
+<span style="color:red;">- 	DataSet ds_test(  nbAttribs() );</span>
+<span style="color:green;">+ 	SrcDataSet ds_train( nbAttribs() );</span>
+<span style="color:green;">+ 	SrcDataSet ds_test(  nbAttribs() );</span>
+ 
+<span style="color:red;">-	DataSet ds2 = getSetWithoutOutliers();</span>
+<span style="color:green;">+	SrcDataSet ds2 = getSetWithoutOutliers();</span>
+ 
+ 	uint nb = ds2.size() / nbFolds;
+ 	for( uint i=0; i&lt;ds2.size(); i++ )
+<span style="color:teal;">@@ -1122,7 +1214,7 @@ DataSet::getFolds( uint index, uint nbFolds ) const</span>
+ namespace priv {
+ // % % % % % % % % % % % % % %
+ 
+<span style="color:red;">-/// Helper function for DataSet::generateAttribPlot()</span>
+<span style="color:green;">+/// Helper function for SrcDataSet::generateAttribPlot()</span>
+ void addVerticalLine( std::ostream&amp; f, std::string label, float vpos, float xpos, std::string color )
+ {
+ 	f &lt;&lt; &quot;set arrow from &quot; &lt;&lt; xpos &lt;&lt; &quot;, graph 0 to &quot; &lt;&lt; xpos &lt;&lt; &quot;, graph 1 nohead lc rgb '&quot;
+<span style="color:teal;">@@ -1145,9 +1237,9 @@ Moreover, you can always tweak the generated script to fit your needs.</span>
+ */
+ template&lt;typename T&gt;
+ void
+<span style="color:red;">-DataSet::generateAttribPlot(</span>
+<span style="color:red;">-	std::string fname, ///&lt; File name, no extension (the 2 files will have that name, with extensions .plt and .csv)</span>
+<span style="color:red;">-	const DatasetStats&lt;T&gt;&amp; dss</span>
+<span style="color:green;">+SrcDataSet::generateAttribPlot(</span>
+<span style="color:green;">+	std::string            fname,   ///&lt; File name, no extension (the 2 files will have that name, with extensions .plt and .csv)</span>
+<span style="color:green;">+	const DatasetStats&lt;T&gt;&amp; dss      ///&lt; stats of attribute, needed to fraw lines for median, mean, stddev.</span>
+ ) const
+ {
+ 	START;
+<span style="color:teal;">@@ -1164,7 +1256,8 @@ DataSet::generateAttribPlot(</span>
+ 	f1 &lt;&lt; '\n';
+ 
+ 	auto f = priv::openOutputFile( fname, priv::FT_PLT, _fname );
+<span style="color:red;">-	f &lt;&lt; &quot;set ylabel 'CLASS'&quot;</span>
+<span style="color:green;">+	f &lt;&lt; &quot;set ylabel 'Class Index'&quot;</span>
+<span style="color:green;">+		&lt;&lt; &quot;\nset y2label 'Class Label'&quot;</span>
+ 		&lt;&lt; &quot;\nset yrange [-0.5:&quot; &lt;&lt; nbClasses()-0.5f &lt;&lt; ']'
+ 		&lt;&lt; &quot;\nclass=&quot; &lt;&lt; nbAttribs()+1
+ 		&lt;&lt; &quot;\nset datafile separator ' '&quot;
+<span style="color:teal;">@@ -1192,7 +1285,7 @@ DataSet::generateAttribPlot(</span>
+ //---------------------------------------------------------------------
+ /// Helper member function for DataSet::load()
+ void
+<span style="color:red;">-DataSet::p_parseTokens(</span>
+<span style="color:green;">+SrcDataSet::p_parseTokens(</span>
+ 	std::vector&lt;std::string&gt;&amp;   v_tok,             ///&lt; string tokens read on line
+ 	const Fparams&amp;              params,            ///&lt; parameters
+ 	std::map&lt;std::string,uint&gt;&amp; classStringMap,    ///&lt; class to string map, used if class is given as a string
+<span style="color:teal;">@@ -1247,7 +1340,7 @@ DataSet::p_parseTokens(</span>
+ /// Load data file into memory, returns false on failure
+ //template&lt;typename T&gt;
+ bool
+<span style="color:red;">-DataSet::load( std::string fname, const Fparams params )</span>
+<span style="color:green;">+SrcDataSet::load( std::string fname, const Fparams params )</span>
+ {
+ 	std::ifstream f( fname );
+ 	if( !f.is_open() )
+<span style="color:teal;">@@ -1313,7 +1406,7 @@ DataSet::load( std::string fname, const Fparams params )</span>
+ //---------------------------------------------------------------------
+ /// Generates both data files and Gnuplot script of the class distribution among the dataset
+ void
+<span style="color:red;">-DataSet::generateClassDistrib( std::string fname ) const</span>
+<span style="color:green;">+SrcDataSet::generateClassDistrib( std::string fname ) const</span>
+ {
+ 	START;
+ 	auto fhisto = priv::openOutputFile( fname, priv::FT_DAT, _fname );
+<span style="color:teal;font-weight:bold;">diff --git a/histac.hpp b/histac.hpp</span>
+index 1b95ccd..ae206c9 100644
+<span style="color:red;">--- a/histac.hpp</span>
+<span style="color:green;">+++ b/histac.hpp</span>
+<span style="color:teal;">@@ -354,8 +354,8 @@ VBS_Histogram&lt;T,KEY&gt;::splitSearch()</span>
+ {
+ 	START;
+ 	COUT &lt;&lt; &quot;\n* Start splitting, nb bins=&quot; &lt;&lt; nbBins() &lt;&lt; '\n';
+<span style="color:red;">-	printInfo( std::cout );</span>
+<span style="color:red;">-	::priv::printMap( std::cout, _mCCount );</span>
+<span style="color:green;">+//	printInfo( std::cout );</span>
+<span style="color:green;">+//	::priv::printMap( std::cout, _mCCount );</span>
+ 	size_t iter1 = 0;
+ 	bool splitOccured = false;
+ 	do
+<span style="color:teal;">@@ -382,7 +382,7 @@ VBS_Histogram&lt;T,KEY&gt;::mergeSearch()</span>
+ {
+ 	START;
+ 	COUT &lt;&lt; &quot;\n* Start merge search\n&quot;;
+<span style="color:red;">-	::priv::printMap( std::cout, _mCCount );</span>
+<span style="color:green;">+//	::priv::printMap( std::cout, _mCCount );</span>
+ //	print( std::cout );
+ 
+ 	size_t countNbMerge = 0;
+</pre>
+</body>
+</html>

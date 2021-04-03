@@ -26,7 +26,19 @@ int main( int argc, const char** argv )
 		<< "YES"
 #else
 		<< "NO"
-#endif // HANDLE_MISSING_VALUES
+#endif
+		<< "\n - DEBUG: "
+#ifdef DEBUG
+		<< "YES"
+#else
+		<< "NO"
+#endif
+		<< "\n - DEBUGS: "
+#ifdef DEBUGS
+		<< "YES"
+#else
+		<< "NO"
+#endif
 	<< "\n* RunTime parameters:\n";
 
 	Fparams fparams;
@@ -63,6 +75,9 @@ int main( int argc, const char** argv )
 		g_params.verbose = true;
 		std::cout << " - enabling logging with level " << g_params.verboseLevel << '\n';
 	}
+	else
+		std::cout << " - no logging\n";
+
 
 	auto str_maxDepth = cmdl("md").str();
 	if( !str_maxDepth.empty() )

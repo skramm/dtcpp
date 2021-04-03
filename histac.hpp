@@ -15,7 +15,8 @@
 
 namespace histac {
 
-/// Histogram binning. List of techniques on algorithm behavior when we reach the max depth, see HParams
+/// Histogram binning. List of techniques on algorithm behavior when we
+/// reach the max depth, see HParams
 enum class EN_MDB
 {
 	discardNonMajPoints,  ///< search for the class that is majority, and discard the other points in the bin

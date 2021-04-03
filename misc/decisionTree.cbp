@@ -78,6 +78,12 @@
 		<Unit filename="Doxyfile">
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
+		<Unit filename="doc_pages.md">
+			<Option target="main" />
+		</Unit>
+		<Unit filename="graphical_rendering.md">
+			<Option target="main" />
+		</Unit>
 		<Extensions>
 			<lib_finder disable_auto="1" />
 		</Extensions>

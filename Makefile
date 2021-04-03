@@ -62,16 +62,6 @@ endif
 all: $(BIN_DIR)/dectree
 	@echo "done"
 
-run: all
-	$(BIN_DIR)/dectree sample_data/iris.data -sep "," -cs -ll 4
-
-# iris dataset
-run2: all
-	$(BIN_DIR)/dectree sample_data/iris.data -sep "," -cs -nf 5
-
-run3: all
-	$(BIN_DIR)/dectree sample_data/winequality-white.csv -sep ";" -cs -ll 0
-
 check:
 	cppcheck . --enable=all 2>cppcheck.log
 	xdg-open cppcheck.log

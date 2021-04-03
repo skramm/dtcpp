@@ -325,14 +325,7 @@ class DataPoint
 			return ( _missingValues.find( idx ) != _missingValues.end() );
 
 		}
-/// This one is used when loading the data into memory
-		bool isMissingValue( std::string str ) const
-		{
-			for( const auto& mvs: DataSet::sv_MissingValueStrings )
-				if( mvs == str )
-					return true;
-			return false;
-		}
+		bool isMissingValue( std::string str ) const;
 #endif
 
 	public:
@@ -530,7 +523,7 @@ enum class En_OR_method
 enum class En_MVS
 {
 	disablePoint,
-	setToMean
+	setToMean   ///< used mean value of attribute \todoM 20210403: not implemented yet !
 };
 #endif
 //---------------------------------------------------------------------
@@ -758,6 +751,16 @@ class DataSet
 #ifdef HANDLE_MISSING_VALUES
 std::vector<std::string> DataSet::sv_MissingValueStrings;
 En_MVS                   DataSet::s_MissingValueStrategy = En_MVS::disablePoint;
+
+/// Used when loading the data into memory
+bool
+DataPoint::isMissingValue( std::string str ) const
+{
+	for( const auto& mvs: DataSet::sv_MissingValueStrings )
+		if( mvs == str )
+			return true;
+	return false;
+}
 #endif
 //---------------------------------------------------------------------
 void
@@ -1071,7 +1074,7 @@ DataSet::computeStats( uint nbBins ) const
 		<< "set grid\n\n";
 
 	DatasetStats<T> dstats( nbAttribs() );
-	for( size_t atItx=0; atItx<nbAttribs(); atItx++ )
+	for( size_t atIdx=0; atIdx<nbAttribs(); atIdx++ )
 	{
 		std::vector<float> vat;
 		vat.reserve( size() );               // guarantees we won't have any reallocating
@@ -1081,7 +1084,7 @@ DataSet::computeStats( uint nbBins ) const
 #ifdef HANDLE_MISSING_VALUES
 				if( !point.valueIsMissing( atIdx ) )
 #endif
-				vat.push_back( point.attribVal(atItx) );
+				vat.push_back( point.attribVal(atIdx) );
 			}
 		else
 			for( size_t ptIdx=0; ptIdx<size(); ptIdx++ )
@@ -1091,28 +1094,28 @@ DataSet::computeStats( uint nbBins ) const
 #ifdef HANDLE_MISSING_VALUES
 				if( !point.valueIsMissing( atIdx ) )
 #endif
-					vat.push_back( point.attribVal(atItx) );
+					vat.push_back( point.attribVal(atIdx) );
 			}
 
 		const auto& atstats = computeAttribStats<T>( vat );
-		dstats.add( atItx, atstats );
+		dstats.add( atIdx, atstats );
 
-		auto histo = genAttribHisto( atItx, vat, atstats, nbBins, _fname, size() );
+		auto histo = genAttribHisto( atIdx, vat, atstats, nbBins, _fname, size() );
 
-		auto v_ccpb = p_countClassPerBin( atItx, histo );
-		priv::saveClassCountPerBin( atItx, v_ccpb );
+		auto v_ccpb = p_countClassPerBin( atIdx, histo );
+		priv::saveClassCountPerBin( atIdx, v_ccpb );
 
-		fplot << "set output 'attrib_histo_"<< atItx << ".png'\n"
+		fplot << "set output 'attrib_histo_"<< atIdx << ".png'\n"
 			<< "unset label\n"
 			<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n"
-			<< "set label 'attribute " << atItx << "' at screen 0.8, screen .98\n"
+			<< "set label 'attribute " << atIdx << "' at screen 0.8, screen .98\n"
 			<< "set multiplot layout 2,1\n"
 			<< "set logscale y\n"
 			<< "set title '% of pts'\n"
-			<< "plot 'attrib_histo_" << atItx << ".dat' using 5:xtic(sprintf(\"%.1e\",column(2))) noti\n"
+			<< "plot 'attrib_histo_" << atIdx << ".dat' using 5:xtic(sprintf(\"%.1e\",column(2))) noti\n"
 			<< "set title 'Nb classes/nbpts of bin'\n"
 			<< "set xtics format ''\n"
-			<< "plot 'histo_ccpb_attrib_" << atItx << ".dat' using 3 noti\n"
+			<< "plot 'histo_ccpb_attrib_" << atIdx << ".dat' using 3 noti\n"
 			<< "unset multiplot\n"
 			<< '\n';
 	}
@@ -2702,22 +2705,23 @@ SearchBestIG(
 			const auto& point = data.getDataPoint(ptIdx);
 			if( !point.isClassLess() )
 			{
+				auto attribVal = point.attribVal( atIdx );
 #ifdef HANDLE_MISSING_VALUES
 				bool usePoint = true;
 				if( point.valueIsMissing( atIdx ) )
 				{
 					switch( DataSet::s_MissingValueStrategy )
 					{
-						case En_MVS::disablePoint: usePoint=false; break
-						case En_MVS::setToMean: assert(0);
-							break;
+						case En_MVS::disablePoint: usePoint=false; break;
+						case En_MVS::setToMean: assert(0); ///\todoM we need to have access to the dataset stats
+							//attribVal = MEAN_VALUE_OF ATTRIBUTE
+						break;
 						default: assert(0);
 					}
 				}
 				if( usePoint )
 #endif
 				{
-					auto attribVal = point.attribVal( atIdx );
 					if( attribVal < v_thresVal[i] )
 					{
 						m_LT[ point.classVal() ]++;
@@ -3280,24 +3284,29 @@ TrainingTree::classify( const DataPoint& point ) const
 		return retval;
 	}
 
+#ifdef HANDLE_MISSING_VALUES
+	if( point.nbMissingValues() )
+	{
+		std::cerr << "Error, unable to classify point, has missing attribute values\n";
+		return retval;
+	}
+#endif
+
 	vertexT_t v = _initialVertex;   // initialize to first node
 	bool done = false;
-//	uint iter = 0;
 	do
 	{
 		assert( _graph[v]._type != NT_undef );
-//		COUT << "\n*iter=" << iter++ << " NODE " << _graph[v]._nodeId << std::endl;
 		if( _graph[v]._type != NT_Root && _graph[v]._type != NT_Decision ) // then, we are done !
 		{
 			done = true;
 			retval = _graph[v]._nClass;
-//			COUT << "Final node: class = " << retval << "\n";
 		}
 		else
 		{
 			auto attrIndex = _graph[v]._attrIndex;  // get attrib index that this node handles
 			auto atValue   = point.attribVal( attrIndex );  // get data point value for this attribute
-//			COUT << "Considering attribute " << attrIndex << " with value " << atValue << std::endl;
+
 			assert( boost::out_degree( v, _graph ) == 2 );
 
 			auto edges = boost::out_edges( v, _graph );    // get the two output edges of the node

@@ -312,6 +312,18 @@ class DataPoint
 		std::vector<float> _attrValue;   ///< attributes
 		ClassVal _class = ClassVal(-1);  ///< Class of the datapoint, -1 for undefined
 
+#ifdef HANDLE_MISSING_VALUES
+		std::set<uint> _missingValues;
+	public:
+		bool isMissingValue( std::string str ) const
+		{
+			for( const auto& mvs: DataSet::sv_MissingValueStrings )
+				if( mvs == str )
+					return true;
+			return false;
+		}
+#endif
+
 	public:
 #ifdef TESTMODE
 /// Constructor used in tests
@@ -333,7 +345,15 @@ class DataPoint
 			for( size_t i=0; i<v_string.size(); i++ )
 			try
 			{
-				_attrValue.push_back( priv::my_stod( v_string[i] ) );
+#ifdef HANDLE_MISSING_VALUES
+				if( isMissingValue( v_string[i] ) )
+				{
+					_missingValues.insert( static_cast<uint>(i) );
+					_attrValue.push_back( 0. );
+				}
+				else
+#endif
+					_attrValue.push_back( priv::my_stod( v_string[i] ) );
 			}
 			catch(...)
 			{
@@ -373,12 +393,10 @@ class DataPoint
 
 		const float& attribVal( size_t idx ) const
 		{
-// TEMP
-			if( idx>=_attrValue.size() )
-				std::cerr << "idx=" << idx << " _attrValue.size()=" << _attrValue.size() << "\n";
 			assert( idx<_attrValue.size() );
 			return _attrValue[idx];
 		}
+/// This (fetch by ref) is needed when tagging outliers, see \page p_outliers
 		float& attribVal( size_t idx )
 		{
 			assert( idx<_attrValue.size() );
@@ -701,11 +719,18 @@ class DataSet
 	public:
 		std::string             _fname;                 ///< file name (saved so it can be printed out in output files)
 
+#ifdef HANDLE_MISSING_VALUES
+		static std::vector<std::string> sv_MissingValueStrings;
+#endif
 };
 //using DataSetf = DataSet<float>;
 //using DataSetd = DataSet<double>;
 
 
+//---------------------------------------------------------------------
+#ifdef HANDLE_MISSING_VALUES
+std::vector<std::string> DataSet::sv_MissingValueStrings;
+#endif
 //---------------------------------------------------------------------
 void
 DataPoint::print( std::ostream& f ) const

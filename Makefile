@@ -35,7 +35,7 @@ ifeq "$(DEBUG)" ""
 endif
 
 ifeq ($(DEBUG),Y)
-	CFLAGS += -DDEBUG -g
+	CFLAGS += -DDEBUG
 endif
 
 #----------------------------------------------
@@ -44,8 +44,19 @@ ifeq "$(DEBUGS)" ""
 endif
 
 ifeq ($(DEBUGS),Y)
-	CFLAGS += -DDEBUG_START
+	CFLAGS += -DDEBUG_START -DDEBUG
 endif
+
+
+#----------------------------------------------
+ifeq "$(HMV)" ""
+	HMV=N
+endif
+
+ifeq ($(HMV),Y)
+	CFLAGS += -DHANDLE_MISSING_VALUES
+endif
+
 
 
 all: $(BIN_DIR)/dectree

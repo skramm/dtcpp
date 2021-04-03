@@ -99,6 +99,7 @@ This software is build from 2 files only:
  * dtcpp.cpp : basically only a command-line parser, then calls the code from the header
 
 
+
 ### Needed tools
 
 * C++14 compiler
@@ -124,6 +125,26 @@ This software is build from 2 files only:
 For the test build only:
 * Catch2: https://github.com/catchorg/Catch2/
 (tested with catch 2.13.4)
+
+### Build option
+
+The build is make based.
+Several options are available and can be passe to make in the form: <br>
+```
+* make <target> <option={Y|N}
+```
+### Targets
+
+* `clean`
+* `cleanout`
+* `cleanall`
+
+### Options
+
+* `HMV`: this will enable the "muissing values" features, by defining the symbol `HANDLE_MISSING_VALUES`. It will slow down a bit computing.
+* `NDEBUG`: this will disable all assertions in the code, to speed up things
+* `DEBUG`: this will enable some addition debug code, and set logging level to 4. Not meant to be used by end-user, only for dev/debugging purposes
+* `DEBUGS`: similar as the above, but will also print down each function start (automatically defines `DEBUG`)
 
 
 ### Error handling

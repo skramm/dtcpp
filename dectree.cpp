@@ -159,9 +159,8 @@ int main( int argc, const char** argv )
 //		std::cout << cm << "\n";
 //		tt.printInfo( std::cout, "Before Pruning" );
 
-
 		tt.printInfo( std::cout, "After pruning" );
-		tt.printDot( 1 );
+
 		auto cm = tt.classify( dataset );
 		std::cout << cm << "\n";
 		cm.printAllScores( std::cout );

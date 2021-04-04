@@ -2138,7 +2138,7 @@ class TrainingTree
 		ConfusionMatrix classify( const DataSet& ) const;
 		ClassVal        classify( const DataPoint& ) const;
 
-		void     printDot( string name, int id ) const;
+		void     printDot( std::string name, int id ) const;
 		void     printInfo( std::ostream&, const char* msg=0 ) const;
 		uint     maxDepth() const { return _maxDepth; }
 		size_t   nbLeaves() const;
@@ -2270,7 +2270,7 @@ printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 /// Print a DOT file of the tree by calling the recursive function \ref printDotNodeChilds()
 inline
 void
-TrainingTree::printDot( string name, int id ) const
+TrainingTree::printDot( std::string name, int id ) const
 {
 	auto f = priv::openOutputFile( "tree_" + name + "_" + std::to_string(id) , priv::FT_DOT );
 	f << "# file: " << _dataFileName << "\n\n"
@@ -3182,11 +3182,11 @@ TrainingTree::train( DataSet& data, const Params params )
 	TrainingInfo info;
 	p_buildTree( data, params );
 	if( params.generateDotFiles )
-		tt.printDot( "build", 0 );
+		printDot( "build", 0 );
 
 	info.nbRemovals = p_pruning( data );
 	if( params.generateDotFiles )
-		tt.printDot( "pruned", 1 );
+		printDot( "pruned", 1 );
 	return info;
 }
 //---------------------------------------------------------------------

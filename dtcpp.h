@@ -508,12 +508,15 @@ using ClassStringIndexBiMap = boost::bimap<
 	std::string,
 	size_t
 >;
+
+using ClassCounter = std::map<ClassVal,size_t>;
+
 //---------------------------------------------------------------------
 /// Outlier Detection Method. Related to Dataset::tagOutliers()
 enum class En_OD_method
 {
 	fixedSigma
-	,ChauvenetCrit ///< https://en.wikipedia.org/wiki/Chauvenet%27s_criterion
+	,ChauvenetCrit ///< \todoM See https://en.wikipedia.org/wiki/Chauvenet%27s_criterion
 };
 //---------------------------------------------------------------------
 /// Outlier Removal Method. Related to Dataset::tagOutliers()
@@ -735,8 +738,8 @@ class DataSet
 		size_t                  _nbAttribs = 0;
 		std::vector<DataPoint>  _data;
 		ClassStringIndexBiMap   _classStringIndexBimap;  ///< maps string labels to indexes
-		std::map<ClassVal,uint> _classCount;            ///< Holds the number of points for each class value. Does \b NOT count classless points
-		mutable ClassIndexMap   _classIndexMap;		    ///< holds correspondence between real class values (say, 1,4,7) and corresponding indexes (0,1,2)
+		ClassCounter            _classCount;             ///< Holds the number of points for each class value. Does \b NOT count classless points
+		mutable ClassIndexMap   _classIndexMap;		     ///< holds correspondence between real class values (say, 1,4,7) and corresponding indexes (0,1,2)
 		mutable bool            _cimIsUpToDate = false;
 		uint                    _nbNoClassPoints = 0u;
 		bool                    _noChange = false;
@@ -2350,13 +2353,13 @@ TrainingTree::printInfo( std::ostream& f, const char* msg ) const
 /**
 - See related getGiniImpurity()
 */
-std::pair<std::map<ClassVal,size_t>,size_t>
+std::pair<ClassCounter,size_t>
 getNodeClassCount(
 	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
 	const DataSet&           data     ///< dataset
 )
 {
-	std::map<ClassVal,size_t> m;
+	ClassCounter m;
 	size_t nbClassLess = 0;
 	for( auto idx: v_dpidx )
 	{
@@ -2382,7 +2385,7 @@ Input arg: map of class counts and relevant number of points
 */
 double
 getGiniImpurity(
-	const std::pair<std::map<ClassVal,size_t>,size_t>& pmap
+	const std::pair<ClassCounter,size_t>& pmap
 )
 {
 	const auto& classVotes  = pmap.first;
@@ -2665,9 +2668,9 @@ SearchBestIG(
 	for( size_t i=0; i<v_thresVal.size(); i++ )          // for each threshold value
 	{
 //		COUT << "thres " << i << "=" << v_thresVal[i] << '\n';
-		std::map<ClassVal,uint> m_LT, m_HT;
+		ClassCounter m_LT, m_HT;
 
-		uint nb_HT = 0;
+		size_t nb_HT = 0;
 		for( auto ptIdx: v_dpidx )                         // for each data point
 		{
 			const auto& point = data.getDataPoint(ptIdx);
@@ -2899,7 +2902,7 @@ findBestAttribute(
 	const DataSet&           data,   ///< whole dataset
 	const Params&            params, ///< parameters
 	uint                     nodeId, ///< node Id, used to generate data and plot file for that node
-	const std::map<ClassVal,size_t>& ccount, ///< class count (only non-classless points)
+	const ClassCounter&      ccount, ///< class count (only non-classless points)
 	double giniImpurity
 )
 {

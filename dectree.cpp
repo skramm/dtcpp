@@ -112,15 +112,22 @@ int main( int argc, const char** argv )
 		std::cout << " - training with " << nbFolds << " on dataset\n";
 	}
 
+#ifndef HANDLE_OUTLIERS
 	bool doRemoveOutliers = false;
 	if( cmdl["ro"] )
 		doRemoveOutliers = true;
 	std::cout << " - removal of outliers: " << std::boolalpha << doRemoveOutliers << '\n';
+#else
+	if( cmdl["ro"] )
+	{
+		std::cerr << " - option -ro: unable, build without outlier support, please rebuild\n";
+		return 1;
+	}
+#endif // HANDLE_OUTLIERS
 
 	if( cmdl["sd"] )
 		params.useSortToFindThresholds = true;
 	std::cout << " - threshold finding technique: " << (params.useSortToFindThresholds?"sort points":"histogram binning") << '\n';
-
 
 	DataSet dataset;
 	if( !dataset.load( fname, fparams ) )

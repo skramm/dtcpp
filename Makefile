@@ -7,6 +7,7 @@ SHELL=bash
 BIN_DIR=build/bin
 OBJ_DIR=build/obj
 
+APPNAME=dectree
 
 SRC_FILES = $(wildcard *.cpp)
 HEADERS = $(wildcard *.h*)
@@ -19,6 +20,9 @@ PNG_DOT_FILES = $(patsubst %.dot,%.png,$(DOT_FILES))
 OBJ_FILES = $(patsubst %.cpp,$(OBJ_DIR)/%,$(SRC_FILES))
 EXE_FILES = $(patsubst %.cpp,$(BIN_DIR)/%,$(SRC_FILES))
 PLOT_OUT_FILES= $(patsubst out/%.plt,out/%.png,$(PLOT_IN_FILES))
+
+#----------------------------------------------
+# MAKEFILE OPTIONS
 
 #----------------------------------------------
 ifeq "$(NDEBUG)" ""
@@ -47,7 +51,6 @@ ifeq ($(DEBUGS),Y)
 	CFLAGS += -DDEBUG_START -DDEBUG
 endif
 
-
 #----------------------------------------------
 ifeq "$(HMV)" ""
 	HMV=N
@@ -66,7 +69,8 @@ ifeq ($(HO),Y)
 	CFLAGS += -DHANDLE_OUTLIERS
 endif
 
-
+#----------------------------------------------
+# MAKEFILE TARGETS
 
 all: $(BIN_DIR)/dectree
 	@echo "done"
@@ -92,10 +96,39 @@ $(OBJ_DIR)/%.o: %.cpp $(HEADERS)
 $(BIN_DIR)/%:$(OBJ_DIR)/%.o
 	$(CXX) -o $@ $< -s
 
-doc:
-	@- build/html/*
+doc: cleandoc
 	@doxygen misc/Doxyfile 1>build/doxygen_stdout 2>build/doxygen_stderr
 	@xdg-open build/html/index.html
+
+testb:
+	@echo "Testing build for all possible configurations"
+	@echo "App size for different build options" >build/app_size.txt
+	@echo "build test" >build/make_stdout
+	@echo "build test" >build/make_stderr
+#
+	@opt="HO=Y HMV=Y"; \
+	make cleanbin; \
+	echo -e "\n***** Build options: $$opt" >>build/make_stdout; \
+	make $${opt} 1>>build/make_stdout 2>>build/make_stderr; \
+	echo "$$opt: $$(stat --printf="%s" $(BIN_DIR)/$(APPNAME))" >> build/app_size.txt
+#
+	@opt="HO=Y HMV=N"; \
+	make cleanbin; \
+	echo -e "\n***** Build options: $$opt" >>build/make_stdout; \
+	make $${opt} 1>>build/make_stdout 2>>build/make_stderr; \
+	echo "$$opt: $$(stat --printf="%s" $(BIN_DIR)/$(APPNAME))" >> build/app_size.txt
+#
+	@opt="HO=N HMV=Y"; \
+	make cleanbin; \
+	echo -e "\n***** Build options: $$opt" >>build/make_stdout; \
+	make $${opt} 1>>build/make_stdout 2>>build/make_stderr; \
+	echo "$$opt: $$(stat --printf="%s" $(BIN_DIR)/$(APPNAME))" >> build/app_size.txt
+#
+	@opt="HO=N HMV=N"; \
+	make cleanbin; \
+	echo -e "\n***** Build options: $$opt" >>build/make_stdout; \
+	make $${opt} 1>>build/make_stdout 2>>build/make_stderr; \
+	echo "$$opt: $$(stat --printf="%s" $(BIN_DIR)/$(APPNAME))" >> build/app_size.txt
 
 # add --success to see successful tests
 test: build/bin/test_catch
@@ -136,5 +169,7 @@ clean: cleandoc
 #	@-rm *.png
 #	@-rm *.plt
 
-cleanall: clean cleanout
+cleanall: clean cleanout cleanbin
+
+cleanbin:
 	@-rm $(BIN_DIR)/*

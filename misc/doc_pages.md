@@ -8,6 +8,7 @@ to train the tree.
 
 This is enabled only if the symbol `HANDLE_OUTLIERS` is defined (build option `HO`)
 
+At run time, you need to pass the flag `-ro` (_Remove Outliers_)
 
 ## Missing data handling
 

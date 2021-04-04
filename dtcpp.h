@@ -277,6 +277,7 @@ struct Params
 //	int   nbFolds = 5;
 	uint  maxTreeDepth = 12;
 	bool  useSortToFindThresholds = false;
+	bool  generateDotFiles = true;
 };
 
 //---------------------------------------------------------------------
@@ -466,7 +467,8 @@ struct AttribStats
 	}
 };
 //---------------------------------------------------------------------
-/// Holds attribute stats, see DataSet::computeStats() (just a wrapper, actually...)
+/// Holds attribute stats, see DataSet::computeStats()
+/// (mostly a wrapper on a vector, actually)
 template<typename T>
 struct DatasetStats
 {
@@ -2064,6 +2066,13 @@ ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 	}
 }
 //---------------------------------------------------------------------
+/// This is returned by TrainingTree::train(), holds some information
+/// on training process
+struct TrainingInfo
+{
+	size_t nbRemovals = 0;
+};
+//---------------------------------------------------------------------
 /// This one holds edges that each have a vector holding the index of datapoints.
 /// This is memory costly, but useless for classifying, so once it is trained, we could use another tree type
 /**
@@ -2125,17 +2134,18 @@ class TrainingTree
 		void saveToFile( std::string fname ) const;
 		void readFromFile( std::string fname );
 
-		void     train( DataSet&, Params params=Params() );
+		TrainingInfo    train( DataSet&, Params params=Params() );
 		ConfusionMatrix classify( const DataSet& ) const;
 		ClassVal        classify( const DataPoint& ) const;
 
-		void     printDot( int id ) const;
+		void     printDot( string name, int id ) const;
 		void     printInfo( std::ostream&, const char* msg=0 ) const;
 		uint     maxDepth() const { return _maxDepth; }
 		size_t   nbLeaves() const;
 
-		size_t pruning( const DataSet& );
 	private:
+		size_t p_pruning( const DataSet& );
+		void   p_buildTree( DataSet&, Params params=Params() );
 		void p_check() const
 		{
 //			assert( _tClassIndexMap.size() > 0 );
@@ -2260,9 +2270,9 @@ printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 /// Print a DOT file of the tree by calling the recursive function \ref printDotNodeChilds()
 inline
 void
-TrainingTree::printDot( int id ) const
+TrainingTree::printDot( string name, int id ) const
 {
-	auto f = priv::openOutputFile( "tree_" + std::to_string(id) , priv::FT_DOT );
+	auto f = priv::openOutputFile( "tree_" + name + "_" + std::to_string(id) , priv::FT_DOT );
 	f << "# file: " << _dataFileName << "\n\n"
 		<< "digraph g {\nnode [shape=\"box\"];\n"
 		<< "title [label=\"data file: " << _dataFileName
@@ -2361,82 +2371,6 @@ getGiniImpurity(
 	assert( giniCoeff >= 0. );                        // has to be !!!
 	return giniCoeff;
 }
-
-//---------------------------------------------------------------------
-#if 0
-/// Computes the Gini coefficient for points listed in \c vdpidx
-/**
-Returns a pair holding as first:the Gini Impurity, second: the class votes
-
-\todoM handle the case where all the points are classless !
-
-\todoH This function gets called from two functions, this should not be!
-*/
-std::pair<double,std::map<ClassVal,uint>>
-getGiniImpurity(
-	const std::vector<uint>& v_dpidx, ///< datapoint indexes to consider
-	const DataSet&           data     ///< dataset
-)
-{
-	START;
-	assert( v_dpidx.size()>0 );
-
-	size_t nbClassLess = 0;
-	std::map<ClassVal,uint> classVotes; // key: class index, value: votes
-	for( auto idx: v_dpidx )
-	{
-		const auto& dp = data.getDataPoint( idx );
-		if( dp.isClassLess() )
-			nbClassLess++;
-		else
-			classVotes[ dp.classVal() ]++;
-	}
-	assert( nbClassLess < v_dpidx.size() );
-
-	double giniCoeff = 1.;
-	for( auto elem: classVotes )
-	{
-		auto v = 1. * elem.second / (v_dpidx.size() - nbClassLess);
-		giniCoeff -= v*v;
-	}
-	COUT << "global Gini Coeff=" << giniCoeff << " nbClassLess=" << nbClassLess << " nb pts total=" << v_dpidx.size() << '\n';
-	assert( giniCoeff >= 0. );                        // has to be !!!
-	return std::make_pair(
-		giniCoeff,
-		classVotes
-	);
-}
-#endif
-//---------------------------------------------------------------------
-#if 0
-// DEPRECATED
-/// Returns the class that is in majority in the points defined in \c vIdx.
-/// The second value is the percentage of that majority, in the range \f$ [0,1]\f$  (well, \f$ ]0.5,1]\f$  actually !)
-//template<typename T>
-std::pair<ClassVal,float>
-getMajorityClass( const std::vector<uint>& vIdx, const DataSet& data )
-{
-	START;
-	using Pair = std::pair<ClassVal,uint>;
-
-	auto classVotes = computeClassVotes( vIdx, data );
-
-	auto it_max = std::max_element(
-		std::begin( classVotes ),
-		std::end( classVotes ),
-		[]                                      // lambda
-		(const Pair& a, const Pair& b)->bool
-		{ return a.second < b.second; }
-	);
-
-	auto idx_maj = it_max->first;
-
-	return std::make_pair(
-		idx_maj,
-		1. * classVotes[idx_maj] / vIdx.size()
-	);
-}
-#endif
 
 //---------------------------------------------------------------------
 /// Finds class holding max value (first) and ambiguity of that max value (second)
@@ -3031,7 +2965,7 @@ addChildPair( vertexT_t v, GraphT& graph, size_t nbElems )
 	return std::make_pair(v1,v2);
 }
 //---------------------------------------------------------------------
-/// Recursive helper function, used by TrainingTree::train()
+/// Recursive helper function, used by TrainingTree::p_buildTree()
 /**
 Computes the threshold, splits the dataset and assigns the split to 2 sub nodes (that get created)
 */
@@ -3164,7 +3098,7 @@ that has the same parent.
 \todoM integrate this in the main training function, so for end-user it gets automatically done.
 */
 size_t
-TrainingTree::pruning( const DataSet& data )
+TrainingTree::p_pruning( const DataSet& data )
 {
 	START;
 
@@ -3241,12 +3175,25 @@ TrainingTree::pruning( const DataSet& data )
 }
 //---------------------------------------------------------------------
 /// Train tree using data.
-/**
-\return false if failure
-*/
+//template<typename T>
+TrainingInfo
+TrainingTree::train( DataSet& data, const Params params )
+{
+	TrainingInfo info;
+	p_buildTree( data, params );
+	if( params.generateDotFiles )
+		tt.printDot( "build", 0 );
+
+	info.nbRemovals = p_pruning( data );
+	if( params.generateDotFiles )
+		tt.printDot( "pruned", 1 );
+	return info;
+}
+//---------------------------------------------------------------------
+/// Train tree using data.
 //template<typename T>
 void
-TrainingTree::train( DataSet& data, const Params params )
+TrainingTree::p_buildTree( DataSet& data, const Params params )
 {
 	START;
 	LOG( 0, "Start training" );

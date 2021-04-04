@@ -157,10 +157,9 @@ int main( int argc, const char** argv )
 		tt.train( dataset, params );
 //		auto cm = tt.classify( dataset );
 //		std::cout << cm << "\n";
-		tt.printInfo( std::cout, "Before Pruning" );
-		tt.printDot( 0 );
+//		tt.printInfo( std::cout, "Before Pruning" );
 
-		tt.pruning( dataset );
+
 		tt.printInfo( std::cout, "After pruning" );
 		tt.printDot( 1 );
 		auto cm = tt.classify( dataset );
@@ -186,8 +185,6 @@ int main( int argc, const char** argv )
 //			data_train.printInfo( std::cout, "train" );
 //			data_test.printInfo(  std::cout, "test" );
 			vec_tree[i].train( data_train, params );
-			vec_tree[i].pruning( data_train );
-//			tt.printDot( i );
 
 //			vec_cm_train.push_back( tt.classify( data_train ) );
 			vec_cm_test.push_back( vec_tree[i].classify( data_test ) );

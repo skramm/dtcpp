@@ -135,6 +135,7 @@ int main( int argc, const char** argv )
 	dataset.generateAttribPlot( "dataA", stats );
 	dataset.generateClassDistrib( "class_distribution" );
 
+#ifdef HANDLE_OUTLIERS
 	if( doRemoveOutliers )
 	{
 		dataset.tagOutliers( stats );
@@ -144,6 +145,7 @@ int main( int argc, const char** argv )
 		std::cout << stats2;
 		dataset.generateAttribPlot( "dataB", stats2 );
 	}
+#endif
 
 	if( noTraining )
 	{

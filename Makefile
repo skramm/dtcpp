@@ -57,6 +57,15 @@ ifeq ($(HMV),Y)
 	CFLAGS += -DHANDLE_MISSING_VALUES
 endif
 
+#----------------------------------------------
+ifeq "$(HO)" ""
+	HO=N
+endif
+
+ifeq ($(HO),Y)
+	CFLAGS += -DHANDLE_OUTLIERS
+endif
+
 
 
 all: $(BIN_DIR)/dectree

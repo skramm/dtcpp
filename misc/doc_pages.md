@@ -6,6 +6,8 @@ In some situations, the attribute values can be polluted with some obvious outli
 This software offers an optional outlier handling feature, that can be used to remove these before using the data
 to train the tree.
 
+This is enabled only if the symbol `HANDLE_OUTLIERS` is defined (build option `HO`)
+
 
 ## Missing data handling
 

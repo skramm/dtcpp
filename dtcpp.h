@@ -647,8 +647,9 @@ class DataSet
 			_nbNoClassPoints = 0u;
 			_noChange = false;
 			_cimIsUpToDate = false;
-
+#ifdef HANDLE_OUTLIERS
 			clearOutliers();
+#endif
 		}
 		std::pair<DataSet,DataSet> getFolds( uint i, uint nbFolds ) const;
 
@@ -659,7 +660,7 @@ class DataSet
 		}
 		template<typename T>
 		DatasetStats<T> computeStats( uint nbBins ) const;
-
+#ifdef HANDLE_OUTLIERS
 /// \name Outlier handling
 ///@{
 		template<typename T>
@@ -685,8 +686,8 @@ class DataSet
 			return _nbOutliers;
 		}
 		DataSet getSetWithoutOutliers() const;
-
 ///@}
+#endif // HANDLE_OUTLIERS
 		size_t nbClasses( const std::vector<uint>& ) const;
 
 /// Returns nb of classes in the dataset, \b NOT considering the points without any class assigned
@@ -723,7 +724,9 @@ class DataSet
 		}
 
 	private:
+#ifdef HANDLE_OUTLIERS
 		void p_countClasses();
+#endif
 		void p_parseTokens( std::vector<std::string>&, const Fparams&, uint&, size_t );
 		template<typename HISTO>
 		std::vector<std::pair<uint,uint>> p_countClassPerBin( size_t, const HISTO& ) const;
@@ -736,11 +739,12 @@ class DataSet
 		mutable ClassIndexMap   _classIndexMap;		    ///< holds correspondence between real class values (say, 1,4,7) and corresponding indexes (0,1,2)
 		mutable bool            _cimIsUpToDate = false;
 		uint                    _nbNoClassPoints = 0u;
-		std::vector<bool>       _vIsOutlier;            ///< Will be allocated ONLY if tagOutliers() is called, with En_OR_method::disablePoint
-		size_t                  _nbOutliers = 0;        ///< to avoid recounting them when unneeded
 		bool                    _noChange = false;
 		Fparams                 _fparams;               ///< stored here, because some flags might be useful after loading
-
+#ifdef HANDLE_OUTLIERS
+		size_t                  _nbOutliers = 0;        ///< to avoid recounting them when unneeded
+		std::vector<bool>       _vIsOutlier;            ///< Will be allocated ONLY if tagOutliers() is called, with En_OR_method::disablePoint
+#endif
 	public:
 		std::string             _fname;                 ///< file name (saved so it can be printed out in output files)
 
@@ -906,8 +910,10 @@ DataSet::p_countClassPerBin( size_t attrIdx, const HISTO& histo ) const
 		const auto& pt = getDataPoint(idx);        // for each data point
 		auto attribVal = pt.attribVal( attrIdx );  // get attribute value
 
-		if( !pt.isClassLess()                      // if not classless, then
-			&& !pointIsOutlier(idx) )              // AND not an outlier
+		if( !pt.isClassLess() )                    // if not classless, then
+#ifdef HANDLE_OUTLIERS
+			if( !pointIsOutlier(idx) )             // AND not an outlier,
+#endif
 		{                                          // then assign it to the correct bin
 			size_t i = 0;
 			for (auto&& x : boost::histogram::indexed(histo) )
@@ -992,6 +998,7 @@ attribIsOutlier( T atval, AttribStats<T> stat, En_OD_method odm, float param )
 	return false; // TEMP
 }
 //---------------------------------------------------------------------
+#ifdef HANDLE_OUTLIERS
 /// Called after tagging outliers, because some classes might have vanished.
 void
 DataSet::p_countClasses()
@@ -1004,6 +1011,7 @@ DataSet::p_countClasses()
 	for( size_t p=0; p<size(); p++ )
 	{
 		const auto& pt = getDataPoint(p);
+
 		if( !pointIsOutlier(p) )
 		{
 			if( pt.isClassLess() )
@@ -1058,7 +1066,7 @@ DataSet::tagOutliers( const DatasetStats<T>& stats, En_OD_method odm, En_OR_meth
 	}
 	p_countClasses();
 }
-
+#endif
 //---------------------------------------------------------------------
 /// Compute statistics of the dataset, attribute by attribute, and saves histogram in data files.
 /// Also generates a Gnuplot script to plot these.
@@ -1084,7 +1092,9 @@ DataSet::computeStats( uint nbBins ) const
 	{
 		std::vector<float> vat;
 		vat.reserve( size() );               // guarantees we won't have any reallocating
+#ifdef HANDLE_OUTLIERS
 		if( nbOutliers() == 0 )
+#endif
 			for( const auto& point: _data )
 			{
 #ifdef HANDLE_MISSING_VALUES
@@ -1092,16 +1102,23 @@ DataSet::computeStats( uint nbBins ) const
 #endif
 				vat.push_back( point.attribVal(atIdx) );
 			}
+#ifdef HANDLE_OUTLIERS
 		else
+#endif
+
 			for( size_t ptIdx=0; ptIdx<size(); ptIdx++ )
 			{
 				const auto& point = getDataPoint(ptIdx);
+
+#ifdef HANDLE_OUTLIERS
 				if( !pointIsOutlier(ptIdx) )
+#endif
 #ifdef HANDLE_MISSING_VALUES
 				if( !point.valueIsMissing( atIdx ) )
 #endif
 					vat.push_back( point.attribVal(atIdx) );
 			}
+
 
 		const auto& atstats = computeAttribStats<T>( vat );
 		dstats.add( atIdx, atstats );
@@ -1143,6 +1160,7 @@ DataSet::nbClasses( const std::vector<uint>& vIdx ) const
 	return classSet.size();
 }
 //---------------------------------------------------------------------
+#ifdef HANDLE_OUTLIERS
 /// Returns dataset without the outliers (assumes they have been tagged before!)
 DataSet
 DataSet::getSetWithoutOutliers() const
@@ -1159,6 +1177,7 @@ DataSet::getSetWithoutOutliers() const
 	else                           // if no outliers,
 		return DataSet(*this);     // then return a copy
 }
+#endif
 //---------------------------------------------------------------------
 /// Returns a pair of two subsets of the data, first is the training data, second is the test data
 /**
@@ -1177,8 +1196,11 @@ DataSet::getFolds( uint index, uint nbFolds ) const
  	DataSet ds_train( nbAttribs() );
  	DataSet ds_test(  nbAttribs() );
 
+#ifdef HANDLE_OUTLIERS
 	DataSet ds2 = getSetWithoutOutliers();
-
+#else
+	const DataSet& ds2 =*this;
+#endif
 	uint nb = ds2.size() / nbFolds;
 	for( uint i=0; i<ds2.size(); i++ )
 	{
@@ -1229,6 +1251,8 @@ DataSet::generateAttribPlot(
 {
 	START;
 	auto f1 = priv::openOutputFile( fname, priv::FT_CSV, _fname );
+
+#ifdef HANDLE_OUTLIERS
 	if( _vIsOutlier.size() )
 	{
 		for( size_t i=0; i<size(); i++ )
@@ -1236,6 +1260,7 @@ DataSet::generateAttribPlot(
 				getDataPoint(i).print( f1 );
 	}
 	else
+#endif
 		for( const auto& pt: _data )
 			pt.print( f1 );
 	f1 << '\n';
@@ -1440,7 +1465,10 @@ DataSet::printInfo( std::ostream& f, const char* name ) const
 		<< "\n # attributes="       << nbAttribs()
 		<< "\n # classes="          << nbClasses()
 		<< "\n # classless points=" << _nbNoClassPoints
-		<< "\n # outliers=" << _nbOutliers << '\n';
+#ifdef HANDLE_OUTLIERS
+		<< "\n # outliers=" << _nbOutliers
+#endif
+		<< '\n';
 
 	if( _fparams.classAsString )
 	{
@@ -3209,6 +3237,7 @@ TrainingTree::p_buildTree( DataSet& data, const Params params )
 
 	std::vector<uint> v_idx;
 	v_idx.reserve( data.size() );
+#ifdef HANDLE_OUTLIERS
 	if( data.nbOutliers() )                     // if outliers there,
 	{                                           // then we put in the
 		for( size_t i=0; i<data.size(); i++ )   // set of indexes only
@@ -3216,10 +3245,12 @@ TrainingTree::p_buildTree( DataSet& data, const Params params )
 				v_idx.push_back( i );
 	}
 	else
+#endif
 	{
 		v_idx.resize( data.size() );  // create vector holding indexes of all the data points
 		std::iota( v_idx.begin(), v_idx.end(), 0 );
 	}
+
 
 	_graph[_initialVertex].v_Idx = v_idx;
 	COUT << "INTIAL ID=" << _graph[_initialVertex]._nodeId << '\n';

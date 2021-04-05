@@ -141,10 +141,11 @@ test: build/bin/test_catch
 #	$(CXX) -Wall -std=gnu++14 -fexceptions -O2 -c test_catch.cpp -o build/obj/test_catch.o
 
 plt: $(PLOT_OUT_FILES)
+	@cp misc/style.css out/
 
 out/%.png:out/%.plt
 	@chmod u+x out/*.plt
-	@echo "\n************** processing file $<" >> out/gnuplot.stdout
+	@echo "-processing file $<" >> out/gnuplot.stdout
 	@cd out; ./$(notdir $<) 1>> gnuplot.stdout 2>>gnuplot.stderr
 
 dot: $(PNG_DOT_FILES)

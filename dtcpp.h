@@ -292,6 +292,7 @@ struct Params
 	uint  maxTreeDepth = 12;
 	bool  useSortToFindThresholds = false;
 	bool  generateDotFiles = true;
+	int   foldIndex = -1;
 };
 
 //---------------------------------------------------------------------
@@ -2116,6 +2117,15 @@ ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 struct TrainingInfo
 {
 	size_t nbRemovals = 0;
+
+	friend std::ostream& operator << ( std::ostream& f, const TrainingInfo& ti )
+	{
+		f << "TrainingInfo:"
+			<< "\n - nbRemovals=" << ti.nbRemovals
+			<< '\n';
+		return f;
+	}
+
 };
 //---------------------------------------------------------------------
 /// This one holds edges that each have a vector holding the index of datapoints.
@@ -2135,7 +2145,6 @@ access the Confusion Matrix. It can be generated from a source dataset with:
 //template<typename T>
 class TrainingTree
 {
-
 	friend void splitNode( vertexT_t, GraphT&, DataSet&, const Params& );
 
 	private:
@@ -2184,7 +2193,7 @@ class TrainingTree
 		ClassVal        classify( const DataPoint& ) const;
 
 		void     printDot( std::string name, int id ) const;
-		void     printInfo( std::ostream&, const char* msg=0 ) const;
+		void     printInfo( std::ostream&, std::string msg=std::string() ) const;
 		uint     maxDepth() const { return _maxDepth; }
 		size_t   nbLeaves() const;
 
@@ -2315,9 +2324,12 @@ printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 /// Print a DOT file of the tree by calling the recursive function \ref printDotNodeChilds()
 inline
 void
-TrainingTree::printDot( std::string name, int id ) const
+TrainingTree::printDot( std::string name, int foldIndex ) const
 {
-	auto f = priv::openOutputFile( "tree_" + name + "_" + std::to_string(id) , priv::FT_DOT );
+	auto fname = "tree"
+		+ ( foldIndex==-1 ? "" : "_f"+std::to_string(foldIndex) )
+		+ "_" + name;
+	auto f = priv::openOutputFile( fname, priv::FT_DOT );
 	f << "# file: " << _dataFileName << "\n\n"
 		<< "digraph g {\nnode [shape=\"box\"];\n"
 		<< "title [label=\"data file: " << _dataFileName
@@ -2335,7 +2347,7 @@ TrainingTree::printDot( std::string name, int id ) const
 		<< "SC: Single Class\\n"
 		<< "MD: Max Depth\\n"
 		<< "STS: Split Too Small\\n"
-		<< "MP: Merged at Pruning step"
+		<< "MP: Merged by pruning"
 		<< "\",shape=\"note\",labelloc=\"l\"];\n";
 
 	priv::printDotNodeChilds( f, _initialVertex, _graph );
@@ -2346,19 +2358,16 @@ TrainingTree::printDot( std::string name, int id ) const
 /// Print basic information on the tree
 //template<typename T>
 void
-TrainingTree::printInfo( std::ostream& f, const char* msg ) const
+TrainingTree::printInfo( std::ostream& f, std::string msg ) const
 {
 	START;
-	f << "Training tree info:";
-	if( msg )
-		f << msg;
-	f << "\n -nb nodes=" << boost::num_vertices( _graph )
+	f << "Tree info: "
+		<< msg
+		<< "\n -nb nodes=" << boost::num_vertices( _graph )
 		<< "\n -nb edges=" << boost::num_edges( _graph )
 		<< "\n -max depth=" << maxDepth()
 		<< "\n -nb of leaves=" << nbLeaves()
 		<< '\n';
-//	f << "Boost printing:\n";
-//	boost::print_graph( _graph );  // <= does not work with boost::ListS as container, needs an index attached as dynamic property !
 }
 
 //---------------------------------------------------------------------
@@ -3224,13 +3233,14 @@ TrainingInfo
 TrainingTree::train( DataSet& data, const Params params )
 {
 	TrainingInfo info;
+	clear();
 	p_buildTree( data, params );
 	if( params.generateDotFiles )
-		printDot( "build", 0 );
+		printDot( "build", params.foldIndex );
 
 	info.nbRemovals = p_pruning( data );
 	if( params.generateDotFiles )
-		printDot( "pruned", 1 );
+		printDot( "pruned", params.foldIndex );
 	return info;
 }
 //---------------------------------------------------------------------
@@ -3270,7 +3280,7 @@ TrainingTree::p_buildTree( DataSet& data, const Params params )
 	auto fhtml = priv::openOutputFile( "training", priv::FT_HTML, data._fname );
 	fhtml << "<h2>Point balance and IG vs. threshold value</h2>\n"
 		<< "<table><tr><th></th>\n";
-	for( int i=0; i<nbAttribs; i++ )
+	for( uint i=0; i<nbAttribs; i++ )
 		fhtml << "<th>Attribute " << i << "</th>\n";
 	fhtml << "</tr>\n";
 

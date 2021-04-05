@@ -163,12 +163,13 @@ int main( int argc, const char** argv )
 	if( nbFolds == 0 )
 	{
 		TrainingTree tt( dataset.getClassIndexMap() );
-		tt.train( dataset, params );
+		auto trainInfo = tt.train( dataset, params );
 //		auto cm = tt.classify( dataset );
 //		std::cout << cm << "\n";
 //		tt.printInfo( std::cout, "Before Pruning" );
 
 		tt.printInfo( std::cout, "After pruning" );
+		std::cout << trainInfo;
 
 		auto cm = tt.classify( dataset );
 		std::cout << cm << "\n";
@@ -192,10 +193,14 @@ int main( int argc, const char** argv )
 
 //			data_train.printInfo( std::cout, "train" );
 //			data_test.printInfo(  std::cout, "test" );
-			vec_tree[i].train( data_train, params );
+			params.foldIndex = i;
+			auto trainInfo = vec_tree[i].train( data_train, params );
+			vec_tree[i].printInfo( std::cout, "fold " + std::to_string(i) );
+			std::cout << trainInfo;
 
 //			vec_cm_train.push_back( tt.classify( data_train ) );
 			vec_cm_test.push_back( vec_tree[i].classify( data_test ) );
+
 //			std::cout << "\n* Fold " << i+1 << "/" << nbFolds << '\n';
 
 /*			std::cout << "Confusion Matrix (train):" << cm_train << "\n";

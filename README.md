@@ -9,10 +9,16 @@ Naive attempt of a Decision Tree implementation for continuous variables (WIP !!
 
 ## WORK IN PROGRESS, NO RELEASES YET !
 
-## current status 20210322:
+## current status 20210405:
 
+WIP: find Bug:
+```
+./run_demo d -nf 5
+make plt
+```
 
-WIP: histogram of classes vs trheshfold values
+this produces erroneous plots
+
 
 ## Features
 

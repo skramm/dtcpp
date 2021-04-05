@@ -141,7 +141,7 @@ test: build/bin/test_catch
 #	$(CXX) -Wall -std=gnu++14 -fexceptions -O2 -c test_catch.cpp -o build/obj/test_catch.o
 
 plt: $(PLOT_OUT_FILES)
-	@cp misc/style.css out/
+	@cp misc/out_style.css out/
 
 out/%.png:out/%.plt
 	@chmod u+x out/*.plt

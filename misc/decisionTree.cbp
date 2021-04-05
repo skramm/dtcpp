@@ -84,6 +84,9 @@
 		<Unit filename="graphical_rendering.md">
 			<Option target="main" />
 		</Unit>
+		<Unit filename="out_style.css">
+			<Option target="main" />
+		</Unit>
 		<Extensions>
 			<lib_finder disable_auto="1" />
 		</Extensions>

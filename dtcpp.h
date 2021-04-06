@@ -2428,32 +2428,6 @@ getGiniImpurity(
 	return giniCoeff;
 }
 
-//---------------------------------------------------------------------
-/// Finds class holding max value (first) and ambiguity of that max value (second)
-template<typename T>
-std::pair<T,float>
-findDominantClass( const std::map<T,size_t>& mcount )
-{
-	assert( mcount.size() > 1 );
-
-	size_t vmax  = 0u;
-	size_t vmax2 = vmax;
-	T cmax  = T(-1);
-	T cmax2 = cmax;
-
-	for( const auto& p: mcount )
-	{
-		if( p.second > vmax )
-		{
-			vmax2 = vmax;
-			cmax2 = cmax;
-			vmax = p.second;
-			cmax = p.first;
-		}
-	}
-	assert( vmax>0 );
-	return std::make_pair( cmax, 1. * vmax2/vmax );
-}
 
 //---------------------------------------------------------------------
 /// Utility function, sort vector and removes values whose difference is small
@@ -3073,7 +3047,9 @@ splitNode(
 
 	if( nodeIsLeave )
 	{
-		std::tie( graph[v]._nClass, graph[v]._nAmbig ) = findDominantClass( classCount );
+		auto fdc = ::priv::findDominantClass( classCount );
+		graph[v]._nClass = fdc.dominantClass;
+		graph[v]._nAmbig = fdc.ambig;
 		return;
 	}
 
@@ -3085,7 +3061,9 @@ splitNode(
 	{
 		LOG( 1, "unable to find good attribute" );
 		graph[v]._type = NT_Final_SplitTooSmall;
-		std::tie( graph[v]._nClass, graph[v]._nAmbig ) = findDominantClass( classCount );
+		auto fdc = ::priv::findDominantClass( classCount );
+		graph[v]._nClass = fdc.dominantClass;
+		graph[v]._nAmbig = fdc.ambig;
 		return;
 	}
 //
@@ -3211,7 +3189,7 @@ TrainingTree::p_pruning( const DataSet& data )
 
 								auto pm = getNodeClassCount( node1.v_Idx, data );
 								_graph[v0]._giniImpurity = getGiniImpurity( pm );
-								_graph[v0]._nAmbig       = findDominantClass( pm.first ).second;
+								_graph[v0]._nAmbig       = ::priv::findDominantClass( pm.first ).ambig;
 							}
 							boost::clear_vertex(  v1, _graph );
 							boost::clear_vertex(  v2, _graph );

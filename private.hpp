@@ -103,13 +103,42 @@ struct Gparams
 };
 
 
+//---------------------------------------------------------------------
+/// Type returned by findDominantClass()
+template<typename C>
+struct DominantClassInfo
+{
+	C      dominantClass;
+	size_t dcCount;
+	float  ambig;
+};
 
-//namespace dtcpp {
+/// Finds in a class-counting map the max value (first) and ambiguity of that max value (second)
+template<typename C>
+//std::pair<T,float>
+DominantClassInfo<C>
+findDominantClass( const std::map<C,size_t>& mcount )
+{
+	assert( mcount.size() > 1 );
 
-// % % % % % % % % % % % % % %
-/// private namespace; not part of API
-// namespace priv {
-// % % % % % % % % % % % % % %
+	size_t vmax  = 0u;
+	size_t vmax2 = vmax;
+	C cmax  = C(-1);
+	C cmax2 = cmax;
+
+	for( const auto& p: mcount )
+	{
+		if( p.second > vmax )
+		{
+			vmax2 = vmax;
+			cmax2 = cmax;
+			vmax = p.second;
+			cmax = p.first;
+		}
+	}
+	assert( vmax>0 );
+	return DominantClassInfo<C>{ cmax, vmax, 1.f * vmax2/vmax };
+}
 
 //---------------------------------------------------------------------
 /// General utility function

@@ -288,7 +288,7 @@ VBS_Histogram<T,KEY>::print( std::ostream& f, const char* msg ) const
 //---------------------------------------------------------------------
 /// Attempt to split a bin, returns true if a split occurred
 /**
-This will also remove points if at a given max depth, we still can"t split the bin
+This will also remove points if at a given max depth, we still can't split the bin
 
 Steps:
  # check if max depth is reached
@@ -316,74 +316,40 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 	{
 		COUT << "Reached MAX DEPTH! bin=" << bin << '\n';
 		_reachedMaxDepth++;
-/*		priv::printVector( std::cout, bin._vIdxPt, "BEFORE points" );
-		for( const auto idx: bin._vIdxPt )
-			std::cout << idx << ": " <<p_src->at(idx).first << "-" << p_src->at(idx).second << "\n";
-*/
+		bin._doNotSplit = true;
 		switch( _hparams._maxDepthBehavior )
 		{
 			case EN_MDB::tagBinAsNoSplit:
-				bin._doNotSplit = true;
 				COUT << "bin, tagged as NoSplit\n";
 			break;
-/*			case EN_MDB::discardNonMajPoints:
+			case EN_MDB::discardNonMajPoints:
+			{
+				auto fdc = ::priv::findDominantClass( bin._mClassCounter );
+				if( fdc.ambig < 0.9 )        /// \todoM magic value, store in some parameter
+				{
+					COUT << "nbpts BEFORE=" << _nbPts << '\n';
+					_nbPts -= bin.size();
+
+					std::vector<size_t> vec1;
+					vec1.reserve( bin.size() );
+					for( const auto idx: bin._vIdxPt )   // parse the points
+					{
+						const auto& pt = p_src->at(idx); // and add only the points
+						if( pt.second == fdc.dominantClass )      // that are of dominant class
+							vec1.push_back( idx );
+					}
+					bin._vIdxPt = std::move(vec1);
+
+					bin._mClassCounter.clear();
+					bin._mClassCounter[fdc.dominantClass] = fdc.dcCount;
+					_nbPts += bin.size();
+				}
+			}
 			break;
-			*/
+
 			default: assert(0);
 		}
-		depth_sb--;
-		return false;
-
-#ifdef DISCARD_POINTS_IF_CANT_SPLIT
-		for( auto idx: bin._vIdxPt )
-			p_src->
-#else
-		auto it = std::max_element(                      // find dominant class
-			std::begin(bin._mClassCounter),
-			std::end(bin._mClassCounter),
-			[]                                   // lambda
-			( const auto& p1, const auto& p2 )
-			{
-				return p1.second < p2.second;
-			}
-		);
-		auto domClass   = it->first;
-		auto nbDomClass = it->second;
-		COUT << "domClass=" << domClass << ", #=" << nbDomClass << " (" << 100.*nbDomClass/bin.size() << "%) binsize=" << bin.size() << "\n";
-//		::priv::printMap( std::cout, bin._mClassCounter, "bin class map" );
-		COUT << "nbpts BEFORE=" << _nbPts << '\n';
-		_nbPts -= bin.size();
-//		std::cout << "Reached max depth, removing " << bin.size() << " pts ";
-
-		std::vector<size_t> vec1;
-		vec1.reserve( bin.size() );
-		bin._mClassCounter.clear();
-		for( const auto idx: bin._vIdxPt )  // parse the points
-		{
-			const auto& pt = p_src->at(idx);
-			if( pt.second == domClass )
-				vec1.push_back( idx );
-/*			else                              // adjust global map
-			{
-				COUT << "BEFORE removing from ccount: class=" << pt.second << " nb="  << _mCCount[pt.second] << '\n';
-				_mCCount[pt.second]--;
-				if( _mCCount[pt.second] == 0 )
-					_mCCount.erase(pt.second);
-			}*/
-		}
-		bin._mClassCounter[domClass] = nbDomClass;
-		bin._vIdxPt = std::move(vec1);
-		_nbPts += bin.size();
 		COUT << "AFTER bin:" << bin << '\n' << " nbpts AFTER=" << _nbPts << '\n';
-//		assert( _nbPts<200);
-//		std::cout << "but adding " << bin.size() << " pts\n";
-
-
-/*		priv::printVector( std::cout, bin._vIdxPt, "AFTER points" );
-		for( const auto idx: bin._vIdxPt )
-			std::cout << idx << ": " <<p_src->at(idx).first << "-" << p_src->at(idx).second << "\n";
-*/
-#endif
 		depth_sb--;
 		return false;
 	}
@@ -582,7 +548,7 @@ VBS_Histogram<T,KEY>::mergeSearch()
 
 //---------------------------------------------------------------------
 /// Compute the thresholds on an attribute value to be used to find the best split,
-/// using a histogram binng technique
+/// using a histogram binning technique
 /**
  Input: a vector or pairs, size=nb of points in subset of data set.
  - first value: the attribute value,
@@ -590,9 +556,9 @@ VBS_Histogram<T,KEY>::mergeSearch()
 
 Output: a pair made of the vector of floating point threshold values and a bool.
 If the bool is false, then this means the function was unable to compute the thresholds.
-This can happen because the histogram bins are splitted to find the best value separating classes, and if
-splitting reaches a maximum depth and there are still more than one class in the bin, then we just
-"forget" about the minority class values of the bin.
+This can happen because the histogram bins are splitted to find the best value separating classes,
+and if splitting reaches a maximum depth and there are still more than one class in the bin,
+then we just "forget" about the minority class values of the bin.
 */
 template<typename T,typename KEY>
 std::pair<std::vector<float>,bool>
@@ -630,7 +596,7 @@ getThresholds(
 // if the split operations made the histogram have only one class, then
 // we can't provide a threshold, we just return an empty vector and set
 // the flag to false
-/// \todoL maybe we can do that BEFORE the merging operation?
+
 //	assert( histo.nbBins() > 1 );
 	if( histo.nbBins() < 2 )
 	{

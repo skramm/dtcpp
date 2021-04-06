@@ -652,11 +652,6 @@ class DataSet
 		uint     getIndexFromClass( ClassVal ) const;
 		ClassVal getClassFromIndex( uint ) const;
 
-		void generateClassDistrib( std::string fname, std::ostream& ) const;
-
-		template<typename T>
-		void generateAttribPlot( std::string fname, const DatasetStats<T>&, std::ostream& ) const;
-
 		void clear()
 		{
 			_data.clear();
@@ -741,11 +736,17 @@ class DataSet
 		{
 			return _classStringIndexBimap;
 		}
+		void generateDataHtmlPage( std::string, std::ostream&, const DatasetStats<float>& stats, int nbBins ) const;
 
 	private:
 #ifdef HANDLE_OUTLIERS
 		void p_countClasses();
 #endif
+
+		template<typename T>
+		void p_generateAttribPlot( std::string fname, const DatasetStats<T>&, std::ostream& ) const;
+		void p_generateClassDistrib( std::string fname ) const;
+
 		void p_parseTokens( std::vector<std::string>&, const Fparams&, uint&, size_t );
 		template<typename HISTO>
 		std::vector<std::pair<uint,uint>> p_countClassPerBin( size_t, const HISTO& ) const;
@@ -1149,8 +1150,8 @@ DataSet::computeStats( uint nbBins ) const
 
 		fplot << "set output 'attrib_histo_"<< atIdx << ".png'\n"
 			<< "unset label\n"
-			<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n"
-			<< "set label 'attribute " << atIdx << "' at screen 0.8, screen .98\n"
+//			<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n"
+//			<< "set label 'attribute " << atIdx << "' at screen 0.8, screen .98\n"
 			<< "set multiplot layout 2,1\n"
 			<< "set logscale y\n"
 			<< "set title '% of pts'\n"
@@ -1263,7 +1264,7 @@ Moreover, you can always tweak the generated script to fit your needs.
 */
 template<typename T>
 void
-DataSet::generateAttribPlot(
+DataSet::p_generateAttribPlot(
 	std::string            fname,  ///< File name, no extension (the 2 files will have that name, with extensions .plt and .csv)
 	const DatasetStats<T>& dss,    ///< dataset stats
 	std::ostream&          fhtml   ///< output html file
@@ -1285,7 +1286,7 @@ DataSet::generateAttribPlot(
 			pt.print( f1 );
 	f1 << '\n';
 
-	fhtml << "<h2>2 - Class vs. attributes</h2>\n<table><tr>\n";
+	fhtml << "<table><tr>\n";
 	for( size_t i=0; i<nbAttribs(); i++ )
 		fhtml << "<th>Attribute " << i << "</th>\n";
 	fhtml << "</tr><tr>\n";
@@ -1450,13 +1451,33 @@ DataSet::load( std::string fname, const Fparams params )
 	return true;
 }
 //---------------------------------------------------------------------
+/// Generates in Html page the code to show the produced plots
+void
+DataSet::generateDataHtmlPage( std::string fname, std::ostream& fhtml, const DatasetStats<float>& stats, int nbBins ) const
+{
+	fhtml << "<h2>Dataset characteristics</h2>\n"
+		<< "<h3>1 - Class distribution</h3>\n"
+		<< "<img src='class_distrib_" << fname << ".png'>\n";
+	p_generateClassDistrib( "class_distrib_" + fname );
+
+	fhtml << "<h3>2 - Class vs. attribute values</h3>\n";
+	p_generateAttribPlot( fname, stats, fhtml );
+
+	fhtml << "<h3>3 - Histogram of data related to attribute value</h3>\n<table><tr>\n";
+	for( uint i=0; i<nbAttribs(); i++ )
+		fhtml << "<th>Attribute " << i << "</th>\n";
+	fhtml << "</tr><tr>\n";
+	for( uint i=0; i<nbAttribs(); i++ )
+		fhtml << "<td><img src='attrib_histo_" << i << ".png' ></td>\n";
+	fhtml << "</tr></table>\n";
+}
+
+//---------------------------------------------------------------------
 /// Generates both data files and Gnuplot script of the class distribution of the dataset
 void
-DataSet::generateClassDistrib( std::string fname, std::ostream& fhtml ) const
+DataSet::p_generateClassDistrib( std::string fname ) const
 {
 	START;
-	fhtml << "<h2>1 - Dataset class distribution</h2>\n"
-		<< "<img src='" << fname << ".png'>\n";
 
 	auto fhisto = priv::openOutputFile( fname, priv::FT_DAT, _fname );
 

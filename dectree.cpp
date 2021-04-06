@@ -112,7 +112,7 @@ int main( int argc, const char** argv )
 		std::cout << " - training with " << nbFolds << " on dataset\n";
 	}
 
-#ifndef HANDLE_OUTLIERS
+#ifdef HANDLE_OUTLIERS
 	bool doRemoveOutliers = false;
 	if( cmdl["ro"] )
 		doRemoveOutliers = true;
@@ -142,10 +142,9 @@ int main( int argc, const char** argv )
 
 	auto fhtml = dtcpp::priv::openOutputFile( "dectree", priv::FT_HTML, dataset._fname );
 	params.outputHtml = &fhtml;
-	dataset.generateClassDistrib( "class_distribution", fhtml );
-	dataset.generateAttribPlot( "dataA", stats, fhtml );
 
-	//generateDataHtmlPage()
+	dataset.generateDataHtmlPage( "A", fhtml, stats, 10 /* bins */ );
+
 #ifdef HANDLE_OUTLIERS
 	if( doRemoveOutliers )
 	{
@@ -155,7 +154,7 @@ int main( int argc, const char** argv )
 		auto stats2 = dataset.computeStats<float>( nbBins );
 		std::cout << stats2;
 		fhtml << "<h2>After outlier removal step</h2>\n";
-		dataset.generateAttribPlot( "dataB", stats2; fhtml );
+		dataset.generateDataHtmlPage( "B", fhtml, stats2, 10 );
 	}
 #endif
 

@@ -324,7 +324,7 @@ VBS_Histogram<T,KEY>::p_splitBin( decltype( _lBins.begin() ) it, char side )
 			break;
 			case EN_MDB::discardNonMajPoints:
 			{
-				auto fdc = ::priv::findDominantClass( bin._mClassCounter );
+				auto fdc = priv1::findDominantClass( bin._mClassCounter );
 				if( fdc.ambig < 0.9 )        /// \todoM magic value, store in some parameter
 				{
 					COUT << "nbpts BEFORE=" << _nbPts << '\n';

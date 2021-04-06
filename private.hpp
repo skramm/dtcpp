@@ -12,6 +12,7 @@
 //#include <list>
 //#include <vector>
 
+#define DTCPP_PLOT_MAX_WIDTH 1500
 
 #ifdef DEBUG_START
 	#define START if(1) std::cout << "* Start: " << __FUNCTION__ << "()\n"
@@ -31,8 +32,8 @@
 		if( g_params.verbose && level<=g_params.verboseLevel ) \
 		{ \
 			std::cout << std::setfill('0') << std::setw(4) << g_params.timer.getDuration(level); \
-			::priv::spaceLog( level ); \
-			std::cout << " E" << std::setfill('0') << std::setw(4) << ::priv::logCount(level)++ << '-' << __FUNCTION__ << "(): " << msg << '\n'; \
+			priv1::spaceLog( level ); \
+			std::cout << " E" << std::setfill('0') << std::setw(4) << priv1::logCount(level)++ << '-' << __FUNCTION__ << "(): " << msg << '\n'; \
 		} \
 	}
 
@@ -43,7 +44,7 @@ class DataSet;
 
 // % % % % % % % % % % % % % %
 /// private namespace; not part of API
-namespace priv {
+namespace priv1 {
 // % % % % % % % % % % % % % %
 constexpr int nbLogLevels = 5;
 
@@ -60,7 +61,7 @@ void spaceLog( int n )
 {
 	std::cout << ':';
 	for( int i=0; i<n; i++ )
-		std::cout << "  ";
+		std::cout << " |";
 }
 
 //---------------------------------------------------------------------
@@ -183,7 +184,7 @@ printMap( std::ostream& f, const std::map<K,V>& m, const char* msg=0 )
 // % % % % % % % % % % % % % %
 
 /// Global parameters
-priv::Gparams g_params;
+priv1::Gparams g_params;
 
 
 #endif // PRIVATE_HG

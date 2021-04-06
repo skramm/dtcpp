@@ -293,6 +293,7 @@ struct Params
 	bool  useSortToFindThresholds = false;
 	bool  generateDotFiles = true;
 	int   foldIndex = -1;
+	std::ostream* outputHtml = nullptr;
 };
 
 //---------------------------------------------------------------------
@@ -381,7 +382,7 @@ class DataPoint
 			}
 			catch(...)
 			{
-				::priv::printVector( std::cerr, v_string, "string conversion error", false );
+				priv1::printVector( std::cerr, v_string, "string conversion error", false );
 				throw std::runtime_error( "unable to convert a string value -" + v_string[i] + "- to float" );
 			}
 		}
@@ -651,10 +652,10 @@ class DataSet
 		uint     getIndexFromClass( ClassVal ) const;
 		ClassVal getClassFromIndex( uint ) const;
 
-		void generateClassDistrib( std::string fname ) const;
+		void generateClassDistrib( std::string fname, std::ostream& ) const;
 
 		template<typename T>
-		void generateAttribPlot( std::string fname, const DatasetStats<T>& ) const;
+		void generateAttribPlot( std::string fname, const DatasetStats<T>&, std::ostream& ) const;
 
 		void clear()
 		{
@@ -1263,8 +1264,9 @@ Moreover, you can always tweak the generated script to fit your needs.
 template<typename T>
 void
 DataSet::generateAttribPlot(
-	std::string fname, ///< File name, no extension (the 2 files will have that name, with extensions .plt and .csv)
-	const DatasetStats<T>& dss
+	std::string            fname,  ///< File name, no extension (the 2 files will have that name, with extensions .plt and .csv)
+	const DatasetStats<T>& dss,    ///< dataset stats
+	std::ostream&          fhtml   ///< output html file
 ) const
 {
 	START;
@@ -1282,6 +1284,11 @@ DataSet::generateAttribPlot(
 		for( const auto& pt: _data )
 			pt.print( f1 );
 	f1 << '\n';
+
+	fhtml << "<h2>2 - Class vs. attributes</h2>\n<table><tr>\n";
+	for( size_t i=0; i<nbAttribs(); i++ )
+		fhtml << "<th>Attribute " << i << "</th>\n";
+	fhtml << "</tr><tr>\n";
 
 	auto f = priv::openOutputFile( fname, priv::FT_PLT, _fname );
 	f << "\nset terminal pngcairo size 600,600\n";
@@ -1304,6 +1311,7 @@ DataSet::generateAttribPlot(
 
 	for( size_t i=0; i<nbAttribs(); i++ )
 	{
+		fhtml << "<td><img src='" << fname << '_' << i << ".png'></td>\n";
 		auto st = dss.get(i);
 		f << "set output '" << fname << '_' << i << ".png'\n"
 			<< "unset arrow\n"
@@ -1316,6 +1324,7 @@ DataSet::generateAttribPlot(
 		f << "set title 'Class vs. attribute " << i
 			<< "'\nplot '" << fname << ".csv' using " << i+1 << ":class notitle\n\n";
 	}
+	fhtml << "</tr>\n</table>\n";
 }
 
 //---------------------------------------------------------------------
@@ -1441,11 +1450,14 @@ DataSet::load( std::string fname, const Fparams params )
 	return true;
 }
 //---------------------------------------------------------------------
-/// Generates both data files and Gnuplot script of the class distribution among the dataset
+/// Generates both data files and Gnuplot script of the class distribution of the dataset
 void
-DataSet::generateClassDistrib( std::string fname ) const
+DataSet::generateClassDistrib( std::string fname, std::ostream& fhtml ) const
 {
 	START;
+	fhtml << "<h2>1 - Dataset class distribution</h2>\n"
+		<< "<img src='" << fname << ".png'>\n";
+
 	auto fhisto = priv::openOutputFile( fname, priv::FT_DAT, _fname );
 
 	fhisto << "# data class histogram file for input file '" <<  fname
@@ -1462,7 +1474,7 @@ DataSet::generateClassDistrib( std::string fname ) const
 	fplot << "set terminal pngcairo size 600,600\n"
 		<< "set output '" << fname << ".png'\n"
 		<< "set title 'Class distribution'\n"
-		<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n"
+//		<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n"
 		<< "set ylabel '% of total points'\n"
 		<< "set xlabel 'Class'\n"
 		<< "set style data histogram\n"
@@ -1622,13 +1634,9 @@ struct NodeT
 	}
 
 /// Reset of node counter \ref s_Counter
-/**
-\note We start at one because instanciating a \c TrainingTree will already create the root node (index 0).
-Thus, re-training a tree will need to start at index=1
-*/
 	static void resetNodeId()
 	{
-		s_Counter = 1;
+		s_Counter = 0;
 	}
 	NodeT() { _nodeId = s_Counter++; }
 	NodeT( const NodeT& ) = delete;
@@ -2190,18 +2198,18 @@ class TrainingTree
 		void saveToFile( std::string fname ) const;
 		void readFromFile( std::string fname );
 
-		TrainingInfo    train( DataSet&, Params params=Params() );
+		TrainingInfo    train( DataSet&, Params& params );
 		ConfusionMatrix classify( const DataSet& ) const;
 		ClassVal        classify( const DataPoint& ) const;
 
-		void     printDot( std::string name, int id ) const;
+		void     printDot( std::string name, Params& params ) const;
 		void     printInfo( std::ostream&, std::string msg=std::string() ) const;
 		uint     maxDepth() const { return _maxDepth; }
 		size_t   nbLeaves() const;
 
 	private:
 		size_t p_pruning( const DataSet& );
-		void   p_buildTree( DataSet&, Params params=Params() );
+		void   p_buildTree( DataSet&, Params& params);
 		void p_check() const
 		{
 //			assert( _tClassIndexMap.size() > 0 );
@@ -2326,11 +2334,15 @@ printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 /// Print a DOT file of the tree by calling the recursive function \ref printDotNodeChilds()
 inline
 void
-TrainingTree::printDot( std::string name, int foldIndex ) const
+TrainingTree::printDot( std::string name, Params& params ) const
 {
 	auto fname = "tree"
-		+ ( foldIndex==-1 ? "" : "_f"+std::to_string(foldIndex) )
+		+ ( params.foldIndex==-1 ? "" : "_f"+std::to_string(params.foldIndex) )
 		+ "_" + name;
+
+	*params.outputHtml << "<h2>3 - Generated Tree: " << name
+		<< "</h2>\n<img src='" << fname << ".png'>\n";
+
 	auto f = priv::openOutputFile( fname, priv::FT_DOT );
 	f << "# file: " << _dataFileName << "\n\n"
 		<< "digraph g {\nnode [shape=\"box\"];\n"
@@ -2583,16 +2595,16 @@ generateClassHistoPerTVal(
 	fdata << "\n# (EOF)\n";
 
 	auto fplot = priv::openOutputFile( oss.str(), priv::FT_PLT, data._fname );
-	auto imwidth = std::min( 1200, 300 + (int)v_thresVal.size()*20 );
+	auto imwidth = std::min( (size_t)DTCPP_PLOT_MAX_WIDTH, 300 + v_thresVal.size()*12 );
 	fplot << "\nset terminal pngcairo size " << imwidth << ",600"
 		<< "\nset output '" << oss.str() << ".png'"
-		<< "\nset label 'file: " << data._fname << "' at screen 0.01, screen .98 noenhanced"
+//		<< "\nset label 'file: " << data._fname << "' at screen 0.01, screen .98 noenhanced"
 		<< "\nset style data histogram"
 		<< "\nset style histogram rowstacked"
 		<< "\nset style fill solid border -1"
 		<< "\nset boxwidth 0.75"
 		<< "\nset grid"
-		<< "\nset title 'Node "<< nodeId << ", Attribute " << atIdx << " (" << v_dpidx.size() << " pts)'"
+//		<< "\nset title 'Node "<< nodeId << ", Attribute " << atIdx << " (" << v_dpidx.size() << " pts)'"
 		<< "\nset xlabel '" << v_thresVal.size() << " threshold values'";
 
 	fplot << "\nplot '" << oss.str() << ".dat' using 4:xtic(1) ti '";
@@ -2643,8 +2655,11 @@ SearchBestIG(
 	char sep = ' ';
 	fdata << "# thres_index thres_value nbPtsLower nbPtsHigher\n\n";
 
-	fhtml << "<td><img src='" << oss.str() << ".png'></td>\n";
-	auto pwidth = std::min( (size_t)1200, 300+v_thresVal.size()*12 );
+	fhtml << "<td><img src='" << oss.str()
+		<< ".png'><br>\n<img src='thresClassHisto_n" << nodeId << "_at" << atIdx
+		<< ".png'></td>\n";
+
+	auto pwidth = std::min( (size_t)DTCPP_PLOT_MAX_WIDTH, 300+v_thresVal.size()*12 );
 	auto fplot = priv::openOutputFile( oss.str(), priv::FT_PLT, data._fname );
 	fplot << "\nset terminal pngcairo size " << pwidth << ",500\n"
 		<< "\nset datafile separator ' '"
@@ -2656,7 +2671,7 @@ SearchBestIG(
 		<< "\nset y2tics"
 		<< "\nset style data linespoints"
 		<< "\nset output '" << oss.str() << ".png'"
-		<< "\nset title 'Attribute " << atIdx << " node " << nodeId << " (" << v_dpidx.size() << " pts)'"
+//		<< "\nset title 'Attribute " << atIdx << " node " << nodeId << " (" << v_dpidx.size() << " pts)'"
 		<< "\nset xtics 1"
 		<< '\n';
 	if( v_thresVal.size() > 9 )
@@ -2664,7 +2679,7 @@ SearchBestIG(
 	if( v_thresVal.size() > 24 )
 		fplot << "set xtics 5\n";
 
-	fplot << "set title 'Attribute " << atIdx << "'\n"
+	fplot //<< "set title 'Attribute " << atIdx << "'\n"
 		<< "set xlabel '" << v_thresVal.size() << " threshold values'\n"
 		<< "plot '" << oss.str() << ".dat' using 1:(1.-abs($3-$4)/($3+$4)) lw 2 ti 'Pts balance',"
 		<< " '' using 1:5 lw 2 axes x1y2 ti 'IG'\n";
@@ -2926,7 +2941,11 @@ findBestAttribute(
 //	assert( atMap.nbUnusedAttribs() != 0 );
 
 	LOG( 2, "Searching all thresholds among " << data.nbAttribs() << " attributes" );
-	fhtml << "<tr><th>Node " << nodeId << "<br>" << vIdx.size() << " pts</th>\n";
+
+	fhtml << "<tr><th></th>\n";
+	for( uint i=0; i<data.nbAttribs(); i++ )
+		fhtml << "<th>Attribute " << i << "</th>\n";
+	fhtml << "</tr>\n<tr><th>Node " << nodeId << "<br>" << vIdx.size() << " pts</th>\n";
 
 // step 1 - compute best IG/threshold for each attribute, only for the considered points
 	std::vector<AttributeData> v_IG;
@@ -3047,7 +3066,7 @@ splitNode(
 
 	if( nodeIsLeave )
 	{
-		auto fdc = ::priv::findDominantClass( classCount );
+		auto fdc = priv1::findDominantClass( classCount );
 		graph[v]._nClass = fdc.dominantClass;
 		graph[v]._nAmbig = fdc.ambig;
 		return;
@@ -3061,7 +3080,7 @@ splitNode(
 	{
 		LOG( 1, "unable to find good attribute" );
 		graph[v]._type = NT_Final_SplitTooSmall;
-		auto fdc = ::priv::findDominantClass( classCount );
+		auto fdc = priv1::findDominantClass( classCount );
 		graph[v]._nClass = fdc.dominantClass;
 		graph[v]._nAmbig = fdc.ambig;
 		return;
@@ -3189,7 +3208,7 @@ TrainingTree::p_pruning( const DataSet& data )
 
 								auto pm = getNodeClassCount( node1.v_Idx, data );
 								_graph[v0]._giniImpurity = getGiniImpurity( pm );
-								_graph[v0]._nAmbig       = ::priv::findDominantClass( pm.first ).ambig;
+								_graph[v0]._nAmbig       = priv1::findDominantClass( pm.first ).ambig;
 							}
 							boost::clear_vertex(  v1, _graph );
 							boost::clear_vertex(  v2, _graph );
@@ -3210,24 +3229,24 @@ TrainingTree::p_pruning( const DataSet& data )
 /// Train tree using data.
 //template<typename T>
 TrainingInfo
-TrainingTree::train( DataSet& data, const Params params )
+TrainingTree::train( DataSet& data, Params& params )
 {
 	TrainingInfo info;
 	clear();
 	p_buildTree( data, params );
 	if( params.generateDotFiles )
-		printDot( "build", params.foldIndex );
+		printDot( "build", params );
 
 	info.nbRemovals = p_pruning( data );
 	if( params.generateDotFiles )
-		printDot( "pruned", params.foldIndex );
+		printDot( "pruned", params );
 	return info;
 }
 //---------------------------------------------------------------------
 /// Train tree using data.
 //template<typename T>
 void
-TrainingTree::p_buildTree( DataSet& data, const Params params )
+TrainingTree::p_buildTree( DataSet& data, Params& params )
 {
 	START;
 	LOG( 0, "Start training" );
@@ -3257,18 +3276,19 @@ TrainingTree::p_buildTree( DataSet& data, const Params params )
 		std::iota( v_idx.begin(), v_idx.end(), 0 );
 	}
 
-	auto fhtml = priv::openOutputFile( "training", priv::FT_HTML, data._fname );
-	fhtml << "<h2>Point balance and IG vs. threshold value</h2>\n"
-		<< "<table><tr><th></th>\n";
+//	auto fhtml = priv::openOutputFile( "training", priv::FT_HTML, data._fname );
+	auto& fhtml = *params.outputHtml;
+	fhtml << "<h2>Point balance and IG vs. threshold value</h2>\n<table>\n";
+/*		<< "<table><tr><th></th>\n";
 	for( uint i=0; i<nbAttribs; i++ )
 		fhtml << "<th>Attribute " << i << "</th>\n";
 	fhtml << "</tr>\n";
-
+*/
 	_graph[_initialVertex].v_Idx = v_idx;
-	COUT << "INTIAL ID=" << _graph[_initialVertex]._nodeId << '\n';
+	COUT << "INITIAL ID=" << _graph[_initialVertex]._nodeId << '\n';
 	priv::splitNode( _initialVertex, _graph, data, params, _maxDepth, fhtml ); // Call the "split" function (recursive)
 
-	fhtml << "</table>\n</body></html>\n";
+	fhtml << "</table>\n";
 
 	if( nbLeaves() < 2 )  // has to be at least 2 leaves
 	{

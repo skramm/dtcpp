@@ -11,13 +11,10 @@ Naive attempt of a Decision Tree implementation for continuous variables (WIP !!
 
 ## current status 20210405:
 
-WIP: find Bug:
-```
-./run_demo d -nf 5
-make plt
-```
+WIP:
+- investigate on IF vs threshold value
 
-this produces erroneous plots
+
 
 
 ## Features

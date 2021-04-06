@@ -1586,17 +1586,18 @@ getString( NodeType nt )
 /// A node of the training tree, this is used in the graph (see \ref GraphT)
 struct NodeT
 {
-	static uint s_Counter;           ///< Node counter, incremented at each node creation, reset with resetNodeId()
-
-	uint     _nodeId = 0;            ///< Id of the node. Needed to print the dot file. \todoL could be removed if graph switches to \c VecS
-	NodeType _type = NT_undef;       ///< Type of the node (Root, leaf, or decision)
-	ClassVal _nClass = ClassVal(-1); ///< Class, relevant only for terminal nodes (leaves of the tree)
-	size_t   _attrIndex = 0;         ///< Attribute Index that this nodes classifies (only for decision nodes)
-	float    _threshold = 0.f;       ///< Threshold on the attribute value (only for decision nodes)
-	uint     _depth = 0;             ///< Depth of the node in the tree
-	float    _giniImpurity = 0.f;
-	float    _nAmbig = -1.f;
-	std::vector<uint> v_Idx;         ///< Data point indexes
+	private:
+		static uint s_Counter;           ///< Node counter, incremented at each node creation, reset with resetNodeId()
+	public:
+		uint     _nodeId = 0;            ///< Id of the node. Needed to print the dot file. \todoL could be removed if graph switches to \c VecS
+		NodeType _type = NT_undef;       ///< Type of the node (Root, leaf, or decision)
+		ClassVal _nClass = ClassVal(-1); ///< Class, relevant only for terminal nodes (leaves of the tree)
+		size_t   _attrIndex = 0;         ///< Attribute Index that this nodes classifies (only for decision nodes)
+		float    _threshold = 0.f;       ///< Threshold on the attribute value (only for decision nodes)
+		uint     _depth = 0;             ///< Depth of the node in the tree
+		float    _giniImpurity = 0.f;
+		float    _nAmbig = -1.f;
+		std::vector<uint> v_Idx;         ///< Data point indexes
 
 	friend std::ostream& operator << ( std::ostream& f, const NodeT& n )
 	{
@@ -2177,10 +2178,11 @@ class TrainingTree
 		{
 			_tClassIndexMap = cim;
 		}
-
+/// This does clear the tree, but also adds the initial node
 		void clear()
 		{
 			_graph.clear();
+			NodeT::resetNodeId();
 			_initialVertex = boost::add_vertex(_graph);  // create initial vertex
 			_graph[_initialVertex]._type = NT_Root;
 		}
@@ -3045,8 +3047,7 @@ splitNode(
 
 	graph[v]._giniImpurity = getGiniImpurity( classCountInfo );
 
-	bool nodeIsLeave = false;
-	if( classCount.size() == 1 )
+	if( classCount.size() == 1 )         // single class here
 	{
 		LOG( 1, "node has single class, STOP" );
 		graph[v]._nClass = classCount.begin()->first;          // no need to search for dominant class, there is only one !
@@ -3055,6 +3056,7 @@ splitNode(
 		return;
 	}
 
+	bool nodeIsLeave = false;
 	if( graph[v]._depth > params.maxTreeDepth )
 	{
 		LOG( 1, "tree reached max depth (=" << params.maxTreeDepth << "), STOP" );
@@ -3254,7 +3256,7 @@ TrainingTree::p_buildTree( DataSet& data, const Params params )
 	p_check();
 
 	_dataFileName = data._fname;
-	NodeT::resetNodeId();
+
 	auto nbAttribs = data.nbAttribs();
 	if( !nbAttribs )
 		throw std::runtime_error( "no attributes!" );

@@ -736,6 +736,12 @@ class DataSet
 		{
 			return _classStringIndexBimap;
 		}
+		const ClassIndexMap& getIndexBimap() const
+		{
+			return _classIndexMap;
+		}
+
+
 		void generateDataHtmlPage( std::string, std::ostream&, const DatasetStats<float>& stats, int nbBins ) const;
 
 	private:
@@ -1316,8 +1322,8 @@ DataSet::p_generateAttribPlot(
 		auto st = dss.get(i);
 		f << "set output '" << fname << '_' << i << ".png'\n"
 			<< "unset arrow\n"
-			<< "unset label\n"
-			<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n";
+			<< "unset label\n";
+//			<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n";
 		priv::addVerticalLine( f, "mean",       0.8, st._meanVal,               "red" );
 		priv::addVerticalLine( f, "mean-sigma", 0.7, st._meanVal-st._stddevVal, "blue" );
 		priv::addVerticalLine( f, "mean+sigma", 0.7, st._meanVal+st._stddevVal, "blue" );
@@ -2147,6 +2153,7 @@ ConfusionMatrix::printAllScores( std::ostream& f, const char* msg ) const
 struct TrainingInfo
 {
 	size_t nbRemovals = 0;
+	bool   trainingSuccess = false;
 
 	friend std::ostream& operator << ( std::ostream& f, const TrainingInfo& ti )
 	{
@@ -2230,7 +2237,7 @@ class TrainingTree
 
 	private:
 		size_t p_pruning( const DataSet& );
-		void   p_buildTree( DataSet&, Params& params);
+		bool   p_buildTree( DataSet&, Params& params);
 		void p_check() const
 		{
 //			assert( _tClassIndexMap.size() > 0 );
@@ -2630,9 +2637,13 @@ generateClassHistoPerTVal(
 
 	fplot << "\nplot '" << oss.str() << ".dat' using 4:xtic(1) ti '";
 
+
+	const auto& ibm  = data.getIndexBimap();
 	const auto& sibm = data.getStringIndexBimap();
-	if( !sibm.size() )            // if we have string classes
-		fplot << "class 0'";
+	assert( ibm.size() == 0 || sibm.size() == 0 );
+
+	if( !sibm.size() )            // if we don't have string classes
+		fplot << "class " << ibm.right.at(0) << "'";
 	else
 		fplot << "0:" << sibm.right.at(0) << "'";
 
@@ -2640,7 +2651,7 @@ generateClassHistoPerTVal(
 	{
 		fplot << ", '' using " << 5+i << " ti '";
 		if( !sibm.size() )                     // if no strings, just print the index
-			fplot << "class " << i+1;
+			fplot << "class " << ibm.right.at(i+1);
 		else
 			fplot << i+1 << ":" << sibm.right.at(i+1);
 		fplot << "'";
@@ -3254,19 +3265,22 @@ TrainingTree::train( DataSet& data, Params& params )
 {
 	TrainingInfo info;
 	clear();
-	p_buildTree( data, params );
-	if( params.generateDotFiles )
-		printDot( "build", params );
+	if( p_buildTree( data, params ))
+	{
+		info.trainingSuccess = true;
+		if( params.generateDotFiles )
+			printDot( "build", params );
 
-	info.nbRemovals = p_pruning( data );
-	if( params.generateDotFiles )
-		printDot( "pruned", params );
+		info.nbRemovals = p_pruning( data );
+		if( params.generateDotFiles )
+			printDot( "pruned", params );
+	}
 	return info;
 }
 //---------------------------------------------------------------------
 /// Train tree using data.
 //template<typename T>
-void
+bool
 TrainingTree::p_buildTree( DataSet& data, Params& params )
 {
 	START;
@@ -3314,9 +3328,10 @@ TrainingTree::p_buildTree( DataSet& data, Params& params )
 	if( nbLeaves() < 2 )  // has to be at least 2 leaves
 	{
 		std::cerr << "fail, unable to build tree, only " << nbLeaves() << " leaves\n";
-		std::exit(1);
+		return false;
 	}
 	LOG( 0, "Training done" );
+	return true;
 }
 
 //---------------------------------------------------------------------

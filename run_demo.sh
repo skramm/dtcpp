@@ -66,6 +66,9 @@ if [ "$1" == "" ]; then
 fi
 
 runone $1 $2 $3 $4 $5
+make plt
+make dot
+xdg-open out/dectree.html
 
 
 

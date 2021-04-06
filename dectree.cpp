@@ -168,6 +168,11 @@ int main( int argc, const char** argv )
 	{
 		TrainingTree tt( dataset.getClassIndexMap() );
 		auto trainInfo = tt.train( dataset, params );
+		if( !trainInfo.trainingSuccess )
+		{
+			std::cerr << "Failed to build tree !\n";
+			return 1;
+		}
 //		auto cm = tt.classify( dataset );
 //		std::cout << cm << "\n";
 //		tt.printInfo( std::cout, "Before Pruning" );
@@ -199,6 +204,12 @@ int main( int argc, const char** argv )
 //			data_test.printInfo(  std::cout, "test" );
 			params.foldIndex = i;
 			auto trainInfo = vec_tree[i].train( data_train, params );
+			if( !trainInfo.trainingSuccess )
+			{
+				std::cerr << "Failed to build tree for fold " << i << '\n';
+				return 1;
+			}
+
 			vec_tree[i].printInfo( std::cout, "fold " + std::to_string(i) );
 			std::cout << trainInfo;
 

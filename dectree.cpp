@@ -161,7 +161,7 @@ int main( int argc, const char** argv )
 	if( noTraining )
 	{
 		std::cout << "No training required, exiting\n";
-		std::exit(2);
+		return 0;
 	}
 
 	if( nbFolds == 0 )

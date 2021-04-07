@@ -1461,8 +1461,39 @@ DataSet::load( std::string fname, const Fparams params )
 void
 DataSet::generateDataHtmlPage( std::string fname, std::ostream& fhtml, const DatasetStats<float>& stats, int nbBins ) const
 {
-	fhtml << "<h2>Dataset characteristics</h2>\n"
-		<< "<h3>1 - Class distribution</h3>\n"
+	fhtml << "<h2>Dataset characteristics</h2>\n<ul>";
+
+	if( !fname.empty() )
+		fhtml << "<li>name: " << fname << "</li>\n";
+	fhtml << "<li># points=" << size()
+		<< "</li>\n<li># attributes="       << nbAttribs()
+		<< "</li>\n<li># classes="          << nbClasses()
+		<< "</li>\n<li># classless points=" << _nbNoClassPoints
+		<< "</li>\n</ul>\n";
+
+	if( _fparams.classAsString )
+	{
+		fhtml << "<h4>Class strings => indexes:</h4>\n<ul>\n";
+		for( const auto& psi: _classStringIndexBimap.left )
+			fhtml << "<li>\"" << psi.first << "\" : " << psi.second << "</li>\n";
+		fhtml << "</ul>\n";
+	}
+
+	fhtml << "<h4>Classes frequency:</h4>\n<ol>\n";
+	size_t sum = 0;
+	size_t c = 0;
+	for( const auto& cval: _classCount )
+	{
+		fhtml << "<li> : " <<  cval.first << " - "
+			<< cval.second
+			<< " (" << std::setw(4) << 100. * cval.second/size()
+			<< " %)</li>\n";
+		sum += cval.second;
+	}
+	fhtml << "<ol>\n => " << sum << " points holding a class value\n\n";
+
+
+	fhtml << "<h3>1 - Class distribution</h3>\n"
 		<< "<img src='class_distrib_" << fname << ".png'>\n";
 	p_generateClassDistrib( "class_distrib_" + fname );
 
@@ -1474,7 +1505,7 @@ DataSet::generateDataHtmlPage( std::string fname, std::ostream& fhtml, const Dat
 		fhtml << "<th>Attribute " << i << "</th>\n";
 	fhtml << "</tr><tr>\n";
 	for( uint i=0; i<nbAttribs(); i++ )
-		fhtml << "<td><img src='attrib_histo_" << i << ".png' ></td>\n";
+		fhtml << "<td><img src='attrib_histo_" << i << ".png'></td>\n";
 	fhtml << "</tr></table>\n";
 }
 

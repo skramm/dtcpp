@@ -28,7 +28,7 @@ During the training step, it also analyses the input data and produces different
  * a plot of the tree
 
 
-* Input dataset format: csv style
+Input dataset format: csv style
  * class values: string or numerical (integer values), see [`-cs` option](#ss_clswitch)
  * attribute values: only numerical at present
  * class value position: either first or last element of the line

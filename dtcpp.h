@@ -296,13 +296,23 @@ struct Params
 	std::ostream* outputHtml = nullptr;
 };
 
+
 //---------------------------------------------------------------------
 /// Preliminar stuff, WIP
 namespace prelim {
 
-enum DataType
+
+enum class En_DataType
 {
-	DT_real, DT_integer, DT_string, DT_bool
+	unknown, real_t, integer_t, string_t, bool_t
+};
+
+//---------------------------------------------------------------------
+struct Attribute
+{
+	std::string atName;
+//	uint        atIndex;
+	En_DataType atType = En_DataType::unknown;
 };
 
 class DataSetDescription
@@ -312,7 +322,7 @@ class DataSetDescription
 			: _dataType(nbAttribs)
 		{}
 	private:
-		std::vector<DataType> _dataType;
+		std::vector<Attribute> _dataType;
 };
 
 } // namespace prelim {
@@ -1500,6 +1510,9 @@ DataSet::generateDataHtmlPage( std::string fname, std::ostream& fhtml, const Dat
 	fhtml << "<h3>2 - Class vs. attribute values</h3>\n";
 	p_generateAttribPlot( fname, stats, fhtml );
 
+// TODO
+//	generateClassHistoPerTVal( nodeId, atIdx, v_thresVal, data, v_dpidx );
+
 	fhtml << "<h3>3 - Histogram of data related to attribute value</h3>\n<table><tr>\n";
 	for( uint i=0; i<nbAttribs(); i++ )
 		fhtml << "<th>Attribute " << i << "</th>\n";
@@ -2671,7 +2684,6 @@ generateClassHistoPerTVal(
 
 	const auto& ibm  = data.getIndexBimap();
 	const auto& sibm = data.getStringIndexBimap();
-	assert( ibm.size() == 0 || sibm.size() == 0 );
 
 	if( !sibm.size() )            // if we don't have string classes
 		fplot << "class " << ibm.right.at(0) << "'";

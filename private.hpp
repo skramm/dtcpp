@@ -8,15 +8,14 @@
 #define PRIVATE_HG
 
 #include <iostream>
-//#include <map>
-//#include <list>
-//#include <vector>
 
 #define DTCPP_PLOT_MAX_WIDTH 1500
 
 #ifdef DEBUG_START
 	#define START if(1) std::cout << "* Start: " << __FUNCTION__ << "()\n"
-	#define DEBUG
+	#ifndef DEBUG
+		#define DEBUG
+	#endif
 #else
 	#define START
 #endif
@@ -56,7 +55,7 @@ uint& logCount(uint level)
 }
 
 //---------------------------------------------------------------------
-/// Used in logging macro, see \ref LOG
+/// Used in logging macro, see macro LOG
 void spaceLog( int n )
 {
 	std::cout << ':';

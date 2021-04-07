@@ -97,7 +97,8 @@ $(BIN_DIR)/%:$(OBJ_DIR)/%.o
 	$(CXX) -o $@ $< -s
 
 doc: cleandoc
-	@doxygen misc/Doxyfile 1>build/doxygen_stdout 2>build/doxygen_stderr
+	@echo "Doxygen version: $$(doxygen --version)" >build/doxygen_stdout
+	@doxygen misc/Doxyfile 1>>build/doxygen_stdout 2>build/doxygen_stderr
 	@xdg-open build/html/index.html
 
 testb:

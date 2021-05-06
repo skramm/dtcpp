@@ -2,7 +2,7 @@
 
 SHELL=bash
 
-.PHONY: fdoc clean cleanall all show doc dot test check touch
+.PHONY: clean cleanall all show doc dot test check touch
 
 BIN_DIR=build/bin
 OBJ_DIR=build/obj
@@ -76,7 +76,7 @@ all: $(BIN_DIR)/dectree
 	@echo "done"
 
 check:
-	cppcheck . --enable=all 2>cppcheck.log
+	cppcheck . --enable=all --std=c++14 2>cppcheck.log
 	xdg-open cppcheck.log
 
 show:

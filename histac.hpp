@@ -198,17 +198,18 @@ VBS_Histogram<T,KEY>::VBS_Histogram( const std::vector<std::pair<T,KEY>>& v_pac,
 	auto step = (vmax - vmin) / nbBins;
 	_lBins.resize( nbBins );
 
-	int i = 0;
-	for( auto& bin: _lBins )
 	{
-		bin._startValue = vmin + i     * step;
-		bin._endValue   = vmin + (i+1) * step;
-		i++;
+		int i = 0;
+		for( auto& bin: _lBins )
+		{
+			bin._startValue = vmin + i     * step;
+			bin._endValue   = vmin + (i+1) * step;
+			i++;
+		}
 	}
 
-	for( size_t i=0; i<v_pac.size(); i++ )
-//		if( v_pac[i].second != KEY(-1) )      // so we don not put points having no class in the bins
-		p_assignToBin( v_pac[i], i );
+	for( size_t ii=0; ii<v_pac.size(); ii++ )
+		p_assignToBin( v_pac[ii], ii );
 
 	_nbPts = v_pac.size();
 }

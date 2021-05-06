@@ -79,7 +79,7 @@ getString( EN_FileType ft )
 //---------------------------------------------------------------------
 /// Generic function used to open output files
 auto
-openOutputFile( std::string fn, EN_FileType ft, std::string data_fn=std::string() )
+openOutputFile( const std::string& fn, EN_FileType ft, std::string data_fn=std::string() )
 {
 	std::ostringstream oss;
 	oss << "out/" << fn << '.' << getString( ft );
@@ -318,7 +318,7 @@ struct Attribute
 class DataSetDescription
 {
 	public:
-		DataSetDescription( uint nbAttribs )
+		explicit DataSetDescription( uint nbAttribs )
 			: _dataType(nbAttribs)
 		{}
 	private:
@@ -355,7 +355,7 @@ class DataPoint
 			return ( _missingValues.find( idx ) != _missingValues.end() );
 
 		}
-		bool isMissingValue( std::string str ) const;
+		bool isMissingValue( const std::string& str ) const;
 ///@}
 #endif
 
@@ -800,7 +800,7 @@ En_MVS                   DataSet::s_MissingValueStrategy = En_MVS::disablePoint;
 
 /// Used when loading the data into memory
 bool
-DataPoint::isMissingValue( std::string str ) const
+DataPoint::isMissingValue( const std::string& str ) const
 {
 	for( const auto& mvs: DataSet::sv_MissingValueStrings )
 		if( mvs == str )
@@ -1258,7 +1258,7 @@ namespace priv {
 // % % % % % % % % % % % % % %
 
 /// Helper function for DataSet::generateAttribPlot()
-void addVerticalLine( std::ostream& f, std::string label, float vpos, float xpos, std::string color )
+void addVerticalLine( std::ostream& f, const std::string& label, float vpos, float xpos, const std::string& color )
 {
 	f << "set arrow from " << xpos << ", graph 0 to " << xpos << ", graph 1 nohead lc rgb '"
 		<< color << "' lw 1\n"
@@ -1868,12 +1868,12 @@ struct ConfusionMatrix
 	explicit ConfusionMatrix( ClassIndexMap cim )
 		: _cmClassIndexMap(cim)
 	{
-		auto nbClasses = cim.size();
-		assert( nbClasses>1 );
-		_mat.resize( nbClasses );
+		auto nbClass = cim.size();
+		assert( nbClass>1 );
+		_mat.resize( nbClass );
 		for( auto& li: _mat )
 		{
-			li.resize( nbClasses );
+			li.resize( nbClass );
 			std::fill( li.begin(), li.end(), 0u );
 		}
 	}
@@ -2091,10 +2091,11 @@ ConfusionMatrix::getScore( PerfScore scoreId, ClassVal cval ) const
 	return p_score( scoreId, priv::CM_Counters(TP,FP,TN,FN) );
 }
 //---------------------------------------------------------------------
-/// Computes and return a single performance score (identified by \c scoreId) for a multiclass task.
+/// Computes and return a single performance score (identified by \c scoreId) for a multiclass task (MC).
 /**
 - Reference:
-Sokolova, M., & Lapalme, G. (2009), "A systematic analysis of performance measures for classification tasks". Information Processing and Management, 45, p. 427-437
+Sokolova, M., & Lapalme, G. (2009), "A systematic analysis of performance measures for classification tasks".
+Information Processing and Management, 45, p. 427-437
 
 - for the Fscore, we use beta=1 (see https://en.wikipedia.org/wiki/F-score#Definition)
 
@@ -2137,10 +2138,10 @@ ConfusionMatrix::getScore_MC( PerfScore_MC scoreId ) const
 			val /= nbValues();
 		break;
 
-		case PerfScore_MC::FSCORE_M:
+		case PerfScore_MC::FSCORE_M:               // macro F-Score
 		{
 			auto p = getScore_MC( PerfScore_MC::PRECIS_M );
-			auto r = getScore_MC( PerfScore_MC::PRECIS_M );
+			auto r = getScore_MC( PerfScore_MC::RECALL_M );
 			val = 2. * p * r / ( p + r );
 		}
 		break;
@@ -2270,18 +2271,18 @@ class TrainingTree
 		void saveToFile( std::string fname ) const;
 		void readFromFile( std::string fname );
 
-		TrainingInfo    train( DataSet&, Params& params );
+		TrainingInfo    train( const DataSet&, const Params& );
 		ConfusionMatrix classify( const DataSet& ) const;
 		ClassVal        classify( const DataPoint& ) const;
 
-		void     printDot( std::string name, Params& params ) const;
+		void     printDot( const std::string& name, const Params& params ) const;
 		void     printInfo( std::ostream&, std::string msg=std::string() ) const;
 		uint     maxDepth() const { return _maxDepth; }
 		size_t   nbLeaves() const;
 
 	private:
 		size_t p_pruning( const DataSet& );
-		bool   p_buildTree( DataSet&, Params& params);
+		bool   p_buildTree( const DataSet&, const Params& params );
 		void p_check() const
 		{
 //			assert( _tClassIndexMap.size() > 0 );
@@ -2393,8 +2394,7 @@ printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 			default:          f << ",color=red"; break;
 //			default: assert(0);
 		}
-		f << "];\n";
-		f << graph[vert]._nodeId << "->" << graph[target]._nodeId  << ";\n";
+		f << "];\n" << graph[vert]._nodeId << "->" << graph[target]._nodeId  << ";\n";
 		printDotNodeChilds( f, target, graph );
 	}
 }
@@ -2406,7 +2406,7 @@ printDotNodeChilds( std::ostream& f, vertexT_t vert, const GraphT& graph )
 /// Print a DOT file of the tree by calling the recursive function \ref printDotNodeChilds()
 inline
 void
-TrainingTree::printDot( std::string name, Params& params ) const
+TrainingTree::printDot( const std::string& name, const Params& params ) const
 {
 	auto fname = "tree"
 		+ ( params.foldIndex==-1 ? "" : "_f"+std::to_string(params.foldIndex) )
@@ -3304,7 +3304,7 @@ TrainingTree::p_pruning( const DataSet& data )
 /// Train tree using data.
 //template<typename T>
 TrainingInfo
-TrainingTree::train( DataSet& data, Params& params )
+TrainingTree::train( const DataSet& data, const Params& params )
 {
 	TrainingInfo info;
 	clear();
@@ -3324,7 +3324,7 @@ TrainingTree::train( DataSet& data, Params& params )
 /// Train tree using data.
 //template<typename T>
 bool
-TrainingTree::p_buildTree( DataSet& data, Params& params )
+TrainingTree::p_buildTree( const DataSet& data, const Params& params )
 {
 	START;
 	LOG( 0, "Start training" );

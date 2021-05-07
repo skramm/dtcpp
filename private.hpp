@@ -113,9 +113,8 @@ struct DominantClassInfo
 	float  ambig;
 };
 
-/// Finds in a class-counting map the max value (first) and ambiguity of that max value (second)
+/// Finds in a class-counting map the dominant class, its count, and the ambiguity of that value (see DominantClassInfo)
 template<typename C>
-//std::pair<T,float>
 DominantClassInfo<C>
 findDominantClass( const std::map<C,size_t>& mcount )
 {
@@ -123,7 +122,7 @@ findDominantClass( const std::map<C,size_t>& mcount )
 
 	size_t vmax  = 0u;
 	size_t vmax2 = vmax;
-	C cmax  = C(-1);
+	C cmax  = C(-1);  // no class
 	C cmax2 = cmax;
 
 	for( const auto& p: mcount )

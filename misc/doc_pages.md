@@ -23,4 +23,4 @@ If enabled, the class DataPoint has these member functions:
 * `bool isMissingValue( std::string str ) const;`
 
 
-*/
+

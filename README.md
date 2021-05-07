@@ -151,10 +151,11 @@ $ make <target> <option={Y|N}>
 
 ### Options
 
-* `HMV`: this will enable the "muissing values" features, by defining the symbol `HANDLE_MISSING_VALUES`. It will slow down a bit computing.
+* `HMV`: this will enable the "missing values" features, by defining the symbol `HANDLE_MISSING_VALUES`. It will slow down a bit computing.
 * `NDEBUG`: this will disable all assertions in the code, to speed up things
 * `DEBUG`: this will enable some addition debug code, and set logging level to 4. Not meant to be used by end-user, only for dev/debugging purposes
 * `DEBUGS`: similar as the above, but will also print down each function start (automatically defines `DEBUG`)
+* `HO`: enables outlier handling features (defines the symbol `HANDLE_OUTLIERS`).
 
 
 ### Error handling

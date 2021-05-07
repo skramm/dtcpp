@@ -196,6 +196,30 @@ TEST_CASE( "computeBestThreshold", "[cbt]" )
 	auto ba = findBestAttribute( v_dpidx, dataset, params, 0, pm.first, giniCoeff, f );
 }
 //-------------------------------------------------------------------------------------------
+TEST_CASE( "getGiniImpurity", "[GI]" )
+{
+	{
+		std::map<ClassVal,size_t> m{
+			{ ClassVal(0), 8 },
+		};
+		CHECK( getGiniImpurity( std::make_pair(m,8) ) == 0. );
+	}
+	{
+		std::map<ClassVal,size_t> m{
+			{ ClassVal(0), 1 },
+			{ ClassVal(1), 1 }
+		};
+		CHECK( getGiniImpurity( std::make_pair(m,2) ) == 0.5 );
+	}
+	{
+		std::map<ClassVal,size_t> m{
+			{ ClassVal(0), 7 },
+			{ ClassVal(1), 7 }
+		};
+		CHECK( getGiniImpurity( std::make_pair(m,14) ) == 0.5 );
+	}
+}
+//-------------------------------------------------------------------------------------------
 TEST_CASE( "removeDuplicates", "[RD]" )
 {
 	Params params;

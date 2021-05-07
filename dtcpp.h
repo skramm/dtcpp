@@ -685,7 +685,7 @@ class DataSet
 		template<typename T>
 		DatasetStats<T> computeStats( uint nbBins ) const;
 #ifdef HANDLE_OUTLIERS
-/// \name Outlier handling
+/// \name Outlier handling (only enabled if \c HANDLE_OUTLIERS defined, see build options)
 ///@{
 		template<typename T>
 		void tagOutliers( const DatasetStats<T>&, En_OD_method odm=En_OD_method::fixedSigma, En_OR_method orm=En_OR_method::disablePoint, float param=3.f );
@@ -782,9 +782,10 @@ class DataSet
 		std::vector<bool>       _vIsOutlier;            ///< Will be allocated ONLY if tagOutliers() is called, with En_OR_method::disablePoint
 #endif
 	public:
-		std::string             _fname;                 ///< file name (saved so it can be printed out in output files)
+		std::string             _fname;                 ///< file name (saved so it can be printed in output files)
 
 #ifdef HANDLE_MISSING_VALUES
+/** If we find any of these in a input data file, then the considered attribute for the considered datapoint will be tagged as "missing" */
 		static std::vector<std::string> sv_MissingValueStrings;
 		static En_MVS                   s_MissingValueStrategy;
 #endif
@@ -1454,6 +1455,7 @@ DataSet::load( std::string fname, const Fparams params )
 	while( !f.eof() );
 
 	_cimIsUpToDate = false;
+	_noChange      = false;
 	g_params.p_dataset = this;
 #if 1
 	std::cout << " - Read " << size() << " points in file " << fname;
@@ -2310,6 +2312,8 @@ namespace serialization {
 } // namespace boost
 namespace dtcpp {
 //---------------------------------------------------------------------
+/// Save tree to file
+/// \todo 20210506: As of today, this does not build, need to investigate
 void
 TrainingTree::saveToFile( std::string fname ) const
 {
@@ -2486,7 +2490,7 @@ getNodeClassCount(
 	);
 }
 //---------------------------------------------------------------------
-/// Computes the Gini impurity value
+/// Computes the Gini impurity value from the class count
 /**
 Input arg: map of class counts and relevant number of points
 
@@ -2500,6 +2504,7 @@ getGiniImpurity(
 	const auto& classVotes  = pmap.first;
 	const auto& nbpts = pmap.second;
 	assert( classVotes.size() > 0 );
+	assert( nbpts > 0 );
 
 	double giniCoeff = 1.;
 	for( auto elem: classVotes )
@@ -2707,8 +2712,8 @@ generateClassHistoPerTVal(
 /// Computes for each of the given thresholds values (\c v_thresVal) all the
 /// IG values and returns the best one.
 /**
-This function also produces a data file named \c out/thres_nX folder
-(with \c X the node ID).
+This function also produces a data file named \c out/thres_nX_atY.dat
+(with \c X the node ID and Y the attribute index).
 This file will hold for each threshold value the number of points lower and higher
 than that value, and the associated IG.
 */

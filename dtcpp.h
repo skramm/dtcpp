@@ -79,7 +79,7 @@ getString( EN_FileType ft )
 //---------------------------------------------------------------------
 /// Generic function used to open output files
 auto
-openOutputFile( const std::string& fn, EN_FileType ft, std::string data_fn=std::string() )
+openOutputFile( const std::string& fn, EN_FileType ft, const std::string& data_fn=std::string() )
 {
 	std::ostringstream oss;
 	oss << "out/" << fn << '.' << getString( ft );
@@ -1289,7 +1289,7 @@ DataSet::p_generateAttribPlot(
 ) const
 {
 	START;
-	std::string fname = "ClassVsAttrib_" + ro;
+	std::string fname = "class_attrib_" + ro;
 	auto f1 = priv::openOutputFile( fname, priv::FT_CSV, _fname );
 
 #ifdef HANDLE_OUTLIERS
@@ -1331,10 +1331,10 @@ DataSet::p_generateAttribPlot(
 
 	for( size_t i=0; i<nbAttribs(); i++ )
 	{
-		fhtml << "<td>\n <img src='" << fname << '_' << i << ".png'></td>\n";
+		fhtml << "<td><img src='" << fname << '_' << i << ".png'></td>\n";
 		auto st = dss.get(i);
-		f << "set output '" << fname << '_' << i << ".png'\n"
-			<< "unset arrow\n"
+		f << "set output '" << fname << '_' << i
+			<< ".png'\nunset arrow\n"
 			<< "unset label\n";
 //			<< "set label 'file: " << _fname << "' at screen 0.01, screen .98 noenhanced\n";
 		priv::addVerticalLine( f, "mean",       0.8, st._meanVal,               "red" );

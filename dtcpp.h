@@ -91,7 +91,7 @@ openOutputFile( const std::string& fn, EN_FileType ft, const std::string& data_f
 		f << "#!/usr/bin/env gnuplot\n\n";
 
 	if( ft == FT_HTML )
-		f << "<!DOCTYPE html><head>\n<title>Datafile:"
+		f << "<!DOCTYPE html>\n<head>\n<title>Datafile:"
 			<< data_fn
 			<< "</title>\n<link rel='stylesheet' href='out_style.css' type='text/css'>\n"
 			<< "</head>\n<body>\n";
@@ -759,8 +759,8 @@ class DataSet
 #endif
 
 		template<typename T>
-		void p_generateAttribPlot( char, /*const std::string& fname, */ const DatasetStats<T>&, std::ostream& ) const;
-		void p_generateClassDistrib( const std::string& fname ) const;
+		void p_generateAttribPlot( const std::string& otd, const DatasetStats<T>&, std::ostream& ) const;
+		void p_generateClassDistrib( std::string fname ) const;
 
 		void p_parseTokens( std::vector<std::string>&, const Fparams&, uint&, size_t );
 		template<typename HISTO>
@@ -1115,7 +1115,7 @@ DatasetStats<T>
 DataSet::computeStats( uint nbBins ) const
 {
 	START;
-	auto fplot = priv::openOutputFile( "plot_attrib_histo", priv::FT_PLT, _fname );
+	auto fplot = priv::openOutputFile( "attrib_histo", priv::FT_PLT, _fname );
 	fplot << "set terminal pngcairo size 600,600\n"
 		<< "set style data histogram\n"
 		<< "set style histogram cluster gap 1\n"
@@ -1282,8 +1282,7 @@ Moreover, you can always tweak the generated script to fit your needs.
 template<typename T>
 void
 DataSet::p_generateAttribPlot(
-	char                   ro,    ///< 'A' (No outlier removal) or 'B' (after outlier removal)
-//	const std::string&     fname,  ///< File name, no extension (the 2 files will have that name, with extensions .plt and .csv)
+	const std::string&     ro,    ///< 'A' (No outlier removal) or 'B' (after outlier removal)
 	const DatasetStats<T>& dss,    ///< dataset stats
 	std::ostream&          fhtml   ///< output html file
 ) const
@@ -1494,7 +1493,6 @@ DataSet::generateDataHtmlPage( std::ostream& fhtml, const DatasetStats<float>& s
 
 	fhtml << "<h4>Classes frequency:</h4>\n<ol>\n";
 	size_t sum = 0;
-	size_t c = 0;
 	for( const auto& cval: _classCount )
 	{
 		fhtml << "<li> : " <<  cval.first << " - "
@@ -1505,11 +1503,10 @@ DataSet::generateDataHtmlPage( std::ostream& fhtml, const DatasetStats<float>& s
 	}
 	fhtml << "</ol>\n => " << sum << " points holding a class value\n\n";
 
-	char otd = _outlierTaggingDone?'B':'A';
+	std::string otd = _outlierTaggingDone?"B":"A";
 	fhtml << "<h3>A1 - Class distribution</h3>\n"
 		<< "<img src='class_distrib_" << otd << ".png'>\n";
 	p_generateClassDistrib( "class_distrib_" + otd );
-
 
 	fhtml << "<h3>A2 - Class vs. attribute values</h3>\n";
 	p_generateAttribPlot( otd, stats, fhtml );
@@ -1529,10 +1526,9 @@ DataSet::generateDataHtmlPage( std::ostream& fhtml, const DatasetStats<float>& s
 //---------------------------------------------------------------------
 /// Generates both data files and Gnuplot script of the class distribution of the dataset
 void
-DataSet::p_generateClassDistrib( const std::string& fname ) const
+DataSet::p_generateClassDistrib( std::string fname ) const
 {
 	START;
-
 	auto fhisto = priv::openOutputFile( fname, priv::FT_DAT, _fname );
 
 	fhisto << "# data class histogram file for input file '" <<  fname
@@ -1637,7 +1633,7 @@ DataSet::print( std::ostream& f, const std::vector<uint>& vIdx ) const
 }
 
 //---------------------------------------------------------------------
-/// Holds the node type, see NodeT
+/// Holds the node type, see \ref NodeT
 enum NodeType : char
 {
 	 NT_undef = 0
@@ -2258,11 +2254,12 @@ class TrainingTree
 		}
 		TrainingTree( const TrainingTree& ) = delete;
 
+/// Assign Class-Index Map
 		void assignCIM( const ClassIndexMap& cim )
 		{
 			_tClassIndexMap = cim;
 		}
-/// This does clear the tree and creates the initial (root) node
+/// Clear the tree and create the initial (root) node
 		void clear()
 		{
 			_graph.clear();
@@ -2431,7 +2428,7 @@ TrainingTree::printDot( const std::string& name, const Params& params ) const
 		<< " thres="    << _graph[_initialVertex]._threshold
 		<< "\\n#"      << _graph[_initialVertex].v_Idx.size()
 		<< "\",color = blue];\n";
-
+/*
 	f << "legend [label=\""
 		<< "MGI: Min Gini Impurity\\n"
 		<< "SC: Single Class\\n"
@@ -2439,7 +2436,7 @@ TrainingTree::printDot( const std::string& name, const Params& params ) const
 		<< "STS: Split Too Small\\n"
 		<< "MP: Merged by pruning"
 		<< "\",shape=\"note\",labelloc=\"l\"];\n";
-
+*/
 	priv::printDotNodeChilds( f, _initialVertex, _graph );
 	f << "}\n";
 }
@@ -2831,8 +2828,8 @@ SearchBestIG(
 	}
 
 // step 3 - find max value of the delta Gini
-//	auto max_pos = std::max_element( std::begin( deltaGini ), std::end( deltaGini ) );
-	auto max_pos = std::min_element( std::begin( deltaGini ), std::end( deltaGini ) );
+	auto max_pos = std::max_element( std::begin( deltaGini ), std::end( deltaGini ) );
+//	auto max_pos = std::min_element( std::begin( deltaGini ), std::end( deltaGini ) );
 
 	auto best_thres_idx = std::distance( std::begin( deltaGini ), max_pos );
 
@@ -3344,7 +3341,14 @@ TrainingTree::train( const DataSet& data, const Params& params )
 	clear();
 	if( p_buildTree( data, params ))
 	{
-		*params.outputHtml << "<h3>B2 - Generated Tree</h3>\n";
+		*params.outputHtml << "<h3>B2 - Generated Tree</h3>\n<p>Leave Type Legend:</p>\n<ul>\n"
+			<< "<li>MGI: Min Gini Impurity</li>\n"
+			<< "<li>SC: Single Class</li>\n"
+			<< "<li>MD: Max Depth</li>\n"
+			<< "<li>STS: Split Too Small</li>\n"
+			<< "<li>MP: Merged by pruning</li>\n"
+			<< "</ul>\n";
+
 		info.trainingSuccess = true;
 		if( params.generateDotFiles )
 			printDot( "initial", params );

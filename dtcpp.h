@@ -751,8 +751,7 @@ class DataSet
 			return _classIndexMap;
 		}
 
-
-		void generateDataHtmlPage( std::string, std::ostream&, const DatasetStats<float>& stats, int nbBins ) const;
+		void generateDataHtmlPage( std::ostream&, const DatasetStats<float>& stats, int nbBins ) const;
 
 	private:
 #ifdef HANDLE_OUTLIERS
@@ -760,8 +759,8 @@ class DataSet
 #endif
 
 		template<typename T>
-		void p_generateAttribPlot( std::string fname, const DatasetStats<T>&, std::ostream& ) const;
-		void p_generateClassDistrib( std::string fname ) const;
+		void p_generateAttribPlot( char, /*const std::string& fname, */ const DatasetStats<T>&, std::ostream& ) const;
+		void p_generateClassDistrib( const std::string& fname ) const;
 
 		void p_parseTokens( std::vector<std::string>&, const Fparams&, uint&, size_t );
 		template<typename HISTO>
@@ -777,6 +776,7 @@ class DataSet
 		uint                    _nbNoClassPoints = 0u;
 		bool                    _noChange = false;
 		Fparams                 _fparams;               ///< stored here, because some flags might be useful after loading
+		bool                    _outlierTaggingDone = false;
 #ifdef HANDLE_OUTLIERS
 		size_t                  _nbOutliers = 0;        ///< to avoid recounting them when unneeded
 		std::vector<bool>       _vIsOutlier;            ///< Will be allocated ONLY if tagOutliers() is called, with En_OR_method::disablePoint
@@ -1282,12 +1282,14 @@ Moreover, you can always tweak the generated script to fit your needs.
 template<typename T>
 void
 DataSet::p_generateAttribPlot(
-	std::string            fname,  ///< File name, no extension (the 2 files will have that name, with extensions .plt and .csv)
+	char                   ro,    ///< 'A' (No outlier removal) or 'B' (after outlier removal)
+//	const std::string&     fname,  ///< File name, no extension (the 2 files will have that name, with extensions .plt and .csv)
 	const DatasetStats<T>& dss,    ///< dataset stats
 	std::ostream&          fhtml   ///< output html file
 ) const
 {
 	START;
+	std::string fname = "ClassVsAttrib_" + ro;
 	auto f1 = priv::openOutputFile( fname, priv::FT_CSV, _fname );
 
 #ifdef HANDLE_OUTLIERS
@@ -1329,7 +1331,7 @@ DataSet::p_generateAttribPlot(
 
 	for( size_t i=0; i<nbAttribs(); i++ )
 	{
-		fhtml << "<td><img src='" << fname << '_' << i << ".png'></td>\n";
+		fhtml << "<td>\n <img src='" << fname << '_' << i << ".png'></td>\n";
 		auto st = dss.get(i);
 		f << "set output '" << fname << '_' << i << ".png'\n"
 			<< "unset arrow\n"
@@ -1471,16 +1473,15 @@ DataSet::load( std::string fname, const Fparams params )
 //---------------------------------------------------------------------
 /// Generates in Html page the code to show the produced plots
 void
-DataSet::generateDataHtmlPage( std::string fname, std::ostream& fhtml, const DatasetStats<float>& stats, int nbBins ) const
+DataSet::generateDataHtmlPage( std::ostream& fhtml, const DatasetStats<float>& stats, int nbBins ) const
 {
-	fhtml << "<h2>Dataset characteristics</h2>\n<ul>";
-
-	if( !fname.empty() )
-		fhtml << "<li>name: " << fname << "</li>\n";
-	fhtml << "<li># points=" << size()
+	fhtml << "<h2>A - Dataset characteristics</h2>\n<ul>\n"
+		<< "<li>name: " << _fname
+		<< "</li>\n<li># points=" << size()
 		<< "</li>\n<li># attributes="       << nbAttribs()
 		<< "</li>\n<li># classes="          << nbClasses()
 		<< "</li>\n<li># classless points=" << _nbNoClassPoints
+		<< "</li>\n<li># outliers removed:" << (_outlierTaggingDone?"YES":"NO")
 		<< "</li>\n</ul>\n";
 
 	if( _fparams.classAsString )
@@ -1502,32 +1503,33 @@ DataSet::generateDataHtmlPage( std::string fname, std::ostream& fhtml, const Dat
 			<< " %)</li>\n";
 		sum += cval.second;
 	}
-	fhtml << "<ol>\n => " << sum << " points holding a class value\n\n";
+	fhtml << "</ol>\n => " << sum << " points holding a class value\n\n";
+
+	char otd = _outlierTaggingDone?'B':'A';
+	fhtml << "<h3>A1 - Class distribution</h3>\n"
+		<< "<img src='class_distrib_" << otd << ".png'>\n";
+	p_generateClassDistrib( "class_distrib_" + otd );
 
 
-	fhtml << "<h3>1 - Class distribution</h3>\n"
-		<< "<img src='class_distrib_" << fname << ".png'>\n";
-	p_generateClassDistrib( "class_distrib_" + fname );
-
-	fhtml << "<h3>2 - Class vs. attribute values</h3>\n";
-	p_generateAttribPlot( fname, stats, fhtml );
+	fhtml << "<h3>A2 - Class vs. attribute values</h3>\n";
+	p_generateAttribPlot( otd, stats, fhtml );
 
 // TODO
 //	generateClassHistoPerTVal( nodeId, atIdx, v_thresVal, data, v_dpidx );
 
-	fhtml << "<h3>3 - Histogram of data related to attribute value</h3>\n<table><tr>\n";
+	fhtml << "<h3>A3 - Histogram of data related to attribute value</h3>\n<table><tr>\n";
 	for( uint i=0; i<nbAttribs(); i++ )
 		fhtml << "<th>Attribute " << i << "</th>\n";
 	fhtml << "</tr><tr>\n";
 	for( uint i=0; i<nbAttribs(); i++ )
-		fhtml << "<td><img src='attrib_histo_" << i << ".png'></td>\n";
+		fhtml << "<td>\n <img src='attrib_histo_" << i << ".png'></td>\n";
 	fhtml << "</tr></table>\n";
 }
 
 //---------------------------------------------------------------------
 /// Generates both data files and Gnuplot script of the class distribution of the dataset
 void
-DataSet::p_generateClassDistrib( std::string fname ) const
+DataSet::p_generateClassDistrib( const std::string& fname ) const
 {
 	START;
 
@@ -2209,7 +2211,6 @@ struct TrainingInfo
 			<< '\n';
 		return f;
 	}
-
 };
 //---------------------------------------------------------------------
 /// This one holds edges that each have a vector holding the index of datapoints.
@@ -2261,7 +2262,7 @@ class TrainingTree
 		{
 			_tClassIndexMap = cim;
 		}
-/// This does clear the tree, but also adds the initial node
+/// This does clear the tree and creates the initial (root) node
 		void clear()
 		{
 			_graph.clear();
@@ -2269,16 +2270,16 @@ class TrainingTree
 			_initialVertex = boost::add_vertex(_graph);  // create initial vertex
 			_graph[_initialVertex]._type = NT_Root;
 		}
-
-		void saveToFile( std::string fname ) const;
-		void readFromFile( std::string fname );
-
+#ifdef GRAPH_SERIALIZATION
+		void saveToFile(   const std::string& fname ) const;
+		void readFromFile( const std::string& fname );
+#endif
 		TrainingInfo    train( const DataSet&, const Params& );
 		ConfusionMatrix classify( const DataSet& ) const;
 		ClassVal        classify( const DataPoint& ) const;
 
 		void     printDot( const std::string& name, const Params& params ) const;
-		void     printInfo( std::ostream&, std::string msg=std::string() ) const;
+		void     printInfo( std::ostream&, const std::string& msg=std::string() ) const;
 		uint     maxDepth() const { return _maxDepth; }
 		size_t   nbLeaves() const;
 
@@ -2315,7 +2316,7 @@ namespace dtcpp {
 /// Save tree to file
 /// \todo 20210506: As of today, this does not build, need to investigate
 void
-TrainingTree::saveToFile( std::string fname ) const
+TrainingTree::saveToFile( const std::string& fname ) const
 {
 	std::ofstream f( fname );
 	if( !f.is_open() )
@@ -2325,7 +2326,7 @@ TrainingTree::saveToFile( std::string fname ) const
 }
 //---------------------------------------------------------------------
 void
-TrainingTree::readFromFile( std::string fname )
+TrainingTree::readFromFile( const std::string& fname )
 {
 	std::ifstream f( fname );
 	if( !f.is_open() )
@@ -2413,11 +2414,10 @@ void
 TrainingTree::printDot( const std::string& name, const Params& params ) const
 {
 	auto fname = "tree"
-		+ ( params.foldIndex==-1 ? "" : "_f"+std::to_string(params.foldIndex) )
+		+ ( params.foldIndex==-1 ? "" : "_f" + std::to_string(params.foldIndex) )
 		+ "_" + name;
 
-	*params.outputHtml << "<h2>3 - Generated Tree: " << name
-		<< "</h2>\n<img src='" << fname << ".png'>\n";
+	*params.outputHtml << "<h4>" << name << " tree</h4>\n<img src='" << fname << ".png'>\n";
 
 	auto f = priv::openOutputFile( fname, priv::FT_DOT );
 	f << "# file: " << _dataFileName << "\n\n"
@@ -2448,7 +2448,7 @@ TrainingTree::printDot( const std::string& name, const Params& params ) const
 /// Print basic information on the tree
 //template<typename T>
 void
-TrainingTree::printInfo( std::ostream& f, std::string msg ) const
+TrainingTree::printInfo( std::ostream& f, const std::string& msg ) const
 {
 	START;
 	f << "Tree info: "
@@ -2485,7 +2485,7 @@ getNodeClassCount(
 	assert( nbClassLess < v_dpidx.size() );
 
 	return std::make_pair(
-		m,                              // the class counts
+		m,                              // the class counters
 		v_dpidx.size() - nbClassLess    // the number of relevant points
 	);
 }
@@ -2735,9 +2735,9 @@ SearchBestIG(
 	char sep = ' ';
 	fdata << "# thres_index thres_value nbPtsLower nbPtsHigher\n\n";
 
-	fhtml << "<td><img src='" << oss.str()
-		<< ".png'><br>\n<img src='thresClassHisto_n" << nodeId << "_at" << atIdx
-		<< ".png'></td>\n";
+	fhtml << "<td>\n <img src='" << oss.str()
+		<< ".png'><br>\n <img src='thresClassHisto_n" << nodeId << "_at" << atIdx
+		<< ".png'>\n</td>\n";
 
 	auto pwidth = std::min( (size_t)DTCPP_PLOT_MAX_WIDTH, 300+v_thresVal.size()*12 );
 	auto fplot = priv::openOutputFile( oss.str(), priv::FT_PLT, data._fname );
@@ -2831,7 +2831,8 @@ SearchBestIG(
 	}
 
 // step 3 - find max value of the delta Gini
-	auto max_pos = std::max_element( std::begin( deltaGini ), std::end( deltaGini ) );
+//	auto max_pos = std::max_element( std::begin( deltaGini ), std::end( deltaGini ) );
+	auto max_pos = std::min_element( std::begin( deltaGini ), std::end( deltaGini ) );
 
 	auto best_thres_idx = std::distance( std::begin( deltaGini ), max_pos );
 
@@ -2842,6 +2843,64 @@ SearchBestIG(
 		ThresholdVal(v_thresVal.at( best_thres_idx ) ),
 		nb_LT.at( best_thres_idx )
 	);
+}
+
+//---------------------------------------------------------------------
+/// Helper function, builds the vector of threshold values using sorting of the attribute values
+bool
+thres_useSorting(
+	uint                     atIdx,
+	const std::vector<uint>& v_dpidx,
+	const DataSet&           data,
+	const Params&            params,    ///< run-time parameters
+	std::vector<float>&      v_thresVal    ///< output vector
+)
+{
+	std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
+	for( size_t i=0; i<v_dpidx.size(); i++ )
+		v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
+
+	auto nbRemoval = removeDuplicates( v_attribVal, params );
+	LOG( 3, "Removal of " << nbRemoval << " attribute values over " << v_dpidx.size() << " points" );
+
+	if( v_attribVal.size() < 2 )         // if only one value, is pointless
+	{
+		LOG( 3, "WARNING, unable to compute best threshold value for attribute " << atIdx << ", maybe check value of 'removalCoeff'" );
+		return false;
+	}
+
+	v_thresVal.resize( v_attribVal.size()-1 );      // if 10 values, then only 9 thresholds
+	for( uint i=0; i<v_thresVal.size(); i++ )
+		v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
+	return true;
+}
+//---------------------------------------------------------------------
+/// Helper function, builds the vector of threshold values using histograms
+bool
+thres_useHistograms(
+	uint                     atIdx,     ///< attribute index we want to process
+	const std::vector<uint>& v_dpidx,   ///< datapoint indexes to consider
+	const DataSet&           data,
+	std::vector<float>&      v_thresVal    ///< output vector
+)
+{
+	using PairAtvalClass = std::pair<float,ClassVal>;
+	std::vector<PairAtvalClass> v_pac( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
+	for( size_t i=0; i<v_dpidx.size(); i++ )
+	{
+		const auto& pt = data.getDataPoint( v_dpidx[i] );
+		if( !pt.isClassLess() )
+			v_pac[i] = std::make_pair( pt.attribVal( atIdx ), pt.classVal() );
+	}
+
+	auto pair_vb = getThresholds<float,ClassVal>( v_pac, 20 );
+	v_thresVal = std::move(pair_vb.first);
+	if( pair_vb.second == false )
+	{
+		LOG( 3, "WARNING, unable to fetch threshold value for attribute " << atIdx );
+		return false;
+	}
+	return true;
 }
 
 //---------------------------------------------------------------------
@@ -2874,51 +2933,19 @@ computeBestThreshold(
 	LOG( 3, "Searching best threshold for node " << nodeId << ", attrib=" << atIdx << " with " << v_dpidx.size() << " datapts");
 
 	std::vector<float> v_thresVal;
-
 	if( params.useSortToFindThresholds )
 	{
-	// step 1 - compute all the potential threshold values (mean value between two consecutive attribute values)
-		std::vector<float> v_attribVal( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
-		for( size_t i=0; i<v_dpidx.size(); i++ )
-			v_attribVal[i] = data.getDataPoint( v_dpidx[i] ).attribVal( atIdx );
-
-		auto nbRemoval = removeDuplicates( v_attribVal, params );
-		LOG( 3, "Removal of " << nbRemoval << " attribute values over " << v_dpidx.size() << " points" );
-
-		if( v_attribVal.size() < 2 )         // if only one value, is pointless
-		{
-			LOG( 3, "WARNING, unable to compute best threshold value for attribute " << atIdx << ", maybe check value of 'removalCoeff'" );
+		if( false == thres_useSorting( atIdx, v_dpidx, data, params, v_thresVal ) )
 			return AttributeData();
-		}
-
-		v_thresVal.resize( v_attribVal.size()-1 );      // if 10 values, then only 9 thresholds
-		for( uint i=0; i<v_thresVal.size(); i++ )
-			v_thresVal[i] = ( v_attribVal.at(i) + v_attribVal.at(i+1) ) / 2.f; // threshold is mean value between the 2 attribute values
 	}
 	else
 	{
-		using PairAtvalClass = std::pair<float,ClassVal>;
-		std::vector<PairAtvalClass> v_pac( v_dpidx.size() ); // pre-allocate vector size (faster than push_back)
-		for( size_t i=0; i<v_dpidx.size(); i++ )
-		{
-			const auto& pt = data.getDataPoint( v_dpidx[i] );
-			if( !pt.isClassLess() )
-				v_pac[i] = std::make_pair( pt.attribVal( atIdx ), pt.classVal() );
-		}
-
-		auto pair_vb = getThresholds<float,ClassVal>( v_pac, 20 );
-		v_thresVal = std::move(pair_vb.first);
-		if( pair_vb.second == false )
-		{
-			LOG( 3, "WARNING, unable to fetch threshold value for attribute " << atIdx );
+		if( false == thres_useHistograms( atIdx, v_dpidx, data, v_thresVal ) )
 			return AttributeData();
-		}
 	}
 
 	LOG( 3, "found " << v_thresVal.size() << " thresholds, searching best one" );
-//	::priv::printVector( std::cout, v_thresVal, "*** THRESHOLDS ***" );
 
-//	fhtml << "<h2>Attribute " << atIdx <<
 // step 2: compute IG for each threshold value
 	auto big = SearchBestIG( nodeId, atIdx, giniCoeff, v_thresVal, data, v_dpidx, fhtml );
 
@@ -2927,7 +2954,7 @@ computeBestThreshold(
 	if( n1 < params.minNbPoints || n2 < params.minNbPoints )
 	{
 		LOG( 1, "not enough points if splitting on best threshold for attribute " << big._atIndex << ": n1=" << n1 << " n2=" << n2 );
-		return AttributeData();  // flag 'unable' is set
+		return AttributeData();
 	}
 	return big;
 }
@@ -3030,12 +3057,12 @@ findBestAttribute(
 // step 1 - compute best IG/threshold for each attribute, only for the considered points
 	std::vector<AttributeData> v_IG;
 
+// for each attribute, we compute the best threshold
 	for( size_t atIdx=0; atIdx<data.nbAttribs(); atIdx++ )  // iterate on all the attributes
 	{
 		auto best = computeBestThreshold( atIdx, vIdx, data, giniImpurity, params, nodeId, fhtml );
 		if( best._unable )        // this means we couldn't find a threshold, so
 		{                         // we forget this one and we switch to the next attribute
-//			atIdx.second = true;  //
 			LOG( 2, "unable to compute thresholds for attrib " << atIdx );
 		}
 		else
@@ -3118,8 +3145,6 @@ splitNode(
 	const auto classCountInfo = getNodeClassCount( vIdx, data );
 	const auto& classCount = classCountInfo.first;
 
-	graph[v]._giniImpurity = getGiniImpurity( classCountInfo );
-
 	if( classCount.size() == 1 )         // single class here
 	{
 		LOG( 1, "node has single class, STOP" );
@@ -3128,6 +3153,8 @@ splitNode(
 		graph[v]._nAmbig = 0.f;
 		return;
 	}
+
+	graph[v]._giniImpurity = getGiniImpurity( classCountInfo );
 
 	bool nodeIsLeave = false;
 	if( graph[v]._depth > params.maxTreeDepth )
@@ -3315,14 +3342,18 @@ TrainingTree::train( const DataSet& data, const Params& params )
 	clear();
 	if( p_buildTree( data, params ))
 	{
+		*params.outputHtml << "<h3>B2 - Generated Tree</h3>\n";
 		info.trainingSuccess = true;
 		if( params.generateDotFiles )
-			printDot( "build", params );
+			printDot( "initial", params );
 
 		info.nbRemovals = p_pruning( data );
 		if( params.generateDotFiles )
 			printDot( "pruned", params );
 	}
+	else
+		*params.outputHtml << "<h3>Tree build failure !!</h3>\n";
+
 	return info;
 }
 //---------------------------------------------------------------------
@@ -3361,12 +3392,8 @@ TrainingTree::p_buildTree( const DataSet& data, const Params& params )
 
 //	auto fhtml = priv::openOutputFile( "training", priv::FT_HTML, data._fname );
 	auto& fhtml = *params.outputHtml;
-	fhtml << "<h2>Point balance and IG vs. threshold value</h2>\n<table>\n";
-/*		<< "<table><tr><th></th>\n";
-	for( uint i=0; i<nbAttribs; i++ )
-		fhtml << "<th>Attribute " << i << "</th>\n";
-	fhtml << "</tr>\n";
-*/
+	fhtml << "<h2>B - Tree build </h2>\n<h3>B1 - Point balance and IG vs. threshold value for each node</h2>\n<table>\n";
+
 	_graph[_initialVertex].v_Idx = v_idx;
 	COUT << "INITIAL ID=" << _graph[_initialVertex]._nodeId << '\n';
 	priv::splitNode( _initialVertex, _graph, data, params, _maxDepth, fhtml ); // Call the "split" function (recursive)
@@ -3531,8 +3558,8 @@ printBestCriterionFold(
 }
 
 //---------------------------------------------------------------------
-/// Finds among all the confusion matrics the one achieving highest performance
-/// based on criterion T
+/// Finds among all the confusion matrix the one achieving highest performance
+/// based on criterion \c T
 template<typename T>
 size_t
 findMaxPerformance( const std::vector<ConfusionMatrix>& vcm, T crit )

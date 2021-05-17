@@ -2594,11 +2594,11 @@ struct AttributeData
 /// depending on the threshold values
 void
 generateClassHistoPerTVal(
-	uint                     nodeId,      ///< node Id (only needed to plot data)
-	uint                     atIdx,       ///< current attribute index
-	std::vector<float>&      v_thresVal,  ///< threshold values for that attribute
-	const DataSet&           data,        ///< dataset
-	const std::vector<uint>& v_dpidx      ///< indexes of considered points in dataset
+	uint                      nodeId,      ///< node Id (only needed to plot data)
+	uint                      atIdx,       ///< current attribute index
+	const std::vector<float>& v_thresVal,  ///< threshold values for that attribute
+	const DataSet&            data,        ///< dataset
+	const std::vector<uint>&  v_dpidx      ///< indexes of considered points in dataset
 )
 {
 	START;
@@ -2719,13 +2719,13 @@ than that value, and the associated IG.
 */
 AttributeData
 SearchBestIG(
-	uint                     nodeId,      ///< node Id (only needed to plot data)
-	uint                     atIdx,       ///< current attribute index
-	double                   giniCoeff,   ///< global Gini coeff
-	std::vector<float>&      v_thresVal,  ///< threshold values
-	const DataSet&           data,        ///< dataset
-	const std::vector<uint>& v_dpidx,     ///< indexes of considered points in dataset
-	std::ostream&            fhtml        ///< html page, opened in caller function
+	uint                      nodeId,      ///< node Id (only needed to plot data)
+	uint                      atIdx,       ///< current attribute index
+	double                    giniCoeff,   ///< global Gini coeff
+	const std::vector<float>& v_thresVal,  ///< threshold values
+	const DataSet&            data,        ///< dataset
+	const std::vector<uint>&  v_dpidx,     ///< indexes of considered points in dataset
+	std::ostream&             fhtml        ///< html page, opened in caller function
 )
 {
 	START;
@@ -2759,9 +2759,9 @@ SearchBestIG(
 	if( v_thresVal.size() > 24 )
 		fplot << "set xtics 5\n";
 
-	fplot //<< "set title 'Attribute " << atIdx << "'\n"
-		<< "set xlabel '" << v_thresVal.size() << " threshold values'\n"
-		<< "plot '" << oss.str() << ".dat' using 1:(1.-abs($3-$4)/($3+$4)) lw 2 ti 'Pts balance',"
+	fplot << "set xlabel '" << v_thresVal.size()
+		<< " threshold values'\nplot '" << oss.str()
+		<< ".dat' using 1:(1.-abs($3-$4)/($3+$4)) lw 2 ti 'Pts balance',"
 		<< " '' using 1:5 lw 2 axes x1y2 ti 'IG'\n";
 
 #ifndef DTCPP_NEED_FOR_SPEED
@@ -2848,6 +2848,8 @@ SearchBestIG(
 /// Compute best threshold for attribute \c atIdx, using the Gini Impurity, for the subset of data given by \c v_dpidx.
 /**
 \return an object of type AttributeData
+
+This function actually computes a set of thresholds, then calls SearchBestIG() to find the best one.
 
 Details:
 - Uses the Gini impurity coeff: https://en.wikipedia.org/wiki/Decision_tree_learning#Gini_impurity

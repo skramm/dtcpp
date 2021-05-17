@@ -143,18 +143,19 @@ int main( int argc, const char** argv )
 	auto fhtml = dtcpp::priv::openOutputFile( "dectree", priv::FT_HTML, dataset._fname );
 	params.outputHtml = &fhtml;
 
-	dataset.generateDataHtmlPage( "A", fhtml, stats, 10 /* bins */ );
+	dataset.generateDataHtmlPage( fhtml, stats, 10 /* bins */ );
 
 #ifdef HANDLE_OUTLIERS
 	if( doRemoveOutliers )
 	{
 		dataset.tagOutliers( stats );
+		_outlierTaggingDone = true;
 		std::cout << "* outlier tagging: " << dataset.nbOutliers() << '\n';
 		dataset.printInfo( std::cout );
 		auto stats2 = dataset.computeStats<float>( nbBins );
 		std::cout << stats2;
 		fhtml << "<h2>After outlier removal step</h2>\n";
-		dataset.generateDataHtmlPage( "B", fhtml, stats2, 10 );
+		dataset.generateDataHtmlPage( fhtml, stats2, 10 );
 	}
 #endif
 

@@ -84,8 +84,8 @@ that are freely available on any OS/architecture:
 
 * `-cs` : class value is a string. Numerical indexes will be automatically associated to each string value.
 * `-sep "x"` : use 'x' as field separator in the input file
-* `-cf` : means class value is the **First** value of line
-* `-cl` : means class value is the **Last** value of line (default)
+* `-cf` : class value is the **First** value of line
+* `-cl` : class value is the **Last** value of line (default)
 * `-ll X` : sets log level to 'X'. Available levels: 0,1,2,3
 * `-i` : load the datafile and prints info and stats on its contents, then exit (no training)
 * `-nf x` : do training on 'x' folds of data
